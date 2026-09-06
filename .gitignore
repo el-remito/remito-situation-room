@@ -1,0 +1,20 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Working design references — kept on disk, never published.
+# Matches the remito-* family convention (see remito-daggerheart-battle-decks,
+# which gitignores its own whitepaper and calculator the same way).
+# ─────────────────────────────────────────────────────────────────────────────
+/Remito Situation Room.md
+/IMPLEMENTATION_PLAN.md
+
+# ── OS / editor cruft ────────────────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# ── Never a build step in this family, but guard against strays ──────────────
+node_modules/
+package-lock.json

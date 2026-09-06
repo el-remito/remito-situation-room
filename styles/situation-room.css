@@ -1,0 +1,149 @@
+/* ==========================================================================
+   remito-situation-room
+
+   Theming follows the Foundryborne idiom: the system never DEFINES its palette
+   variables, it references them with a hex fallback, so the fallback is the
+   default and a theme can override. Every pair is wrapped in light-dark().
+
+   Tokens are scoped to the app root class rather than :root so nothing leaks
+   into the rest of Foundry — and redeclared on .rsr-open-board, which is injected
+   into the Journal sidebar and therefore lives outside any module root.
+
+   Never use Foundry's --color-text-primary or --color-bg-btn: they resolve to
+   white in dark mode and make text invisible.
+
+   COLOUR SEMANTICS — one colour, one meaning:
+     gold      attention / the current thing
+     green     a strength, or something satisfied
+     red       a weakness, or something failed
+     violet    WITHHELD FROM PLAYERS (masked or hidden)
+   Violet is deliberately not red: "the players cannot see this" and "this is
+   bad" are different facts and must not read as the same one.
+   ========================================================================== */
+
+.rsr,
+.rsr-open-board {
+    --rsr-gold: var(--golden, #f3c267);
+    --rsr-gold-soft: var(--golden-40, rgba(243, 194, 103, 0.4));
+    --rsr-gold-dim: var(--golden-bg, rgba(243, 194, 103, 0.1));
+    --rsr-ink: light-dark(var(--dark, #222222), var(--beige, #efe6d8));
+    --rsr-ink-muted: light-dark(#55524a, rgba(239, 230, 216, 0.55));
+    --rsr-panel: light-dark(#ffffff, var(--dark-blue, #18162e));
+    --rsr-panel-deep: light-dark(#f5f2ed, var(--deep-black, #0e0d15));
+    --rsr-panel-soft: light-dark(rgba(34, 34, 34, 0.04), rgba(239, 230, 216, 0.05));
+    --rsr-border: light-dark(rgba(34, 34, 34, 0.25), rgba(239, 230, 216, 0.22));
+    --rsr-strength: var(--green, #40a640);
+    --rsr-weakness: var(--medium-red, #d04747);
+    --rsr-withheld: light-dark(#7c3aed, #b794f6);
+    --rsr-heading: 'Cinzel', serif;
+    --rsr-body: var(--dh-font-body, 'Montserrat'), sans-serif;
+}
+
+/* Visibility passes toggle [hidden] rather than re-rendering, so this must win. */
+.rsr [hidden] { display: none !important; }
+
+/* Core's `a.button, button, kbd` rule forces a flex row at var(--button-size).
+   Scoped away from .header-control or the window's own Close/Toggle buttons lose
+   their Font Awesome glyphs — same specificity, source order wins. */
+.rsr button:not(.header-control) {
+    font-family: var(--rsr-body);
+    color: var(--rsr-ink);
+}
+
+/* ── M1 — Board shell ───────────────────────────────────────────────────── */
+
+.rsr-window-content { padding: 0; }
+
+.rsr-board-root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;                      /* so .rsr-body can actually scroll */
+    background: var(--rsr-panel);
+    color: var(--rsr-ink);
+    font-family: var(--rsr-body);
+}
+
+.rsr-segments {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--rsr-panel-deep);
+    border-bottom: 1px solid var(--rsr-border);
+    flex: 0 0 auto;
+}
+
+.rsr-segment {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: auto;
+    height: auto;                       /* restate: core pins buttons to --button-size */
+    min-height: 0;
+    justify-content: flex-start;
+    padding: 0.35rem 0.8rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-13, 13px);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+}
+
+.rsr-segment:hover { background: var(--rsr-panel-soft); }
+
+.rsr-segment.is-active {
+    border-color: var(--rsr-gold-soft);
+    background: var(--rsr-gold-dim);
+    color: var(--rsr-gold);
+}
+
+.rsr-turn-badge {
+    margin-left: auto;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+    white-space: nowrap;
+}
+
+.rsr-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+}
+
+.rsr-view { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.rsr-placeholder,
+.rsr-empty {
+    margin: 0;
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--rsr-ink-muted);
+    font-style: italic;
+}
+
+/* ── Sidebar button (lives outside the app root — tokens redeclared above) ──
+   Its own row above Create Entry / Create Folder. The row reuses core's own
+   .header-actions.action-buttons.flexrow classes so it inherits the sidebar's
+   spacing exactly, and only the gap below it is ours. */
+
+.rsr-open-row { margin-bottom: 0.25rem; }
+
+.rsr-open-board {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    flex: 1;                            /* sole occupant — take the full row */
+    border-color: var(--rsr-gold-soft);
+}
+
+.rsr-open-board:hover { border-color: var(--rsr-gold); }
+
+.rsr-open-board i { color: var(--rsr-gold); }

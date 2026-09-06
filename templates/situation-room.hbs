@@ -1,0 +1,54 @@
+{{!--
+    The board shell.
+
+    Segments are rendered from context.segments, which already excludes Cockpit for
+    players and already carries `active` — no `eq` helper exists for module templates
+    in v14, so no comparison happens here.
+--}}
+<div class="rsr-board-root">
+
+    <nav class="rsr-segments" aria-label="{{localize 'RSR.board.viewSwitcher'}}">
+        {{#each segments}}
+        <button type="button"
+                class="rsr-segment{{#if this.active}} is-active{{/if}}"
+                data-action="selectView"
+                data-view="{{this.id}}"
+                {{#if this.active}}aria-current="page"{{/if}}>
+            <i class="{{this.icon}}" inert></i>
+            <span>{{localize this.label}}</span>
+        </button>
+        {{/each}}
+
+        {{#if isGM}}
+        <span class="rsr-turn-badge" data-tooltip="{{localize 'RSR.turn.tooltip'}}">
+            {{localize 'RSR.turn.label'}} {{turn}}
+        </span>
+        {{/if}}
+    </nav>
+
+    <section class="rsr-body">
+
+        {{#if isSituation}}
+        <div class="rsr-view rsr-view-situation">
+            {{#if plotCount}}
+            <p class="rsr-placeholder">{{localize 'RSR.board.plotListPending'}}</p>
+            {{else}}
+            <p class="rsr-empty">{{localize 'RSR.board.noPlots'}}</p>
+            {{/if}}
+        </div>
+        {{/if}}
+
+        {{#if isCockpit}}
+        <div class="rsr-view rsr-view-cockpit">
+            <p class="rsr-placeholder">{{localize 'RSR.board.cockpitPending'}}</p>
+        </div>
+        {{/if}}
+
+        {{#if isHelp}}
+        <div class="rsr-view rsr-view-help">
+            <p class="rsr-placeholder">{{localize 'RSR.board.helpPending'}}</p>
+        </div>
+        {{/if}}
+
+    </section>
+</div>

@@ -81,7 +81,12 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
         for (const m of read(file).matchAll(/['"](RSR\.[A-Za-z0-9_.]+)['"]/g)) used.add(m[1]);
     }
 
-    const missing = [...used].filter((k) => !defined.has(k)).sort();
+    // A namespace passed as a prefix — enumOptions(LIFECYCLE, 'RSR.plot.lifecycle')
+    // builds 'RSR.plot.lifecycle.active' at render time. Legitimate as long as it
+    // actually prefixes real keys; a typo'd prefix still fails.
+    const isLivePrefix = (k) => [...defined].some((d) => d.startsWith(`${k}.`));
+
+    const missing = [...used].filter((k) => !defined.has(k) && !isLivePrefix(k)).sort();
     const unused = [...defined]
         .filter((k) => !used.has(k) && !DYNAMIC_PREFIXES.some((p) => k.startsWith(p)))
         .sort();
@@ -137,6 +142,34 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
         }
     }
     report('naming rule: Thread only in lang, Node never user-visible', problems);
+}
+
+// ── 5. the single-funnel invariants ──────────────────────────────────────────
+{
+    /**
+     * These are the two rules the architecture rests on. Both are the kind that
+     * decay quietly: one convenient `game.settings.get` in a UI file is invisible
+     * until a player triggers it and the relay never sees the write.
+     */
+    const funnels = [
+        { pattern: /\bgame\.settings\./, owner: 'scripts/settings.mjs',
+          rule: 'game.settings is touched only in settings.mjs' },
+        { pattern: /\bgame\.socket\./, owner: 'scripts/data/relay.mjs',
+          rule: 'game.socket is touched only in relay.mjs' }
+    ];
+
+    const problems = [];
+    for (const { pattern, owner, rule } of funnels) {
+        for (const file of sources) {
+            if (rel(file) === owner) continue;
+            // Comments explain the rules, so they must not trip them.
+            const body = read(file)
+                .replace(/\/\*[\s\S]*?\*\//g, '')
+                .replace(/(^|[^:])\/\/.*$/gm, '$1');
+            if (pattern.test(body)) problems.push(`${rel(file)}: ${rule}`);
+        }
+    }
+    report('single-funnel invariants (settings, socket)', problems);
 }
 
 // ── summary ──────────────────────────────────────────────────────────────────

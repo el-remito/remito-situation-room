@@ -8,7 +8,8 @@ before its milestone has passed.
 
 | Milestone | Verified | Committed |
 |---|---|---|
-| M1 | awaiting | — |
+| M1 | passed | `1d9bd86` |
+| M2 | awaiting | — |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)
@@ -29,13 +30,16 @@ before its milestone has passed.
 - [x] Junctioned into the live Foundry install
 
 ## M2 — Plots and Threads
-- [ ] Plot CRUD editor
-- [ ] Thread CRUD editor
-- [ ] Player View: Plot list
-- [ ] Player View: drill into one Plot's Thread board
-- [ ] State bar — plain fill + single current-Phase chip (no ladder)
-- [ ] Thread rows with progress bars
-- [ ] Helper shell + first example fixture (Generate / Remove)
+- [x] Plot CRUD editor
+- [x] Thread CRUD editor
+- [x] Player View: Plot list
+- [x] Player View: drill into one Plot's Thread board
+- [x] State bar — plain fill + single current-Phase chip (no ladder)
+- [x] Thread rows with progress bars
+- [x] Helper shell + first example fixture (Generate / Remove)
+- [x] `logic/state-track.mjs` — 28 assertions
+- [x] `logic/visibility.mjs` — 26 assertions (pulled forward from M5)
+- [x] `tools/all.mjs` runner + single-funnel static pass
 
 ## M3 — Advancement and conclusion
 - [ ] `logic/progress.mjs` — thresholds, pools, contest standings

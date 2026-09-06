@@ -147,3 +147,358 @@
 .rsr-open-board:hover { border-color: var(--rsr-gold); }
 
 .rsr-open-board i { color: var(--rsr-gold); }
+
+/* ── M2 — Plots and Threads ─────────────────────────────────────────────── */
+
+/* Buttons. Core pins every button to var(--button-size) as a centred flex row,
+   so anything that is not a single centred line has to restate all three. */
+.rsr-btn,
+.rsr-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0.3rem 0.7rem;
+    background: var(--rsr-panel-soft);
+    border: 1px solid var(--rsr-border);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.rsr-btn:hover, .rsr-icon-btn:hover { border-color: var(--rsr-gold-soft); }
+.rsr-btn-primary { border-color: var(--rsr-gold-soft); background: var(--rsr-gold-dim); }
+.rsr-icon-btn { padding: 0.25rem 0.4rem; background: transparent; border-color: transparent; }
+.rsr-danger:hover { border-color: var(--rsr-weakness); color: var(--rsr-weakness); }
+
+.rsr-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0.5rem 0 0.25rem;
+}
+
+.rsr-section-head h3 {
+    margin: 0;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-14, 14px);
+    border: none;
+}
+
+/* Chips. One colour, one meaning: tone bands describe the Phase, quiet is a
+   lifecycle aside, violet is always "withheld from players" and nothing else. */
+.rsr-chip {
+    display: inline-block;
+    padding: 0.1rem 0.55rem;
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    font-size: var(--font-size-11, 11px);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.rsr-tone-calm    { border-color: var(--rsr-strength); color: var(--rsr-strength); }
+.rsr-tone-neutral { border-color: var(--rsr-gold-soft); color: var(--rsr-gold); }
+.rsr-tone-warn    { border-color: var(--rsr-gold); color: var(--rsr-gold); background: var(--rsr-gold-dim); }
+.rsr-tone-danger  { border-color: var(--rsr-weakness); color: var(--rsr-weakness); }
+
+.rsr-chip-quiet   { color: var(--rsr-ink-muted); }
+.rsr-chip-mode    { color: var(--rsr-ink-muted); font-style: italic; }
+.rsr-chip-done    { border-color: var(--rsr-strength); color: var(--rsr-strength); }
+.rsr-chip-example { border-color: var(--rsr-withheld); color: var(--rsr-withheld); }
+
+/* Anything withheld reads violet, never red. "You cannot see this" and
+   "this went badly" are different facts and must not look like one. */
+.rsr-thread.is-masked .rsr-thread-name,
+.rsr-force-chip.is-masked,
+.rsr-contender.is-masked .rsr-contender-name,
+.rsr-plot-card.is-masked .rsr-plot-name {
+    color: var(--rsr-withheld);
+    font-style: italic;
+}
+
+/* ── State bar ── */
+
+.rsr-state-bar {
+    height: 8px;
+    background: var(--rsr-panel-soft);
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.rsr-state-bar-lg { height: 14px; }
+
+.rsr-state-fill {
+    height: 100%;
+    background: currentColor;
+    opacity: 0.75;
+    transition: width 120ms ease-out;
+}
+
+.rsr-state-value {
+    margin: 0.2rem 0 0;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+    text-align: right;
+}
+
+/* ── Plot list ── */
+
+.rsr-plot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 0.75rem;
+}
+
+.rsr-plot-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.75rem 0.85rem;
+    background: var(--rsr-panel-deep);
+    border: 1px solid var(--rsr-border);
+    border-radius: 6px;
+}
+
+.rsr-plot-head { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+
+.rsr-plot-name {
+    flex: 1;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    justify-content: flex-start;
+    background: none;
+    border: none;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-14, 14px);
+    text-align: left;
+    cursor: pointer;
+}
+
+.rsr-plot-name:hover { color: var(--rsr-gold); }
+
+.rsr-plot-foot {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.15rem;
+}
+
+.rsr-count { flex: 1; font-size: var(--font-size-11, 11px); color: var(--rsr-ink-muted); }
+.rsr-row-tools { display: inline-flex; gap: 0.1rem; }
+
+.rsr-open-arrow {
+    width: auto; height: auto; min-height: 0;
+    padding: 0.2rem 0.45rem;
+    background: transparent; border: 1px solid transparent; cursor: pointer;
+}
+
+.rsr-open-arrow:hover { color: var(--rsr-gold); }
+
+.rsr-force-chips {
+    display: flex; flex-wrap: wrap; gap: 0.3rem;
+    margin: 0; padding: 0; list-style: none;
+}
+
+.rsr-force-chip {
+    padding: 0.05rem 0.5rem;
+    background: var(--rsr-panel-soft);
+    border-radius: 999px;
+    font-size: var(--font-size-11, 11px);
+}
+
+/* ── Plot detail ── */
+
+.rsr-back {
+    align-self: flex-start;
+    width: auto; height: auto; min-height: 0;
+    padding: 0.2rem 0.4rem 0.2rem 0;
+    background: none; border: none;
+    color: var(--rsr-ink-muted);
+    cursor: pointer;
+}
+
+.rsr-back:hover { color: var(--rsr-gold); }
+
+.rsr-plot-detail-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+
+.rsr-plot-title {
+    margin: 0;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-18, 18px);
+    border: none;
+}
+
+.rsr-plot-desc { margin: 0; color: var(--rsr-ink-muted); }
+
+.rsr-gm-notes {
+    margin: 0;
+    padding: 0.5rem 0.7rem;
+    border-left: 3px solid var(--rsr-withheld);
+    background: var(--rsr-panel-soft);
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-12, 12px);
+}
+
+/* ── Threads ── */
+
+.rsr-threads {
+    margin: 0; padding: 0; list-style: none;
+    display: flex; flex-direction: column; gap: 0.5rem;
+}
+
+.rsr-thread {
+    padding: 0.6rem 0.75rem;
+    background: var(--rsr-panel-deep);
+    border: 1px solid var(--rsr-border);
+    border-radius: 6px;
+}
+
+.rsr-thread.is-locked { opacity: 0.72; }
+.rsr-thread.is-concluded { border-left: 3px solid var(--rsr-strength); }
+
+.rsr-thread-head { display: flex; align-items: center; gap: 0.5rem; }
+.rsr-thread-name { flex: 1; font-family: var(--rsr-heading); }
+.rsr-thread-tags { display: inline-flex; align-items: center; gap: 0.3rem; }
+
+.rsr-thread-desc,
+.rsr-outcome,
+.rsr-prereq,
+.rsr-committed {
+    margin: 0.3rem 0 0;
+    font-size: var(--font-size-12, 12px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-prereq { margin: 0 0 0.3rem; font-style: italic; }
+.rsr-prereq em { font-style: normal; color: var(--rsr-ink); }
+.rsr-delta { margin-left: 0.4rem; color: var(--rsr-gold); }
+
+.rsr-asset-chip {
+    display: inline-block;
+    margin-left: 0.3rem;
+    padding: 0.05rem 0.45rem;
+    background: var(--rsr-panel-soft);
+    border-radius: 999px;
+}
+
+/* ── Bars: contested, clock, pool ── */
+
+.rsr-contenders {
+    margin: 0.4rem 0 0; padding: 0; list-style: none;
+    display: flex; flex-direction: column; gap: 0.25rem;
+}
+
+.rsr-contender,
+.rsr-pool,
+.rsr-clock {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.rsr-pool, .rsr-clock { margin-top: 0.4rem; }
+.rsr-contender-name { flex: 0 0 11rem; font-size: var(--font-size-12, 12px); }
+
+.rsr-bar {
+    flex: 1;
+    height: 7px;
+    background: var(--rsr-panel-soft);
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.rsr-bar-fill {
+    display: block;
+    height: 100%;
+    background: var(--rsr-gold);
+    opacity: 0.8;
+    transition: width 120ms ease-out;
+}
+
+.rsr-bar-value {
+    flex: 0 0 auto;
+    min-width: 3.2rem;
+    font-size: var(--font-size-11, 11px);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.rsr-of { color: var(--rsr-ink-muted); }
+
+.rsr-pips { flex: 1; display: flex; gap: 0.25rem; }
+
+.rsr-pip {
+    width: 12px; height: 12px;
+    border: 1px solid var(--rsr-border);
+    border-radius: 50%;
+}
+
+.rsr-pip.is-filled { background: var(--rsr-gold); border-color: var(--rsr-gold); }
+
+/* ── Help ── */
+
+.rsr-help { display: flex; flex-direction: column; gap: 0.4rem; max-width: 60rem; }
+
+.rsr-help-section {
+    border: 1px solid var(--rsr-border);
+    border-radius: 6px;
+    background: var(--rsr-panel-deep);
+}
+
+.rsr-help-section > summary {
+    padding: 0.5rem 0.75rem;
+    font-family: var(--rsr-heading);
+    cursor: pointer;
+}
+
+.rsr-help-body { padding: 0 0.75rem 0.75rem; color: var(--rsr-ink-muted); line-height: 1.5; }
+
+.rsr-help-try {
+    margin-top: 0.75rem;
+    padding: 0.85rem;
+    border: 1px solid var(--rsr-gold-soft);
+    border-radius: 6px;
+    background: var(--rsr-gold-dim);
+}
+
+.rsr-help-try h3 { margin: 0 0 0.35rem; font-family: var(--rsr-heading); border: none; }
+.rsr-help-try p { margin: 0 0 0.6rem; color: var(--rsr-ink-muted); line-height: 1.5; }
+.rsr-help-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.rsr-help-note {
+    margin: 0.5rem 0 0;
+    font-size: var(--font-size-11, 11px);
+    font-style: italic;
+}
+
+/* ── Editors (DialogV2 windows carry .rsr, so the tokens reach them) ── */
+
+.rsr-editor .rsr-checklist {
+    display: flex; flex-direction: column; gap: 0.15rem;
+    max-height: 9rem; overflow-y: auto;
+    width: 100%;
+}
+
+.rsr-editor .rsr-checkline {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-weight: normal;
+}
+
+.rsr-editor .rsr-checkline input { flex: 0 0 auto; }
+
+.rsr-editor .rsr-outcome-row {
+    display: flex; align-items: center; gap: 0.4rem;
+    width: 100%; margin-bottom: 0.25rem;
+}
+
+.rsr-editor .rsr-outcome-force { flex: 0 0 9rem; font-size: var(--font-size-12, 12px); }
+.rsr-editor .rsr-outcome-row input[type="number"] { flex: 0 0 4.5rem; }
+.rsr-editor .rsr-outcome-row input[type="text"] { flex: 1; }
+.rsr-editor textarea { font-family: var(--rsr-body); resize: vertical; }

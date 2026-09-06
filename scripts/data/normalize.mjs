@@ -80,6 +80,11 @@ export function normalizePlot(raw = {}) {
         description: str(raw.description),
         lifecycle: oneOf(raw.lifecycle, LIFECYCLE, LIFECYCLE.ACTIVE),
         state: int(raw.state, 0),
+        // The bar needs an explicit domain: State is a signed number whose meaning
+        // the GM chooses, so there is nothing to infer a maximum from. Deriving it
+        // from the Phase thresholds would make every bar jump when a Phase is added.
+        stateMin: int(raw.stateMin, 0),
+        stateMax: int(raw.stateMax, 100),
         // Sorted by threshold so state-track can scan without re-sorting on every render.
         phases: arr(raw.phases).filter(isObj).map(normalizePhase)
             .sort((a, b) => a.threshold - b.threshold),

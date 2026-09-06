@@ -1,0 +1,113 @@
+{{!--
+    One Thread row. ("node" in code, "Thread" to the reader — the split lives in
+    lang/en.json and nowhere else.)
+
+    The mode decides the bar shape, and that branch was already resolved in
+    _prepareContext: exactly one of isContested / isClock / isPool is true, or the
+    row is concluded. No comparison happens here, because module templates in v14
+    have no `eq` helper.
+--}}
+<li class="rsr-thread{{#if this.masked}} is-masked{{/if}}{{#if this.isLocked}} is-locked{{/if}}{{#if this.isConcluded}} is-concluded{{/if}}"
+    data-thread-id="{{this.id}}">
+
+    {{#if this.prereqNames.length}}
+    <p class="rsr-prereq">
+        <i class="fa-solid fa-lock" inert></i>
+        {{localize "RSR.thread.requires"}} {{#each this.prereqNames}}<em>{{this}}</em>{{#unless @last}}, {{/unless}}{{/each}}
+    </p>
+    {{else}}
+        {{#if this.hasUnseenPrereqs}}
+        <p class="rsr-prereq"><i class="fa-solid fa-lock" inert></i> {{localize "RSR.thread.requiresUnknown"}}</p>
+        {{/if}}
+    {{/if}}
+
+    <header class="rsr-thread-head">
+        <span class="rsr-thread-name">{{this.name}}</span>
+
+        <span class="rsr-thread-tags">
+            {{#if this.isConcluded}}
+            <span class="rsr-chip rsr-chip-done">{{localize this.statusLabel}}</span>
+            {{else}}
+                {{#if this.isLocked}}
+                <span class="rsr-chip rsr-chip-quiet">{{localize this.statusLabel}}</span>
+                {{/if}}
+            <span class="rsr-chip rsr-chip-mode">{{localize this.modeLabel}}</span>
+            {{/if}}
+
+            {{#if @root.isGM}}
+            <button type="button" class="rsr-icon-btn" data-action="editThread" data-thread-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.editThread'}}">
+                <i class="fa-solid fa-pen" inert></i>
+            </button>
+            <button type="button" class="rsr-icon-btn rsr-danger" data-action="removeThread" data-thread-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.deleteThread'}}">
+                <i class="fa-solid fa-trash" inert></i>
+            </button>
+            {{/if}}
+        </span>
+    </header>
+
+    {{#if this.description}}
+    <p class="rsr-thread-desc">{{this.description}}</p>
+    {{/if}}
+
+    {{!-- Concluded: the fiction of what happened. The delta is GM bookkeeping. --}}
+    {{#if this.isConcluded}}
+    <p class="rsr-outcome">
+        {{#if this.concludedBy}}
+        <strong>{{this.concludedBy.name}}</strong>
+        {{/if}}
+        {{this.outcomeNote}}
+        {{#if this.outcomeDelta}}
+        <span class="rsr-delta">{{localize "RSR.plot.state"}} {{this.outcomeDelta}}</span>
+        {{/if}}
+    </p>
+    {{/if}}
+
+    {{!-- Contested: one bar per Force, because they do not share a pool. --}}
+    {{#if this.isContested}}
+    <ul class="rsr-contenders">
+        {{#each this.contenders}}
+        <li class="rsr-contender{{#if this.masked}} is-masked{{/if}}">
+            <span class="rsr-contender-name">{{this.name}}</span>
+            <span class="rsr-bar">
+                <span class="rsr-bar-fill" style="width: {{this.percent}}%"></span>
+            </span>
+            {{#if this.showValues}}
+            <span class="rsr-bar-value">{{this.current}}<span class="rsr-of">/{{this.total}}</span></span>
+            {{/if}}
+        </li>
+        {{/each}}
+    </ul>
+    {{/if}}
+
+    {{!-- Clock: discrete segments, so the table can count what is left. --}}
+    {{#if this.isClock}}
+    <div class="rsr-clock">
+        <span class="rsr-pips">
+            {{#each this.pips}}<i class="rsr-pip{{#if this.filled}} is-filled{{/if}}"></i>{{/each}}
+        </span>
+        {{#if this.clock.showValues}}
+        <span class="rsr-bar-value">{{this.clock.current}}<span class="rsr-of">/{{this.clock.total}}</span></span>
+        {{/if}}
+    </div>
+    {{/if}}
+
+    {{!-- Invest and fiat both read as one pool against a threshold. --}}
+    {{#if this.isPool}}
+    <div class="rsr-pool">
+        <span class="rsr-bar">
+            <span class="rsr-bar-fill" style="width: {{this.pool.percent}}%"></span>
+        </span>
+        {{#if this.pool.showValues}}
+        <span class="rsr-bar-value">{{this.pool.current}}<span class="rsr-of">/{{this.pool.total}}</span></span>
+        {{/if}}
+    </div>
+    {{#if this.committedAssets.length}}
+    <p class="rsr-committed">
+        {{localize "RSR.asset.committed"}}
+        {{#each this.committedAssets}}<span class="rsr-asset-chip">{{this}}</span>{{/each}}
+    </p>
+    {{/if}}
+    {{/if}}
+</li>

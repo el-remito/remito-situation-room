@@ -68,6 +68,25 @@ export function registerSettings() {
     });
 }
 
+/**
+ * The GM-only fallback entry point, for a world whose Journal sidebar has been
+ * customised out from under our button.
+ *
+ * Takes the application class as an argument rather than importing it: settings.mjs
+ * is imported by data/state.mjs, which apps/ imports, so importing an app here
+ * would close the cycle.
+ */
+export function registerBoardMenu(ApplicationClass) {
+    game.settings.registerMenu(MODULE_ID, 'boardMenu', {
+        name: 'RSR.board.title',
+        label: 'RSR.board.open',
+        hint: 'RSR.settings.boardMenu.hint',
+        icon: 'fa-solid fa-tower-observation',
+        type: ApplicationClass,
+        restricted: true
+    });
+}
+
 // ── reads ────────────────────────────────────────────────────────────────────
 // Every read normalizes, so no caller ever has to defend against a missing field.
 // Normalization already returns fresh objects, so the cached setting cannot be

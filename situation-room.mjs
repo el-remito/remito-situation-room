@@ -10,7 +10,7 @@
  */
 
 import { MODULE_ID, TEMPLATES, VIEW } from './scripts/constants.mjs';
-import { registerSettings } from './scripts/settings.mjs';
+import { registerSettings, registerBoardMenu } from './scripts/settings.mjs';
 import { registerRelay } from './scripts/data/relay.mjs';
 import { registerSidebarButton } from './scripts/ui/sidebar-button.mjs';
 import * as state from './scripts/data/state.mjs';
@@ -20,19 +20,17 @@ Hooks.once('init', () => {
     registerSettings();
     registerSidebarButton();
 
-    // The GM-only fallback path, in case a world's Journal sidebar is customised
-    // out from under the button. registerMenu accepts an ApplicationV2 in v14.
-    game.settings.registerMenu(MODULE_ID, 'boardMenu', {
-        name: 'RSR.board.title',
-        label: 'RSR.board.open',
-        hint: 'RSR.settings.boardMenu.hint',
-        icon: 'fa-solid fa-tower-observation',
-        type: SituationRoom,
-        restricted: true
-    });
+    registerBoardMenu(SituationRoom);
 
-    // v14 path for partial preload. Only templates that exist may be listed.
-    foundry.applications.handlebars.loadTemplates([TEMPLATES.BOARD]);
+    // v14 path for partial preload. Registers each partial under its full path,
+    // which is how the templates reference them. Only templates that exist may be
+    // listed — a missing file here fails the whole call, not just its own entry.
+    foundry.applications.handlebars.loadTemplates([
+        TEMPLATES.BOARD,
+        TEMPLATES.PLOT_CARD,
+        TEMPLATES.NODE_ROW,
+        TEMPLATES.HELP
+    ]);
 });
 
 Hooks.once('ready', () => {

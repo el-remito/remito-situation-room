@@ -1,9 +1,11 @@
 {{!--
     The board shell.
 
-    Segments are rendered from context.segments, which already excludes Cockpit for
-    players and already carries `active` — no `eq` helper exists for module templates
-    in v14, so no comparison happens here.
+    Segments come from context.segments, which already excludes Cockpit for players
+    and already carries `active` — no `eq` helper exists for module templates in
+    v14, so no comparison happens here.
+
+    Partials are referenced by full path, which is how loadTemplates registers them.
 --}}
 <div class="rsr-board-root">
 
@@ -29,13 +31,96 @@
     <section class="rsr-body">
 
         {{#if isSituation}}
-        <div class="rsr-view rsr-view-situation">
-            {{#if plotCount}}
-            <p class="rsr-placeholder">{{localize 'RSR.board.plotListPending'}}</p>
+
+            {{!-- Drilled into one Plot --}}
+            {{#if openPlot}}
+            <div class="rsr-view rsr-view-plot">
+                <button type="button" class="rsr-back" data-action="closePlot">
+                    <i class="fa-solid fa-chevron-left" inert></i>
+                    <span>{{localize "RSR.board.allPlots"}}</span>
+                </button>
+
+                <header class="rsr-plot-detail-head">
+                    <h2 class="rsr-plot-title">{{openPlot.name}}</h2>
+                    {{#if openPlot.phaseLabel}}
+                    <span class="rsr-chip rsr-tone-{{openPlot.phaseTone}}">{{openPlot.phaseLabel}}</span>
+                    {{/if}}
+                    {{#unless openPlot.isActive}}
+                    <span class="rsr-chip rsr-chip-quiet">{{localize openPlot.lifecycleLabel}}</span>
+                    {{/unless}}
+                </header>
+
+                <div class="rsr-state-bar rsr-state-bar-lg" role="img"
+                     aria-label="{{localize 'RSR.plot.state'}} {{openPlot.percent}}%">
+                    <div class="rsr-state-fill rsr-tone-{{openPlot.phaseTone}}"
+                         style="width: {{openPlot.percent}}%"></div>
+                </div>
+                {{#if openPlot.showState}}
+                <p class="rsr-state-value">{{openPlot.state}} / {{openPlot.stateMax}}</p>
+                {{/if}}
+
+                {{#if openPlot.description}}
+                <p class="rsr-plot-desc">{{openPlot.description}}</p>
+                {{/if}}
+
+                {{#if openPlot.forces.length}}
+                <ul class="rsr-force-chips">
+                    {{#each openPlot.forces}}
+                    <li class="rsr-force-chip{{#if this.masked}} is-masked{{/if}}">{{this.name}}</li>
+                    {{/each}}
+                </ul>
+                {{/if}}
+
+                {{#if openPlot.gmNotes}}
+                <p class="rsr-gm-notes"><i class="fa-solid fa-eye-slash" inert></i> {{openPlot.gmNotes}}</p>
+                {{/if}}
+
+                <header class="rsr-section-head">
+                    <h3>{{localize "RSR.thread.plural"}}</h3>
+                    {{#if isGM}}
+                    <button type="button" class="rsr-btn" data-action="createThread">
+                        <i class="fa-solid fa-plus" inert></i>
+                        <span>{{localize "RSR.editor.newThread"}}</span>
+                    </button>
+                    {{/if}}
+                </header>
+
+                {{#if openPlot.threads.length}}
+                <ul class="rsr-threads">
+                    {{#each openPlot.threads}}
+                    {{> "modules/remito-situation-room/templates/partials/node-row.hbs"}}
+                    {{/each}}
+                </ul>
+                {{else}}
+                <p class="rsr-empty">{{localize "RSR.board.noThreads"}}</p>
+                {{/if}}
+            </div>
+
+            {{!-- The Plot list --}}
             {{else}}
-            <p class="rsr-empty">{{localize 'RSR.board.noPlots'}}</p>
+            <div class="rsr-view rsr-view-situation">
+                {{#if isGM}}
+                <header class="rsr-section-head">
+                    <h3>{{localize "RSR.plot.plural"}}</h3>
+                    <button type="button" class="rsr-btn" data-action="createPlot">
+                        <i class="fa-solid fa-plus" inert></i>
+                        <span>{{localize "RSR.editor.newPlot"}}</span>
+                    </button>
+                </header>
+                {{/if}}
+
+                {{#if plots.length}}
+                <div class="rsr-plot-grid">
+                    {{#each plots}}
+                    {{> "modules/remito-situation-room/templates/partials/plot-card.hbs"}}
+                    {{/each}}
+                </div>
+                {{else}}
+                <p class="rsr-empty">{{localize "RSR.board.noPlots"}}</p>
+                {{/if}}
+            </div>
             {{/if}}
-        </div>
+
         {{/if}}
 
         {{#if isCockpit}}
@@ -46,7 +131,7 @@
 
         {{#if isHelp}}
         <div class="rsr-view rsr-view-help">
-            <p class="rsr-placeholder">{{localize 'RSR.board.helpPending'}}</p>
+            {{> "modules/remito-situation-room/templates/partials/help.hbs"}}
         </div>
         {{/if}}
 

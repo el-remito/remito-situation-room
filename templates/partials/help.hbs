@@ -1,0 +1,41 @@
+{{!--
+    Help. Same sections for everyone; the copy differs by role.
+
+    The variant is picked by an i18n key suffix (.gm / .player) chosen in
+    _prepareContext, never by assembling a string in JS. Only the GM gets the
+    example controls.
+
+    Sections grow with each milestone — whatever a milestone adds, it adds its own
+    section here rather than leaving the docs to a final-week write-up.
+--}}
+<div class="rsr-help">
+
+    {{#each helpSections}}
+    <details class="rsr-help-section"{{#if @first}} open{{/if}}>
+        <summary>{{localize this.title}}</summary>
+        <div class="rsr-help-body">{{localize this.body}}</div>
+    </details>
+    {{/each}}
+
+    {{#if isGM}}
+    <section class="rsr-help-try">
+        <h3>{{localize "RSR.help.tryTitle"}}</h3>
+        <p>{{localize "RSR.help.tryBody"}}</p>
+        <div class="rsr-help-actions">
+            <button type="button" class="rsr-btn rsr-btn-primary" data-action="generateExample">
+                <i class="fa-solid fa-wand-magic-sparkles" inert></i>
+                <span>{{localize "RSR.help.generateExample"}}</span>
+            </button>
+            {{#if hasExample}}
+            <button type="button" class="rsr-btn rsr-danger" data-action="clearExample">
+                <i class="fa-solid fa-trash" inert></i>
+                <span>{{localize "RSR.help.removeExample"}}</span>
+            </button>
+            {{/if}}
+        </div>
+        {{#if hasExample}}
+        <p class="rsr-help-note">{{localize "RSR.help.examplePresent"}}</p>
+        {{/if}}
+    </section>
+    {{/if}}
+</div>

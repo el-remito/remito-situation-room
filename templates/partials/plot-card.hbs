@@ -1,0 +1,65 @@
+{{!--
+    One Plot in the list.
+
+    The State bar is a plain fill with ONE chip naming the current Phase. There is
+    deliberately no band ladder: showing every Phase label would tell a player that
+    a "Rain of Fire" Phase exists and roughly how far off it is. The context only
+    ever carries the current one, so there is nothing else here to print.
+--}}
+<article class="rsr-plot-card{{#if this.masked}} is-masked{{/if}}" data-plot-id="{{this.id}}">
+
+    <header class="rsr-plot-head">
+        <button type="button" class="rsr-plot-name" data-action="openPlot" data-plot-id="{{this.id}}">
+            {{this.name}}
+        </button>
+
+        {{#if this.phaseLabel}}
+        <span class="rsr-chip rsr-tone-{{this.phaseTone}}">{{this.phaseLabel}}</span>
+        {{/if}}
+
+        {{#unless this.isActive}}
+        <span class="rsr-chip rsr-chip-quiet">{{localize this.lifecycleLabel}}</span>
+        {{/unless}}
+
+        {{#if this.isExample}}
+        <span class="rsr-chip rsr-chip-example">{{localize "RSR.help.exampleTag"}}</span>
+        {{/if}}
+    </header>
+
+    <div class="rsr-state-bar" role="img"
+         aria-label="{{localize 'RSR.plot.state'}} {{this.percent}}%">
+        <div class="rsr-state-fill rsr-tone-{{this.phaseTone}}" style="width: {{this.percent}}%"></div>
+    </div>
+
+    {{#if this.showState}}
+    <p class="rsr-state-value">{{this.state}} / {{this.stateMax}}</p>
+    {{/if}}
+
+    {{#if this.forces.length}}
+    <ul class="rsr-force-chips">
+        {{#each this.forces}}
+        <li class="rsr-force-chip{{#if this.masked}} is-masked{{/if}}">{{this.name}}</li>
+        {{/each}}
+    </ul>
+    {{/if}}
+
+    <footer class="rsr-plot-foot">
+        <span class="rsr-count">{{this.threadCount}} {{localize "RSR.thread.plural"}}</span>
+        {{#if @root.isGM}}
+        <span class="rsr-row-tools">
+            <button type="button" class="rsr-icon-btn" data-action="editPlot" data-plot-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.editPlot'}}">
+                <i class="fa-solid fa-pen" inert></i>
+            </button>
+            <button type="button" class="rsr-icon-btn rsr-danger" data-action="removePlot" data-plot-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.deletePlot'}}">
+                <i class="fa-solid fa-trash" inert></i>
+            </button>
+        </span>
+        {{/if}}
+        <button type="button" class="rsr-open-arrow" data-action="openPlot" data-plot-id="{{this.id}}"
+                data-tooltip="{{localize 'RSR.board.openPlot'}}">
+            <i class="fa-solid fa-chevron-right" inert></i>
+        </button>
+    </footer>
+</article>

@@ -14,6 +14,7 @@
 import { LIFECYCLE } from '../constants.mjs';
 import * as S from '../settings.mjs';
 import { registerOperations, requestWrite } from './relay.mjs';
+import { buildExample } from './example-plot.mjs';
 
 // ── reads ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,14 @@ function upsertRow(rows, patch) {
     const next = [...rows];
     next[index] = { ...next[index], ...patch, id };
     return next;
+}
+
+/** Replace rows sharing an id, append the rest. Order of existing rows is kept. */
+function mergeById(rows, incoming) {
+    const byId = new Map(incoming.map((r) => [r.id, r]));
+    const merged = rows.map((r) => byId.get(r.id) ?? r);
+    for (const r of incoming) if (!rows.some((x) => x.id === r.id)) merged.push(r);
+    return merged;
 }
 
 // ── operations (GM side) ─────────────────────────────────────────────────────
@@ -163,6 +172,19 @@ const operations = {
     },
 
     /**
+     * Builds the Help tab's example. Ids in the fixture are stable, so pressing
+     * Generate twice overwrites the example in place rather than growing a second
+     * copy of it — and never touches a hand-authored row.
+     */
+    async 'example.generate'() {
+        const { plots, nodes, forces, assets } = buildExample();
+        await S.setForces(mergeById(S.getForces(), forces));
+        await S.setPlots(mergeById(S.getPlots(), plots));
+        await S.setNodes(mergeById(S.getNodes(), nodes));
+        await S.setAssets(mergeById(S.getAssets(), assets));
+    },
+
+    /**
      * Deletes exactly what the Help tab generated and nothing else. This is why
      * isExample is on every entity rather than tracked in a side list — a side
      * list can drift out of step with the data it points at.
@@ -192,7 +214,11 @@ export const deleteForce = (forceId) => write('force.delete', { forceId });
 export const upsertAsset = (patch) => write('asset.upsert', { patch });
 export const deleteAsset = (assetId) => write('asset.delete', { assetId });
 export const setTurnCount = (count) => write('turn.set', { count });
+export const generateExample = () => write('example.generate', {});
 export const removeExample = () => write('example.remove', {});
+
+/** A read, so no relay: any client can ask whether the example is currently present. */
+export const hasExample = (board = readBoard()) => board.plots.some((p) => p.isExample);
 
 /** Exposed for tools/ and for the console API; not used by the UI. */
 export const OPERATION_NAMES = Object.keys(operations);

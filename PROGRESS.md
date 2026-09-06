@@ -9,7 +9,8 @@ before its milestone has passed.
 | Milestone | Verified | Committed |
 |---|---|---|
 | M1 | passed | `1d9bd86` |
-| M2 | awaiting | — |
+| M2 | passed | `334d7b9` |
+| M3 | passed | `PENDING` |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)
@@ -42,14 +43,19 @@ before its milestone has passed.
 - [x] `tools/all.mjs` runner + single-funnel static pass
 
 ## M3 — Advancement and conclusion
-- [ ] `logic/progress.mjs` — thresholds, pools, contest standings
-- [ ] Mode: fiat
-- [ ] Mode: invest
-- [ ] Mode: clock
-- [ ] Mode: contested
-- [ ] Plot default + per-Thread override
-- [ ] Per-Force outcomes
-- [ ] Conclude flow (`DialogV2.wait`, one button per Force)
+- [x] `logic/progress.mjs` — thresholds, pools, contest standings
+- [x] Mode: fiat
+- [x] Mode: invest
+- [x] Mode: clock
+- [x] Mode: contested
+- [x] Plot default + per-Thread override
+- [x] Per-Force outcomes
+- [x] Conclude flow (`DialogV2.prompt`, a radio row per Force)
+- [x] Reopen, reversing the delta actually applied
+- [x] Asset modifiers feed the effective threshold
+- [x] `tools/check-progress.mjs` — 40 assertions
+- [x] Syntax-parse static pass
+- [x] Scroll/focus preserved across a push (PARTS `scrollable`)
 
 ## M4 — Forces, Resources, Assets
 - [ ] Force panels + Resource pools

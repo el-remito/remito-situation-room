@@ -20,6 +20,7 @@ import {
     assetsForNode, hasExample, forceById
 } from '../data/state.mjs';
 import { resolvePhase, resolvePhaseForGM, statePercent } from '../logic/state-track.mjs';
+import { resolveMode, effectiveThreshold, isFull } from '../logic/progress.mjs';
 import {
     visibleRows, projectIdentity, projectProgress, projectForceChip, showValues
 } from '../logic/visibility.mjs';
@@ -31,7 +32,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * RSR.help.<key>.body.<gm|player> — the variant picks the string, rather than JS
  * assembling one. A milestone that adds a feature adds its key here.
  */
-const HELP_SECTIONS = ['plots', 'threads', 'state'];
+const HELP_SECTIONS = ['plots', 'threads', 'advancing', 'state'];
 
 /** Localized once per render rather than per row. */
 const maskLabel = () => game.i18n.localize('RSR.visibility.maskedName');
@@ -71,12 +72,26 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             createThread: SituationRoom._onCreateThread,
             editThread: SituationRoom._onEditThread,
             removeThread: SituationRoom._onRemoveThread,
+            advanceThread: SituationRoom._onAdvanceThread,
+            concludeThread: SituationRoom._onConcludeThread,
+            reopenThread: SituationRoom._onReopenThread,
             generateExample: SituationRoom._onGenerateExample,
             clearExample: SituationRoom._onClearExample
         }
     };
 
-    static PARTS = { main: { template: TEMPLATES.BOARD } };
+    /**
+     * `scrollable` is the native v14 mechanism: the Handlebars mixin snapshots the
+     * listed elements' scroll positions in _preSyncPartState and restores them in
+     * _syncPartState. Without it every re-render — including one triggered by
+     * another client — throws the reader back to the top of the board.
+     *
+     * The same pass restores focus, but only for an element with an id or a [name],
+     * which is why the advance buttons carry a name.
+     */
+    static PARTS = {
+        main: { template: TEMPLATES.BOARD, scrollable: ['.rsr-body'] }
+    };
 
     /** Which segment is showing. Instance state — a view preference, not world data. */
     #view = VIEW.SITUATION;
@@ -120,6 +135,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             turn: board.turn.count,
             hasExample: hasExample(board),
             helpSections: HELP_SECTIONS.map((key) => ({
+                key,
                 title: `RSR.help.${key}.title`,
                 body: `RSR.help.${key}.body.${isGM ? 'gm' : 'player'}`
             })),
@@ -186,9 +202,14 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      */
     #buildThread(board, plot, node, isGM) {
         const identity = projectIdentity(node, isGM, maskLabel());
-        const mode = node.mode ?? plot.defaultMode;          // null means inherit
+        const mode = resolveMode(node, plot);
         const concluded = node.status === NODE_STATUS.CONCLUDED;
         const locked = node.status === NODE_STATUS.LOCKED;
+        const assets = assetsForNode(board, node.id);
+
+        // Assets committed to this Thread change what it costs, so the bar and the
+        // GM's controls both work against the effective number, not the raw one.
+        const threshold = effectiveThreshold(node, assets);
 
         const row = {
             id: node.id,
@@ -203,7 +224,14 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             isLocked: locked,
             isContested: false,
             isClock: false,
-            isPool: false
+            isPool: false,
+            // GM affordances. A locked Thread is still advanceable — locking is about
+            // what the fiction allows, and the GM is the one deciding that.
+            canPush: isGM && !concluded,
+            canConclude: isGM && !concluded,
+            canReopen: isGM && concluded,
+            isFull: isFull(node, plot, assets),
+            discounted: isGM && threshold !== node.threshold ? node.threshold : null
         };
 
         // Prerequisites are named only when the viewer may see the prerequisite too;
@@ -236,9 +264,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                     if (!chip) return null;
                     return {
                         ...chip,
+                        canPush: row.canPush,
                         ...projectProgress({
                             current: node.progress.byForce[force.id] ?? 0,
-                            total: node.threshold, isGM, entity: node
+                            total: threshold, isGM, entity: node
                         })
                     };
                 })
@@ -261,7 +290,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         // has nothing pushing it, which reads correctly as an empty bar.
         row.isPool = true;
         row.pool = projectProgress({
-            current: node.progress.pool, total: node.threshold, isGM, entity: node
+            current: node.progress.pool, total: threshold, isGM, entity: node
         });
         row.committedAssets = isGM
             ? assetsForNode(board, node.id).map((a) => a.name)
@@ -315,6 +344,26 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     static async _onRemoveThread(event, target) {
         const { confirmDeleteThread } = await import('./editors.mjs');
         await confirmDeleteThread(target.dataset.threadId);
+    }
+
+    /** Amount and spender ride on the button, so one handler serves every mode. */
+    static async _onAdvanceThread(event, target) {
+        const { advanceNode } = await import('../data/state.mjs');
+        await advanceNode(
+            target.dataset.threadId,
+            Number(target.dataset.amount) || 1,
+            target.dataset.forceId || null
+        );
+    }
+
+    static async _onConcludeThread(event, target) {
+        const { promptConclude } = await import('./editors.mjs');
+        await promptConclude(target.dataset.threadId);
+    }
+
+    static async _onReopenThread(event, target) {
+        const { reopenNode } = await import('../data/state.mjs');
+        await reopenNode(target.dataset.threadId);
     }
 
     static async _onGenerateExample() {

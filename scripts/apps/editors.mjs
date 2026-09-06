@@ -11,6 +11,13 @@
  *    parsed form and the caller gets it directly; returning nothing would silently
  *    hand back the action string instead.
  *  - Form values are read off `button.form.elements.<name>` inside the callback.
+ *  - `content` is passed through foundry.utils.cleanHTML, which DROPS any tag not
+ *    on ALLOWED_HTML_TAGS and any attribute not on ALLOWED_HTML_ATTRIBUTES —
+ *    silently, as an empty fragment. Verified against common/constants.mjs that
+ *    everything below survives: input keeps checked/disabled/name/value/
+ *    placeholder/type, select and textarea keep name, option keeps selected/value,
+ *    and the global list covers class, data-*, style and id. Adding a tag or
+ *    attribute outside those lists here fails by rendering nothing, with no error.
  *
  * Phases are edited as one line per Phase rather than a repeating widget. That is
  * deliberate for now: the reveal/lock lists that land in M6 need real per-Phase UI,
@@ -20,9 +27,12 @@
 import { LIFECYCLE, MODE, NODE_STATUS, VISIBILITY } from '../constants.mjs';
 import {
     readBoard, plotById, nodeById, nodesForPlot, upsertPlot, deletePlot,
-    upsertNode, deleteNode, removeExample
+    upsertNode, deleteNode, removeExample, concludeNode
 } from '../data/state.mjs';
 import { getDefaultVisibility } from '../settings.mjs';
+import {
+    investmentOf, outcomeFor, stateAfterConclusion, effectiveThreshold, leader
+} from '../logic/progress.mjs';
 
 const { DialogV2 } = foundry.applications.api;
 const esc = (v) => foundry.utils.escapeHTML(String(v ?? ''));
@@ -285,6 +295,99 @@ export async function promptThread(threadId, plotId) {
     }
     await upsertNode(patch);
     return patch;
+}
+
+// ── conclusion ───────────────────────────────────────────────────────────────
+
+/**
+ * Ask who carried the Thread, then conclude it.
+ *
+ * "Who won" is not a yes/no question, and contested Threads are GM-adjudicated by
+ * design — the standings inform the call, they do not make it.
+ *
+ * The choice is a radio in each row rather than one button per Force. Force names
+ * are sentences, and four of them in a button strip wrap into an unreadable mess;
+ * more importantly the row is where the investment and the resulting State change
+ * already are, so the decision sits next to what it follows from. The Force
+ * currently ahead is preselected, which is a default, not a verdict.
+ */
+export async function promptConclude(threadId) {
+    const board = readBoard();
+    const node = nodeById(board, threadId);
+    if (!node) return false;
+    const plot = plotById(board, node.plotId);
+    if (!plot) return false;
+
+    const assets = board.assets.filter((a) => a.nodeId === node.id);
+    const forces = plot.forceIds
+        .map((id) => board.forces.find((f) => f.id === id))
+        .filter(Boolean);
+
+    // With no Forces the dialog still works: only the Nobody option is offered,
+    // which concludes the Thread without moving State.
+    const rows = forces.map((force) => {
+        const invested = investmentOf(node, force.id);
+        const after = stateAfterConclusion(plot, node, force.id);
+        const delta = after - plot.state;
+        const outcome = outcomeFor(node, force.id);
+        return { force, invested, delta, note: outcome?.note ?? '' };
+    });
+
+    // The winner is picked in the LIST, not with one button per Force. Force names
+    // are sentences ("The Northwall Guard"), and a button row cannot hold four of
+    // them without wrapping into an unreadable mess. Putting the radio in the row
+    // also means the choice sits beside the investment and consequence it follows
+    // from, instead of a separate strip underneath.
+    const ahead = leader(node, plot.forceIds);
+    const options = [
+        ...rows.map((r) => ({
+            value: r.force.id,
+            name: r.force.name,
+            invested: String(r.invested),
+            delta: `${r.delta >= 0 ? '+' : ''}${r.delta}`,
+            note: r.note,
+            checked: r.force.id === ahead
+        })),
+        {
+            value: 'nobody', name: L('RSR.editor.concludeNobody'),
+            invested: '—', delta: '0', note: L('RSR.editor.concludeNobodyHint'),
+            checked: ahead === null
+        }
+    ];
+
+    const table = `<ul class="rsr-conclude-list">${options.map((o) => `
+        <li>
+            <label class="rsr-conclude-row">
+                <input type="radio" name="winner" value="${esc(o.value)}"${o.checked ? ' checked' : ''}>
+                <span class="rsr-conclude-force">${esc(o.name)}</span>
+                <span class="rsr-conclude-invested">${esc(o.invested)}</span>
+                <span class="rsr-conclude-delta">${esc(o.delta)}</span>
+                <span class="rsr-conclude-note">${esc(o.note)}</span>
+            </label>
+        </li>`).join('')}</ul>`;
+
+    const threshold = effectiveThreshold(node, assets);
+    const summary = game.i18n.format('RSR.editor.concludeSummary', {
+        name: esc(node.name), threshold
+    });
+
+    const chosen = await DialogV2.prompt({
+        window: { title: L('RSR.editor.concludeTitle') },
+        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
+        position: { width: 560 },
+        content: `<p>${summary}</p>${table}`,
+        ok: {
+            label: L('RSR.editor.conclude'),
+            icon: 'fa-solid fa-gavel',
+            // The return value IS the dialog result — see the header note.
+            callback: (event, button) => button.form.elements.winner?.value ?? null
+        },
+        rejectClose: false
+    });
+
+    if (!chosen) return false;
+    await concludeNode(threadId, chosen === 'nobody' ? null : chosen);
+    return true;
 }
 
 // ── destructive confirmations ────────────────────────────────────────────────

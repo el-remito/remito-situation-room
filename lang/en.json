@@ -95,5 +95,17 @@
     "RSR.notify.noGmForWrite": "No Gamemaster is connected, so that change cannot be saved right now.",
     "RSR.notify.relayTimeout": "The Gamemaster's client did not confirm that change. Nothing was saved.",
     "RSR.notify.nameRequired": "Give it a name first.",
-    "RSR.notify.noPlotForThread": "Open a Plot before adding a Thread to it."
+    "RSR.notify.noPlotForThread": "Open a Plot before adding a Thread to it.",
+    "RSR.thread.ready": "Ready",
+    "RSR.thread.discountHint": "Committed Assets have lowered this Thread's cost. The number shown is what it cost before them.",
+    "RSR.editor.conclude": "Conclude…",
+    "RSR.editor.concludeTitle": "Conclude Thread",
+    "RSR.editor.concludeSummary": "Who carried \"{name}\"? Its threshold is {threshold}. Whoever you pick applies their outcome to the Plot's State.",
+    "RSR.editor.concludeNobody": "Nobody",
+    "RSR.editor.reopen": "Reopen",
+    "RSR.editor.reopenHint": "Reactivate this Thread and take back the State it moved. What was actually applied is reversed, so a change that hit the top or bottom of the range does not invent State on the way back.",
+    "RSR.help.advancing.title": "Pushing a Thread along",
+    "RSR.help.advancing.body.gm": "How a Thread moves depends on its mode. Narrative tracks nothing — you conclude it when the fiction says so. Investment fills one shared pool that any Force can add to, and reaches its threshold on its own. Clock counts discrete ticks. Contested gives every Force its own separate pile, and never concludes itself no matter how far ahead someone is, because who won is a fiction question and the numbers are only one input to it. Conclude asks who carried it and shows what each answer would do to State before you commit. Reopen undoes it, reversing exactly what was applied.",
+    "RSR.help.advancing.body.player": "Threads move in different ways. Some fill up as effort is poured into them, some tick over in stages, and some are a tug of war between two sides with separate footholds. Some do not track anything visible at all and simply resolve when the story gets there. When one concludes you will see who carried it and what it did.",
+    "RSR.editor.concludeNobodyHint": "Concludes the Thread without moving State."
 }

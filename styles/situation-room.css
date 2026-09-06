@@ -44,9 +44,26 @@
 
 /* Core's `a.button, button, kbd` rule forces a flex row at var(--button-size).
    Scoped away from .header-control or the window's own Close/Toggle buttons lose
-   their Font Awesome glyphs — same specificity, source order wins. */
+   their Font Awesome glyphs — same specificity, source order wins.
+
+   Font only. Setting `color` here was a real bug: `.rsr button:not(.header-control)`
+   scores (0,2,1), which outranks the system's own
+   `.dh-style button:where(:not(.plain, ...))` at (0,1,1) — so every Daggerheart
+   dialog button inside one of our windows got cream text painted onto its gold
+   background and became unreadable. Our own buttons name their colour below;
+   anything the system styles is left alone to style itself. */
 .rsr button:not(.header-control) {
     font-family: var(--rsr-body);
+}
+
+/* Ours, and only ours. */
+.rsr-segment,
+.rsr-btn,
+.rsr-icon-btn,
+.rsr-mini,
+.rsr-plot-name,
+.rsr-back,
+.rsr-open-arrow {
     color: var(--rsr-ink);
 }
 
@@ -502,3 +519,128 @@
 .rsr-editor .rsr-outcome-row input[type="number"] { flex: 0 0 4.5rem; }
 .rsr-editor .rsr-outcome-row input[type="text"] { flex: 1; }
 .rsr-editor textarea { font-family: var(--rsr-body); resize: vertical; }
+
+/* ── M3 — Advancement and conclusion ────────────────────────────────────── */
+
+/* GM push controls. Deliberately small and low-contrast: they sit on every row,
+   so at full weight they would out-shout the Threads they are attached to. */
+.rsr-controls { display: flex; align-items: center; gap: 0.25rem; }
+.rsr-controls-inline { flex: 0 0 auto; }
+
+.rsr-controls-foot {
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.45rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--rsr-border);
+}
+
+.rsr-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0.1rem 0.4rem;
+    background: var(--rsr-panel-soft);
+    border: 1px solid var(--rsr-border);
+    border-radius: 3px;
+    font-size: var(--font-size-11, 11px);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.rsr-mini:hover { border-color: var(--rsr-gold-soft); color: var(--rsr-gold); }
+
+.rsr-mini-primary {
+    padding: 0.15rem 0.6rem;
+    border-color: var(--rsr-gold-soft);
+    background: var(--rsr-gold-dim);
+}
+
+/* "Ready" is the one place gold is used as a filled state rather than an outline:
+   it is the single moment on the board that wants the GM to look at it. */
+.rsr-ready {
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    background: var(--rsr-gold);
+    color: var(--rsr-panel-deep);
+    font-size: var(--font-size-11, 11px);
+    letter-spacing: 0.04em;
+}
+
+/* A struck-through original cost, shown only to the GM when Assets discounted it. */
+.rsr-discount {
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--rsr-ink-muted);
+}
+
+.rsr-discount i { text-decoration: none; display: inline-block; }
+
+/* The conclude dialog. The winner is a radio in the row, not a button in a strip:
+   Force names are sentences, and the choice belongs beside the numbers it follows
+   from. Two lines per row: the pick and its numbers on top, the outcome sentence
+   beneath at full width. Outcome notes are free GM prose with no length limit, so
+   any column they share will eventually clip — giving them their own line is the
+   only layout that holds at every length. */
+.rsr-conclude-list {
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.rsr-conclude-row {
+    display: grid;
+    grid-template-columns: auto 1fr 3rem 3.25rem;
+    grid-template-areas:
+        "pick  force invested delta"
+        ".     note  note     note";
+    align-items: center;
+    column-gap: 0.6rem;
+    row-gap: 0.15rem;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.rsr-conclude-row:hover { background: var(--rsr-panel-soft); }
+
+/* :has lets the whole row show selection, so the hit target is the row and the
+   radio is only the affordance. */
+.rsr-conclude-row:has(input:checked) {
+    border-color: var(--rsr-gold-soft);
+    background: var(--rsr-gold-dim);
+}
+
+.rsr-conclude-row input { grid-area: pick; margin: 0; }
+.rsr-conclude-force { grid-area: force; font-family: var(--rsr-heading); }
+
+.rsr-conclude-invested { grid-area: invested; }
+.rsr-conclude-delta { grid-area: delta; color: var(--rsr-gold); }
+
+.rsr-conclude-invested,
+.rsr-conclude-delta {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-12, 12px);
+}
+
+.rsr-conclude-note {
+    grid-area: note;
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-12, 12px);
+    line-height: 1.35;
+}
+
+/* An outcome with a delta but no note is legitimate — the row keeps its top line
+   and simply loses the second. */
+.rsr-conclude-note:empty { display: none; }

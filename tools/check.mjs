@@ -3,16 +3,19 @@
  * Static passes. `node tools/check.mjs`
  *
  * There is no linter and no test runner in this family, so these are the checks
- * that stand in for one. All four catch mistakes that are invisible until Foundry
- * is running and then fail silently rather than loudly:
+ * that stand in for one. Every pass here catches a mistake that is invisible until
+ * Foundry is running, and then fails silently rather than loudly:
  *
+ *   0. parse        — every source parses (a syntax error is a blank window)
  *   1. imports      — every relative import specifier resolves to a real file
  *   2. i18n         — every RSR.* key used exists, and every key defined is used
  *   3. data-action  — every data-action in a template has a registered handler
  *   4. naming       — "Thread" appears only in lang/en.json; no user-visible "Node"
+ *   5. funnels      — game.settings only in settings.mjs, game.socket only in relay.mjs
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, relative } from 'node:path';
 
@@ -52,6 +55,24 @@ const templates = walk(join(ROOT, 'templates'), (n) => n.endsWith('.hbs'));
 const read = (f) => readFileSync(f, 'utf8');
 
 console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C.off}\n`);
+
+// ── 0. every source parses ───────────────────────────────────────────────────
+{
+    /**
+     * With no linter and no build step, a syntax error surfaces only when Foundry
+     * loads the module — as a blank window and a console trace. `node --check`
+     * parses without executing, so files full of Foundry globals still pass.
+     */
+    const problems = [];
+    for (const file of sources) {
+        const run = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+        if (run.status !== 0) {
+            const detail = (run.stderr || '').split('\n').find((l) => l.includes('Error')) ?? 'parse failed';
+            problems.push(`${rel(file)}: ${detail.trim()}`);
+        }
+    }
+    report(`sources parse (${sources.length} files)`, problems);
+}
 
 // ── 1. import specifiers resolve ─────────────────────────────────────────────
 {

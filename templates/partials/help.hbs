@@ -11,7 +11,7 @@
 <div class="rsr-help">
 
     {{#each helpSections}}
-    <details class="rsr-help-section"{{#if @first}} open{{/if}}>
+    <details class="rsr-help-section" data-sync="help-{{this.key}}"{{#if @first}} open{{/if}}>
         <summary>{{localize this.title}}</summary>
         <div class="rsr-help-body">{{localize this.body}}</div>
     </details>

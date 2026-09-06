@@ -122,6 +122,9 @@ export function normalizeNode(raw = {}) {
         status: oneOf(raw.status, NODE_STATUS, NODE_STATUS.ACTIVE),
         concludedBy: typeof raw.concludedBy === 'string' && raw.concludedBy.length
             ? raw.concludedBy : null,
+        // What the conclusion actually moved State by — not the declared delta, which
+        // differs whenever State hit a bound. Reopening reverses THIS.
+        appliedDelta: int(raw.appliedDelta, 0),
         prereqNodeIds: idList(raw.prereqNodeIds),
         playerAssignable: bool(raw.playerAssignable),
         sort: int(raw.sort, 0),

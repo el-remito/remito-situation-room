@@ -15,6 +15,10 @@ import { LIFECYCLE } from '../constants.mjs';
 import * as S from '../settings.mjs';
 import { registerOperations, requestWrite } from './relay.mjs';
 import { buildExample } from './example-plot.mjs';
+import {
+    resolveMode, addToPool, tickClock, addForForce, concludeThread, reopenThread
+} from '../logic/progress.mjs';
+import { MODE } from '../constants.mjs';
 
 // ── reads ────────────────────────────────────────────────────────────────────
 
@@ -167,6 +171,67 @@ const operations = {
         await S.setAssets(S.getAssets().filter((a) => a.id !== assetId));
     },
 
+    /**
+     * Push a Thread along. The mode decides which pile the amount lands in, and
+     * logic/progress.mjs does the arithmetic — this only reads, routes and writes.
+     */
+    async 'node.advance'({ nodeId, forceId = null, amount = 1 }) {
+        const nodes = S.getNodes();
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const plot = S.getPlots().find((p) => p.id === node.plotId) ?? null;
+        const assets = S.getAssets().filter((a) => a.nodeId === nodeId);
+        const mode = resolveMode(node, plot);
+
+        let progress;
+        if (mode === MODE.CLOCK) progress = tickClock(node, amount, assets);
+        else if (mode === MODE.CONTESTED) {
+            if (!forceId) return;               // contested spending must name a spender
+            progress = addForForce(node, forceId, amount, assets);
+        } else progress = addToPool(node, amount, assets);
+
+        await S.setNodes(nodes.map((n) => (n.id === nodeId ? { ...n, progress } : n)));
+    },
+
+    /**
+     * Conclude a Thread and move the Plot. Both writes happen here so a conclusion
+     * can never land with the State change missing.
+     */
+    async 'node.conclude'({ nodeId, forceId = null }) {
+        const nodes = S.getNodes();
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const plots = S.getPlots();
+        const plot = plots.find((p) => p.id === node.plotId);
+        if (!plot) return;
+
+        const result = concludeThread(plot, node, forceId);
+        await S.setNodes(nodes.map((n) => (n.id === nodeId
+            ? { ...result.node, appliedDelta: result.delta }
+            : n)));
+        await S.setPlots(plots.map((p) => (p.id === plot.id
+            ? { ...p, state: result.plotState }
+            : p)));
+    },
+
+    /** Undo a conclusion, reversing the delta that was actually applied. */
+    async 'node.reopen'({ nodeId }) {
+        const nodes = S.getNodes();
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const plots = S.getPlots();
+        const plot = plots.find((p) => p.id === node.plotId);
+        if (!plot) return;
+
+        const result = reopenThread(plot, node, node.appliedDelta);
+        await S.setNodes(nodes.map((n) => (n.id === nodeId
+            ? { ...result.node, appliedDelta: 0 }
+            : n)));
+        await S.setPlots(plots.map((p) => (p.id === plot.id
+            ? { ...p, state: result.plotState }
+            : p)));
+    },
+
     async 'turn.set'({ count }) {
         await S.setTurn({ count });
     },
@@ -213,6 +278,10 @@ export const upsertForce = (patch) => write('force.upsert', { patch });
 export const deleteForce = (forceId) => write('force.delete', { forceId });
 export const upsertAsset = (patch) => write('asset.upsert', { patch });
 export const deleteAsset = (assetId) => write('asset.delete', { assetId });
+export const advanceNode = (nodeId, amount, forceId = null) =>
+    write('node.advance', { nodeId, amount, forceId });
+export const concludeNode = (nodeId, forceId = null) => write('node.conclude', { nodeId, forceId });
+export const reopenNode = (nodeId) => write('node.reopen', { nodeId });
 export const setTurnCount = (count) => write('turn.set', { count });
 export const generateExample = () => write('example.generate', {});
 export const removeExample = () => write('example.remove', {});

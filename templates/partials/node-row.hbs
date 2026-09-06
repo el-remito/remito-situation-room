@@ -62,6 +62,15 @@
         <span class="rsr-delta">{{localize "RSR.plot.state"}} {{this.outcomeDelta}}</span>
         {{/if}}
     </p>
+    {{#if this.canReopen}}
+    <div class="rsr-controls">
+        <button type="button" class="rsr-mini" data-action="reopenThread" data-thread-id="{{this.id}}"
+                data-tooltip="{{localize 'RSR.editor.reopenHint'}}">
+            <i class="fa-solid fa-rotate-left" inert></i>
+            <span>{{localize "RSR.editor.reopen"}}</span>
+        </button>
+    </div>
+    {{/if}}
     {{/if}}
 
     {{!-- Contested: one bar per Force, because they do not share a pool. --}}
@@ -75,6 +84,19 @@
             </span>
             {{#if this.showValues}}
             <span class="rsr-bar-value">{{this.current}}<span class="rsr-of">/{{this.total}}</span></span>
+            {{/if}}
+            {{#if this.canPush}}
+            <span class="rsr-controls rsr-controls-inline">
+                <button type="button" class="rsr-mini" data-action="advanceThread"
+                        name="push-{{../id}}-{{this.id}}-1"
+                        data-thread-id="{{../id}}" data-force-id="{{this.id}}" data-amount="1">+1</button>
+                <button type="button" class="rsr-mini" data-action="advanceThread"
+                        name="push-{{../id}}-{{this.id}}-3"
+                        data-thread-id="{{../id}}" data-force-id="{{this.id}}" data-amount="3">+3</button>
+                <button type="button" class="rsr-mini" data-action="advanceThread"
+                        name="push-{{../id}}-{{this.id}}-m1"
+                        data-thread-id="{{../id}}" data-force-id="{{this.id}}" data-amount="-1">&minus;1</button>
+            </span>
             {{/if}}
         </li>
         {{/each}}
@@ -90,6 +112,16 @@
         {{#if this.clock.showValues}}
         <span class="rsr-bar-value">{{this.clock.current}}<span class="rsr-of">/{{this.clock.total}}</span></span>
         {{/if}}
+        {{#if this.canPush}}
+        <span class="rsr-controls rsr-controls-inline">
+            <button type="button" class="rsr-mini" data-action="advanceThread"
+                    name="push-{{this.id}}-1"
+                    data-thread-id="{{this.id}}" data-amount="1">+1</button>
+            <button type="button" class="rsr-mini" data-action="advanceThread"
+                    name="push-{{this.id}}-m1"
+                    data-thread-id="{{this.id}}" data-amount="-1">&minus;1</button>
+        </span>
+        {{/if}}
     </div>
     {{/if}}
 
@@ -102,6 +134,19 @@
         {{#if this.pool.showValues}}
         <span class="rsr-bar-value">{{this.pool.current}}<span class="rsr-of">/{{this.pool.total}}</span></span>
         {{/if}}
+        {{#if this.canPush}}
+        <span class="rsr-controls rsr-controls-inline">
+            <button type="button" class="rsr-mini" data-action="advanceThread"
+                    name="push-{{this.id}}-1"
+                    data-thread-id="{{this.id}}" data-amount="1">+1</button>
+            <button type="button" class="rsr-mini" data-action="advanceThread"
+                    name="push-{{this.id}}-3"
+                    data-thread-id="{{this.id}}" data-amount="3">+3</button>
+            <button type="button" class="rsr-mini" data-action="advanceThread"
+                    name="push-{{this.id}}-m1"
+                    data-thread-id="{{this.id}}" data-amount="-1">&minus;1</button>
+        </span>
+        {{/if}}
     </div>
     {{#if this.committedAssets.length}}
     <p class="rsr-committed">
@@ -110,4 +155,23 @@
     </p>
     {{/if}}
     {{/if}}
+
+    {{#if this.canConclude}}
+    <div class="rsr-controls rsr-controls-foot">
+        {{#if this.discounted}}
+        <span class="rsr-discount" data-tooltip="{{localize 'RSR.thread.discountHint'}}">
+            <i class="fa-solid fa-tag" inert></i> {{this.discounted}}
+        </span>
+        {{/if}}
+        {{#if this.isFull}}
+        <span class="rsr-ready">{{localize "RSR.thread.ready"}}</span>
+        {{/if}}
+        <button type="button" class="rsr-mini rsr-mini-primary" data-action="concludeThread"
+                data-thread-id="{{this.id}}">
+            <i class="fa-solid fa-gavel" inert></i>
+            <span>{{localize "RSR.editor.conclude"}}</span>
+        </button>
+    </div>
+    {{/if}}
+
 </li>

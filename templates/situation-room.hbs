@@ -2,8 +2,13 @@
     The board shell.
 
     Segments come from context.segments, which already excludes Cockpit for players
-    and already carries `active` — no `eq` helper exists for module templates in
-    v14, so no comparison happens here.
+    and already carries `active`. The comparison happens in _prepareContext rather
+    than here because a branch resolved in the markup needs both sides of it in
+    the context, and half of what this window renders is data a player must never
+    be sent.
+
+    `isGM` in this file is the PROJECTED viewer: a GM previewing the table's board
+    is false. `canPreview` is the real one, and it is the only thing that is.
 
     Partials are referenced by full path, which is how loadTemplates registers them.
 --}}
@@ -26,7 +31,33 @@
             {{localize 'RSR.turn.label'}} {{turn}}
         </span>
         {{/if}}
+
+        {{!-- Rendered from canPreview, which is the REAL GM, not the projected
+              one: this is the only way back out of the preview it turns on. --}}
+        {{#if canPreview}}
+        <button type="button"
+                class="rsr-preview-btn{{#if isPreview}} is-on{{/if}}"
+                data-action="togglePreview"
+                data-tooltip="{{localize 'RSR.preview.hint'}}"
+                aria-pressed="{{#if isPreview}}true{{else}}false{{/if}}">
+            <i class="fa-regular fa-eye" inert></i>
+            <span>{{localize "RSR.preview.label"}}</span>
+        </button>
+        {{/if}}
     </nav>
+
+    {{!-- Loud on purpose. Everything below this line is a lie of omission being
+          told correctly, and a GM who forgets they are inside it will conclude
+          their own board has lost half its rows. --}}
+    {{#if isPreview}}
+    <div class="rsr-preview-bar" role="status">
+        <i class="fa-solid fa-eye-low-vision" inert></i>
+        <span class="rsr-preview-said">{{localize "RSR.preview.banner"}}</span>
+        <button type="button" class="rsr-mini" data-action="togglePreview">
+            {{localize "RSR.preview.exit"}}
+        </button>
+    </div>
+    {{/if}}
 
     <section class="rsr-body">
 
@@ -77,12 +108,19 @@
                             {{openPlot.state}}<span class="rsr-of">/{{openPlot.stateMax}}</span>
                         </span>
                         {{/if}}
+                        {{#if openPlot.showBar}}
                         <div class="rsr-state-bar rsr-state-bar-lg" role="img"
-                             aria-label="{{localize 'RSR.plot.state'}} {{openPlot.percent}}%">
+                             aria-label="{{localize 'RSR.plot.state'}}{{#if openPlot.showState}} {{openPlot.state}} / {{openPlot.stateMax}}{{/if}}">
                             <div class="rsr-state-fill rsr-tone-{{openPlot.phaseTone}}"
                                  style="width: {{openPlot.percent}}%"></div>
                         </div>
+                        {{/if}}
                     </div>
+
+                    {{!-- What the table has heard, where the reading would be. --}}
+                    {{#unless openPlot.showBar}}
+                    <p class="rsr-mask-note">{{openPlot.maskNote}}</p>
+                    {{/unless}}
 
                     {{!-- What this Phase looks like from the table. Only ever the
                           CURRENT one: the ladder never leaves _prepareContext. --}}

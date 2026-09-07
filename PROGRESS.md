@@ -12,6 +12,7 @@ before its milestone has passed.
 | M2 | passed | `334d7b9` |
 | M3 | passed | `157d998` |
 | M4 | passed | `0d9f955` |
+| M5 | in progress | — |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)
@@ -157,11 +158,33 @@ before its milestone has passed.
 - [x] The condition pill centres inside an Asset chip instead of sitting on its baseline
 
 ## M5 — Visibility
-- [ ] `logic/visibility.mjs`
-- [ ] Three-state toggle (visible / masked / hidden)
-- [ ] `hideValues` switch
-- [ ] Phase ladder never reaches a player context
+
+Most of this shipped early: `logic/visibility.mjs` landed in M2 and every surface
+built since has projected through it. What M5 owes is the part that cannot be
+written into the code — proof that it holds — plus whatever the sweep turns up.
+
+- [x] `logic/visibility.mjs`
+- [x] Three-state toggle (visible / masked / hidden)
+- [x] `hideValues` switch
+- [x] Phase ladder never reaches a player context
+- [x] Sweep: every player-facing builder read field by field
+- [x] Leak found and fixed — a masked Plot kept its Phase's **tone**
+- [x] Leak found and fixed — a clock with withheld values still **counted in pips**
+- [x] The percentage no longer leaks through an `aria-label` either
+- [x] **As the table sees it**: the GM previews the board as a player gets it
+- [x] One `#viewer()` flag, so the preview is the player code path and not a copy
+- [x] `whileLooking()` — every action but navigation is dead while previewing
+- [x] `tools/check-visibility.mjs` — 42 assertions
+- [x] A mask has a **name**: “Unknown activity — ???” by kind, overridable per row
+- [x] A mask can carry a **line instead of the bar**, for what was heard not watched
+- [x] Both fields live in the shared *What the table sees* section
+- [x] `tools/check-editing.mjs`: what the form owns must survive `patchFrom`
+- [x] Leak found and fixed — a masked Thread still wore its **mode chip**
+- [x] The bar SHAPE goes with the chip: no pips, no contender column under a mask
+- [x] The fixture carries a masked contest, so the collapse is one click from Generate
 - [ ] Verified from a real player login
+- [x] Decision: withheld data at rest stays in settings — the JournalEntry
+      route was checked against the client and does not withhold anything
 
 ## M6 — Gating and the graph
 - [ ] Phase reveal/lock lists

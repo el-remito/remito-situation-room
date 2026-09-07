@@ -1903,3 +1903,92 @@
 
 .rsr-rehome-all > label { font-size: var(--font-size-12, 12px); white-space: nowrap; }
 .rsr-rehome-all select { flex: 1; min-width: 0; }
+
+/* ── M5 — seeing it as the table does ───────────────────────────────────── */
+
+/* Violet, because violet is this module's one colour for withheld and the
+   preview is a statement about withholding — nothing on the board is wrong, it
+   is being kept. Both background AND colour are stated: Daggerheart paints every
+   button gold with dark navy text, so a restyled button that claims only one of
+   the two renders its glyphs invisible. */
+.rsr-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    margin-left: auto;
+    padding: 0.25rem 0.6rem;
+    background: transparent;
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-12, 12px);
+    cursor: pointer;
+}
+
+/* Both this and the Cycle badge push themselves right, and two auto margins in
+   one flex row SPLIT the free space instead of stacking. When the badge is there
+   it does the pushing and this rides along beside it; in the preview the badge
+   is gone with everything else the GM alone sees, and this pushes for itself. */
+.rsr-turn-badge + .rsr-preview-btn { margin-left: 0; }
+
+.rsr-preview-btn:hover {
+    background: transparent;
+    border-color: var(--rsr-withheld);
+    color: var(--rsr-withheld);
+}
+
+.rsr-preview-btn.is-on {
+    background: color-mix(in srgb, var(--rsr-withheld) 18%, transparent);
+    border-color: var(--rsr-withheld);
+    color: var(--rsr-withheld);
+}
+
+/* Loud, and across the whole width. A GM who forgets they are inside the preview
+   will read their own board as having lost half its rows, so the banner is not
+   allowed to be subtle and it carries its own way out. */
+.rsr-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;                     /* a banner, not a share of the height */
+    margin: 0.6rem 0.75rem 0;
+    padding: 0.4rem 0.7rem;
+    background: color-mix(in srgb, var(--rsr-withheld) 14%, transparent);
+    border: 1px solid var(--rsr-withheld);
+    border-radius: 6px;
+    color: var(--rsr-ink);
+    font-size: var(--font-size-12, 12px);
+}
+
+.rsr-preview-bar > i { color: var(--rsr-withheld); }
+.rsr-preview-said { flex: 1; min-width: 0; }
+
+/* ── M5 round 2 — what the table hears instead ──────────────────────────── */
+
+/* A rumour standing where a reading would be. Violet, because that is this
+   module's one colour for withheld, and italic because it is the GM speaking
+   about the row rather than the row reporting itself. The rule on the left says
+   "something has been taken out here" without spending a whole icon on it. */
+.rsr-mask-note {
+    margin: 0.4rem 0 0;
+    padding: 0.15rem 0 0.15rem 0.6rem;
+    border-left: 2px solid var(--rsr-withheld);
+    color: var(--rsr-ink-muted);
+    font-style: italic;
+    font-size: var(--font-size-12, 12px);
+}
+
+/* The form row is a two-column GRID — label, then control. Prose does not fit a
+   control column: the mask note keeps its label (and its badge) on the first
+   line and takes the full width underneath, which is the only shape in which a
+   sentence about rumours looks like something you are meant to write. */
+.rsr-form-row.is-stacked { align-items: start; }
+
+.rsr-form-row.is-stacked > textarea {
+    grid-column: 1 / -1;
+    min-height: 3.4rem;
+    resize: vertical;
+}

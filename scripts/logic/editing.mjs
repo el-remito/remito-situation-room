@@ -60,7 +60,9 @@ export const FIELDS = {
         { name: 'lifecycle', type: 'text' },
         { name: 'defaultMode', type: 'text' },
         { name: 'visibility', type: 'text' },
-        { name: 'hideValues', type: 'bool' }
+        { name: 'hideValues', type: 'bool' },
+        { name: 'maskLabel', type: 'text' },
+        { name: 'maskNote', type: 'text' }
     ],
     [EDIT_KIND.NODE]: [
         { name: 'name', type: 'text' },
@@ -70,7 +72,9 @@ export const FIELDS = {
         { name: 'segments', type: 'int' },
         { name: 'status', type: 'text' },
         { name: 'visibility', type: 'text' },
-        { name: 'hideValues', type: 'bool' }
+        { name: 'hideValues', type: 'bool' },
+        { name: 'maskLabel', type: 'text' },
+        { name: 'maskNote', type: 'text' }
     ],
     [EDIT_KIND.FORCE]: [
         { name: 'name', type: 'text' },
@@ -80,7 +84,8 @@ export const FIELDS = {
         { name: 'income', type: 'int' },
         { name: 'isActive', type: 'bool' },
         { name: 'visibility', type: 'text' },
-        { name: 'hideValues', type: 'bool' }
+        { name: 'hideValues', type: 'bool' },
+        { name: 'maskLabel', type: 'text' }
     ],
     [EDIT_KIND.ASSET]: [
         { name: 'name', type: 'text' },
@@ -89,7 +94,8 @@ export const FIELDS = {
         { name: 'modifierKind', type: 'text' },
         { name: 'modifierValue', type: 'int' },
         { name: 'visibility', type: 'text' },
-        { name: 'hideValues', type: 'bool' }
+        { name: 'hideValues', type: 'bool' },
+        { name: 'maskLabel', type: 'text' }
     ],
     // The condition table has no scalar fields at all — every control in it is a
     // row, harvested by the data-row-group convention.
@@ -150,7 +156,11 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
             // render in the order the board prints them.
             groups: headingsOf(forceIds, forceGroups),
             visibility: str(e.visibility) || defaultVisibilityFor(K, 'plot'),
-            hideValues: bool(e.hideValues)
+            hideValues: bool(e.hideValues),
+            // Empty means the default for the kind, which is a localized string
+            // and therefore not this module's business to know.
+            maskLabel: str(e.maskLabel),
+            maskNote: str(e.maskNote)
         };
     }
 
@@ -169,7 +179,9 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
             })),
             prereqNodeIds: [...(e.prereqNodeIds ?? [])],
             visibility: str(e.visibility) || defaultVisibilityFor(K, 'node'),
-            hideValues: bool(e.hideValues)
+            hideValues: bool(e.hideValues),
+            maskLabel: str(e.maskLabel),
+            maskNote: str(e.maskNote)
         };
     }
 
@@ -185,7 +197,8 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
             isActive: entity ? e.isActive !== false : true,
             tags: (e.tags ?? []).map((t) => ({ text: str(t.text), polarity: t.polarity })),
             visibility: str(e.visibility) || defaultVisibilityFor(K, 'force'),
-            hideValues: bool(e.hideValues)
+            hideValues: bool(e.hideValues),
+            maskLabel: str(e.maskLabel)
         };
     }
 
@@ -205,7 +218,8 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
         modifierKind: str(e.modifier?.kind) || ASSET_MODIFIER.NONE,
         modifierValue: int(e.modifier?.value, 0),
         visibility: str(e.visibility) || defaultVisibilityFor(K, 'asset'),
-        hideValues: bool(e.hideValues)
+        hideValues: bool(e.hideValues),
+        maskLabel: str(e.maskLabel)
     };
 }
 
@@ -334,7 +348,12 @@ export function patchFrom(kind, draft) {
             forceIds,
             forceGroups,
             visibility: draft.visibility,
-            hideValues: draft.hideValues
+            hideValues: draft.hideValues,
+            // Trimmed here rather than on the way in, so a GM who types a space
+            // and thinks better of it gets the default back rather than a mask
+            // called " ".
+            maskLabel: draft.maskLabel.trim(),
+            maskNote: draft.maskNote.trim()
         };
     }
 
@@ -351,7 +370,9 @@ export function patchFrom(kind, draft) {
             outcomes: draft.outcomes.filter((o) => o.delta !== 0 || o.note.trim().length > 0),
             prereqNodeIds: [...draft.prereqNodeIds],
             visibility: draft.visibility,
-            hideValues: draft.hideValues
+            hideValues: draft.hideValues,
+            maskLabel: draft.maskLabel.trim(),
+            maskNote: draft.maskNote.trim()
         };
     }
 
@@ -365,7 +386,8 @@ export function patchFrom(kind, draft) {
             isActive: draft.isActive,
             tags: draft.tags.filter((t) => t.text.trim().length > 0),
             visibility: draft.visibility,
-            hideValues: draft.hideValues
+            hideValues: draft.hideValues,
+            maskLabel: draft.maskLabel.trim()
         };
     }
 
@@ -377,7 +399,8 @@ export function patchFrom(kind, draft) {
         tags: draft.tags.filter((t) => t.text.trim().length > 0),
         modifier: { kind: draft.modifierKind, value: draft.modifierValue },
         visibility: draft.visibility,
-        hideValues: draft.hideValues
+        hideValues: draft.hideValues,
+        maskLabel: draft.maskLabel.trim()
     };
 }
 

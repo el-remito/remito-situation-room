@@ -53,10 +53,15 @@ const randomId = () => (globalThis.crypto?.randomUUID?.()
 
 const id = (v) => (typeof v === 'string' && v.length ? v : randomId());
 
-/** The visibility/hideValues/isExample triplet every entity carries. */
+/** What every entity carries about what the table sees of it. */
 const entityBase = (raw) => ({
     visibility: oneOf(raw?.visibility, VISIBILITY, ENTITY_DEFAULTS.visibility),
     hideValues: bool(raw?.hideValues, ENTITY_DEFAULTS.hideValues),
+    // What this row is CALLED while masked. Empty means the default for its
+    // kind — "Unknown activity — ???" and its siblings — which is why this is a
+    // free string with no fallback baked in: the fallback is a localized thing
+    // and this file is not allowed to know about those.
+    maskLabel: str(raw?.maskLabel),
     isExample: bool(raw?.isExample, ENTITY_DEFAULTS.isExample)
 });
 
@@ -131,6 +136,10 @@ export function normalizePlot(raw = {}) {
         forceGroups: forceGroups(raw.forceGroups, idList(raw.forceIds)),
         playerAssignable: bool(raw.playerAssignable),
         sort: int(raw.sort, 0),
+        // Stands in for the State bar / this Thread's own reading while it
+        // is masked. Only a Plot and a Thread carry one, because only they
+        // draw a reading for it to replace.
+        maskNote: str(raw.maskNote),
         ...entityBase(raw)
     };
 }
@@ -167,6 +176,10 @@ export function normalizeNode(raw = {}) {
         prereqNodeIds: idList(raw.prereqNodeIds),
         playerAssignable: bool(raw.playerAssignable),
         sort: int(raw.sort, 0),
+        // Stands in for the State bar / this Thread's own reading while it
+        // is masked. Only a Plot and a Thread carry one, because only they
+        // draw a reading for it to replace.
+        maskNote: str(raw.maskNote),
         ...entityBase(raw)
     };
 }

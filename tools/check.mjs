@@ -125,8 +125,11 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
 {
     const registered = new Set();
     for (const file of sources) {
-        // The `actions: { ... }` block of a DEFAULT_OPTIONS declaration.
-        for (const block of read(file).matchAll(/actions:\s*\{([\s\S]*?)\n\s*\}/g)) {
+        // The `actions: { ... }` block of a DEFAULT_OPTIONS declaration,
+        // wrapped or not: the board hands its map through whileLooking(),
+        // which kills every writing action while the GM is previewing the
+        // table's board, and the handlers inside are registered either way.
+        for (const block of read(file).matchAll(/actions:\s*(?:[A-Za-z0-9_]+\()?\{([\s\S]*?)\n\s*\}/g)) {
             for (const m of block[1].matchAll(/^\s*([A-Za-z0-9_]+)\s*:/gm)) registered.add(m[1]);
         }
     }

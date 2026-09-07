@@ -31,6 +31,8 @@ const ID = {
     grain: 'rsr-ex-node-grain',
     subject: 'rsr-ex-node-subject',
     gate: 'rsr-ex-node-gate',
+    ledger: 'rsr-ex-node-ledger',
+    quarter: 'rsr-ex-node-quarter',
     battalion: 'rsr-ex-asset-battalion',
     dragon: 'rsr-ex-asset-dragon',
     runners: 'rsr-ex-asset-runners'
@@ -115,8 +117,9 @@ export function buildExample() {
         sort: 0
     }];
 
-    // One thread per advancement mode, plus one concluded and one gated, so every
-    // way a row can render is on screen at once.
+    // One thread per advancement mode, plus one concluded, one gated, and three
+    // masked in different ways, so every way a row can render is on screen at
+    // once — and the three masks are deliberately alike from the table's side.
     const nodes = [
         {
             ...example, id: ID.siege, plotId: ID.plot, sort: 0,
@@ -141,8 +144,12 @@ export function buildExample() {
             progress: { pool: 3, byForce: {} },
             outcomes: [{ forceId: ID.legion, delta: 10, note: 'The east gate opens quietly.' }],
             status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
-            // Masked: the table knows something is happening at the gate, not what.
-            visibility: VISIBILITY.MASKED, hideValues: false, playerAssignable: false
+            // Masked AND numberless, which is the pair worth having in a
+            // fixture: the table knows something is happening at the gate,
+            // not what and not how far along. It is also the only clock here,
+            // so it is what demonstrates that a withheld clock draws a bar
+            // instead of pips a player could simply count.
+            visibility: VISIBILITY.MASKED, hideValues: true, playerAssignable: false
         },
         {
             ...example, id: ID.grain, plotId: ID.plot, sort: 2,
@@ -182,6 +189,44 @@ export function buildExample() {
             prereqNodeIds: [ID.siege],
             // Hidden outright: the table should not know this thread exists yet.
             visibility: VISIBILITY.HIDDEN, hideValues: false, playerAssignable: false
+        },
+        {
+            ...example, id: ID.ledger, plotId: ID.plot, sort: 5,
+            name: 'A Name in the Ledger',
+            description: 'A Legion paymaster is buying somebody inside the Guard.',
+            mode: MODE.INVEST,
+            threshold: 8, segments: 6,
+            progress: { pool: 5, byForce: { [ID.legion]: 5 } },
+            outcomes: [{ forceId: ID.legion, delta: 12, note: 'The name is confirmed.' }],
+            status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
+            // Masked, and the mask says what it likes: this is the row that
+            // demonstrates both halves of round 2. The table gets the GM's own
+            // name for it, and a rumour standing where the bar would be —
+            // because they have HEARD about this one rather than watched it, and
+            // a bar would tell them how close it is.
+            visibility: VISIBILITY.MASKED, hideValues: false, playerAssignable: false,
+            maskLabel: 'Somebody is asking questions — ???',
+            maskNote: 'Rumours about a foreigner running about with a loaded purse, '
+                + 'talking to ex-guardsmen.'
+        },
+        {
+            ...example, id: ID.quarter, plotId: ID.plot, sort: 6,
+            name: 'Turning the Quartermaster',
+            description: 'Both sides have made him an offer. Neither knows about the other.',
+            mode: MODE.CONTESTED,
+            threshold: 9, segments: 6,
+            progress: { pool: 0, byForce: { [ID.legion]: 4, [ID.guard]: 2 } },
+            outcomes: [
+                { forceId: ID.legion, delta: 10, note: 'The stores answer to the Legion now.' },
+                { forceId: ID.guard, delta: -10, note: 'He takes the Guard\'s coin and stays bought.' }
+            ],
+            status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
+            // Masked, numbers on, and no note — which is what makes it the row
+            // that demonstrates round 3. A GM reads a contest: two named sides,
+            // a bar each. The table reads one plain bar and no mode chip,
+            // because "Contested" would have told them somebody is being
+            // opposed, and two named contenders would have told them who.
+            visibility: VISIBILITY.MASKED, hideValues: false, playerAssignable: false
         }
     ];
 

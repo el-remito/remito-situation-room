@@ -153,6 +153,18 @@ const TITLE_KEYS = {
  * `dirty` is a count rather than a flag because "3 unsaved changes" answers a
  * question a lone dot cannot — whether you touched more than you meant to.
  */
+/**
+ * The default name for a masked row of each kind, as an i18n KEY: the template
+ * localizes it into the field's placeholder, so an empty box reads as what the
+ * table would actually see rather than as an empty box.
+ */
+const MASK_KEYS = {
+    [EDIT_KIND.PLOT]: 'RSR.visibility.maskPlot',
+    [EDIT_KIND.NODE]: 'RSR.visibility.maskNode',
+    [EDIT_KIND.FORCE]: 'RSR.visibility.maskForce',
+    [EDIT_KIND.ASSET]: 'RSR.visibility.maskAsset'
+};
+
 function shell(kind, edit, extra = {}) {
     const dirty = Edit.dirtyKeys(edit.snapshot, edit.draft);
     return {
@@ -173,6 +185,17 @@ function shell(kind, edit, extra = {}) {
         problems: Edit.problems(kind, edit.draft),
         visibility: optionsOf(VISIBILITY, 'RSR.visibility', edit.draft.visibility),
         hideValues: edit.draft.hideValues,
+        // What a masked row is called, and what the table hears in place of its
+        // reading. Both are answers to "what do they see instead", so they sit
+        // under the same heading as the visibility itself rather than in the
+        // body of the form where they would read as properties of the row.
+        maskLabel: edit.draft.maskLabel ?? '',
+        maskDefault: MASK_KEYS[kind] ?? 'RSR.visibility.maskedName',
+        // Only where there is a reading to stand in for.
+        hasMaskNote: kind === EDIT_KIND.PLOT || kind === EDIT_KIND.NODE,
+        maskNote: edit.draft.maskNote ?? '',
+        maskNoteHint: kind === EDIT_KIND.PLOT
+            ? 'RSR.editor.maskNoteHintPlot' : 'RSR.editor.maskNoteHintThread',
         ...extra
     };
 }

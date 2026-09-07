@@ -258,5 +258,31 @@ eq('what the GM deleted is reported for rehoming',
     E.droppedConditions(table, mangled), ['damaged']);
 eq('nothing deleted reports nothing', E.droppedConditions(table, table), []);
 
+// ── what the table sees survives the Save ────────────────────────────────────
+// The field-list checks above prove the editor OWNS these; they say nothing
+// about whether patchFrom carries them, and a field that is edited and then
+// dropped on the way to the world is the quieter half of that bug. It happened:
+// maskLabel and maskNote were added to FIELDS and to the drafts, and Save threw
+// them away until this ran.
+for (const kind of [EDIT_KIND.PLOT, EDIT_KIND.NODE, EDIT_KIND.FORCE, EDIT_KIND.ASSET]) {
+    const draft = E.draftFrom(kind, null, {}, { plotId: 'p', forceId: 'f' });
+    const patch = E.patchFrom(kind, draft);
+    const owned = E.FIELDS[kind].map((f) => f.name)
+        // The modifier is the one field the form splits in two and the patch
+        // puts back together, so it is named differently on each side.
+        .filter((n) => !n.startsWith('modifier'));
+    eq(`every ${kind} field the form owns survives patchFrom`,
+        owned.filter((n) => !(n in patch)), []);
+}
+
+eq('a mask name of spaces saves as the default, not as spaces',
+    E.patchFrom(EDIT_KIND.NODE,
+        { ...E.draftFrom(EDIT_KIND.NODE, null, {}, { plotId: 'p' }), maskLabel: '   ' }
+    ).maskLabel, '');
+eq('a mask note keeps its sentence',
+    E.patchFrom(EDIT_KIND.NODE,
+        { ...E.draftFrom(EDIT_KIND.NODE, null, {}, { plotId: 'p' }), maskNote: ' heard it ' }
+    ).maskNote, 'heard it');
+
 console.log(fail === 0 ? '\n  all passed\n' : `\n  ${fail} FAILED\n`);
 process.exit(fail === 0 ? 0 : 1);

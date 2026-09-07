@@ -28,8 +28,8 @@ import { resolveMode, effectiveThreshold, isFull } from '../logic/progress.mjs';
 import { engagedForceIds, uncommittedAssets } from '../logic/economy.mjs';
 import * as Cond from '../logic/condition.mjs';
 import {
-    visibleRows, projectIdentity, projectProgress, projectForceChip, showValues,
-    isHidden, isMasked
+    visibleRows, projectIdentity, projectProgress, projectClock, projectForceChip,
+    projectTone, projectMode, maskNoteOf, showValues, isHidden, isMasked
 } from '../logic/visibility.mjs';
 import * as Edit from '../logic/editing.mjs';
 import { harvest, readField, clearField, editorContext } from './board-editor.mjs';
@@ -41,6 +41,28 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * RSR.help.<key>.body.<gm|player> — the variant picks the string, rather than JS
  * assembling one. A milestone that adds a feature adds its key here.
  */
+/**
+ * Every action except the ones that only LOOK is dead while the preview is on.
+ *
+ * The markup already withholds the controls — a previewing GM is projected as a
+ * player, so nothing that writes is drawn — and this is the second lock on the
+ * same door. It is worth having because the list is inverted: a NEW action added
+ * next year is guarded by default, and has to be named here to work while the
+ * GM is pretending to be somebody who cannot use it. The alternative, a list of
+ * things to block, is a list somebody eventually forgets to add to.
+ *
+ * @param {object} actions      the data-action map
+ * @param {string[]} navigation names that only move the reader around
+ */
+const whileLooking = (actions, navigation = ['selectView', 'openPlot', 'closePlot', 'togglePreview']) =>
+    Object.fromEntries(Object.entries(actions).map(([name, handler]) => [
+        name,
+        navigation.includes(name) ? handler : function (...args) {
+            if (this.isPreviewing) return undefined;
+            return handler.apply(this, args);
+        }
+    ]));
+
 const HELP_SECTIONS = [
     { key: 'plots' },
     { key: 'threads' },
@@ -82,8 +104,25 @@ const ASSET_DRAG = 'rsr-asset';
 /** A Force chip being dragged between headings inside the Plot editor. */
 const ROSTER_DRAG = 'rsr-roster-force';
 
-/** Localized once per render rather than per row. */
-const maskLabel = () => game.i18n.localize('RSR.visibility.maskedName');
+/**
+ * What a masked row of this KIND is called, localized once per row rather than
+ * held, because it is cheap and holding it invites it going stale.
+ *
+ * A bare "???" says something is being withheld and nothing about what sort of
+ * something. "Unknown activity — ???" says a Thread is running, which is what a
+ * mask is FOR: the table is meant to know there is a thing there. The row's own
+ * `maskLabel` beats this, and logic/visibility.mjs does that preferring, so
+ * nothing here has to remember to.
+ */
+const MASK_KEYS = {
+    [EDIT_KIND.PLOT]: 'RSR.visibility.maskPlot',
+    [EDIT_KIND.NODE]: 'RSR.visibility.maskNode',
+    [EDIT_KIND.FORCE]: 'RSR.visibility.maskForce',
+    [EDIT_KIND.ASSET]: 'RSR.visibility.maskAsset'
+};
+
+const maskLabel = (kind) =>
+    game.i18n.localize(MASK_KEYS[kind] ?? 'RSR.visibility.maskedName');
 
 export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
@@ -110,7 +149,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         },
         // Must be a fixed integer. "auto" scrolls the page instead of the window.
         position: { width: 1100, height: 760 },
-        actions: {
+        actions: whileLooking({
             selectView: SituationRoom._onSelectView,
             openPlot: SituationRoom._onOpenPlot,
             closePlot: SituationRoom._onClosePlot,
@@ -157,8 +196,9 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             resetSettings: SituationRoom._onResetSettings,
             clearLog: SituationRoom._onClearLog,
             generateExample: SituationRoom._onGenerateExample,
-            clearExample: SituationRoom._onClearExample
-        }
+            clearExample: SituationRoom._onClearExample,
+            togglePreview: SituationRoom._onTogglePreview
+        })
     };
 
     /**
@@ -181,6 +221,23 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     #plotId = null;
 
     /**
+     * Whether the GM is looking at the board as the table sees it.
+     *
+     * Instance state, like #view: a way of looking, not world data, and nobody
+     * else's client learns it. It exists because the M5 rule — withheld data
+     * never reaches a player's context — is invisible from the GM's side by
+     * construction. A GM who has masked four Threads and hidden a Force has no
+     * way to check their own work short of logging in as somebody else, and a GM
+     * who cannot check tends to either over-hide or stop bothering.
+     *
+     * It is deliberately not a projection of a projection. #viewer() is the ONE
+     * flag every builder reads, so the preview is the same code path a player
+     * gets, not a second rendering of it that could drift. What it does not
+     * prove is what is on the player's MACHINE — see the Help callout.
+     */
+    #asPlayer = false;
+
+    /**
      * The open editor, or null.
      *
      * `{ kind, id, draft, snapshot }`. The draft is a working copy and the world
@@ -195,10 +252,38 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
     get view() { return this.#view; }
 
+    /** Read by whileLooking, which cannot reach a private field from outside. */
+    get isPreviewing() { return this.#asPlayer; }
+
+    /**
+     * The flag every context builder projects against.
+     *
+     * A GM previewing the board is a player for the whole of this window: not
+     * "a GM who is shown less", which would leave every builder deciding for
+     * itself which of the two flags it meant.
+     */
+    #viewer() { return game.user.isGM && !this.#asPlayer; }
+
     /** Players have no Cockpit and no Settings; asking for one lands them back. */
     setView(view) {
         const gmOnly = view === VIEW.COCKPIT || view === VIEW.SETTINGS;
-        this.#view = (gmOnly && !game.user.isGM) ? VIEW.SITUATION : view;
+        this.#view = (gmOnly && !this.#viewer()) ? VIEW.SITUATION : view;
+        this.render();
+    }
+
+    /**
+     * Look at the board as the table does, or stop.
+     *
+     * Leaves the editor first, with its own dirty guard: an editor is authoring,
+     * and there is no such thing as authoring as a player.
+     */
+    async togglePreview() {
+        if (!game.user.isGM) return;
+        if (!await this.#leaveEditor()) return;
+        this.#asPlayer = !this.#asPlayer;
+        // A GM who was in the Cockpit and presses this would otherwise preview a
+        // segment no player has.
+        if (this.#asPlayer && this.#view !== VIEW.HELP) this.#view = VIEW.SITUATION;
         this.render();
     }
 
@@ -218,7 +303,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      *                        for an Asset
      */
     #openEditor(kind, id, seed = {}) {
-        if (!game.user.isGM) return;
+        if (!this.#viewer()) return;
         const board = readBoard();
         if (kind === EDIT_KIND.CONDITIONS) seed = { rows: board.conditions };
         const entity = id ? this.#findEntity(board, kind, id) : null;
@@ -273,11 +358,15 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
     async _prepareContext(options) {
         const context = await super._prepareContext(options);
-        const isGM = game.user.isGM;
+        // Not game.user.isGM: a GM in preview IS a player as far as everything
+        // below is concerned, and there is exactly one flag saying so.
+        const isGM = this.#viewer();
         const board = readBoard();
 
-        // No `eq` helper is available to module templates in v14, so every branch
-        // the template needs is decided here.
+        // Every branch the template needs is decided here. Not because `eq` is
+        // missing — v14 registers it globally — but because a branch resolved in
+        // the markup needs both sides of it in the context, and half of what this
+        // window renders is data a player must never be sent.
         const segments = [
             { id: VIEW.SITUATION, label: 'RSR.board.viewSituation', icon: 'fa-solid fa-map' },
             ...(isGM ? [
@@ -294,6 +383,8 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 ...context,
                 isGM,
                 segments,
+                canPreview: game.user.isGM,
+                isPreview: this.#asPlayer,
                 isEditing: true,
                 turn: board.turn.count,
                 editor: editorContext(this.#edit.kind, this.#edit, board)
@@ -308,6 +399,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             ...context,
             isGM,
             segments,
+            // The control belongs to the real GM, and has to survive the preview
+            // it turns on — it is the only way back out.
+            canPreview: game.user.isGM,
+            isPreview: this.#asPlayer,
             isSituation: this.#view === VIEW.SITUATION,
             isCockpit: this.#view === VIEW.COCKPIT,
             isHelp: this.#view === VIEW.HELP,
@@ -355,7 +450,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      * leaves this method.
      */
     #plotHeader(board, plot, isGM) {
-        const identity = projectIdentity(plot, isGM, maskLabel());
+        const identity = projectIdentity(plot, isGM, maskLabel(EDIT_KIND.PLOT));
         const phase = isGM ? resolvePhaseForGM(plot) : resolvePhase(plot);
         const reveal = showValues(plot, isGM);
 
@@ -371,14 +466,20 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             // What this Phase looks like from the table. Authored per Phase and
             // printed for everyone — unlike gmNotes, which is the GM's own copy.
             phaseDescription: identity.masked ? '' : (phase?.description ?? ''),
-            phaseTone: phase?.tone ?? 'neutral',
+            phaseTone: projectTone(plot, isGM, phase?.tone),
             gmNotes: isGM ? (phase?.gmNotes ?? '') : '',
             percent: statePercent(plot),
+            // What the table hears instead of the State bar. Written by the GM
+            // on a masked Plot, and it replaces the reading rather than sitting
+            // under it: a bar beside "nobody can say how it is going" would be
+            // answering the question the sentence just declined.
+            maskNote: maskNoteOf(plot, isGM),
+            showBar: !maskNoteOf(plot, isGM),
             showState: reveal && !identity.masked,
             state: reveal && !identity.masked ? plot.state : null,
             stateMax: reveal && !identity.masked ? plot.stateMax : null,
             forces: forcesForPlot(board, plot)
-                .map((f) => projectForceChip(f, isGM, maskLabel()))
+                .map((f) => projectForceChip(f, isGM, maskLabel(EDIT_KIND.FORCE)))
                 .filter(Boolean)
         };
     }
@@ -387,7 +488,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         const nodes = visibleRows(nodesForPlot(board, plot.id), isGM);
         return {
             ...this.#plotHeader(board, plot, isGM),
-            description: projectIdentity(plot, isGM, maskLabel()).description,
+            description: projectIdentity(plot, isGM, maskLabel(EDIT_KIND.PLOT)).description,
             groups: this.#buildGroups(board, plot, isGM),
             threads: nodes.map((node) => this.#buildThread(board, plot, node, isGM)),
             threadCount: nodes.length,
@@ -410,7 +511,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         const byLabel = new Map();
 
         for (const force of forcesForPlot(board, plot)) {
-            const chip = projectForceChip(force, isGM, maskLabel());
+            const chip = projectForceChip(force, isGM, maskLabel(EDIT_KIND.FORCE));
             if (!chip) continue;                        // hidden: not even a count
             const label = plot.forceGroups?.[force.id] ?? '';
             if (!byLabel.has(label)) {
@@ -458,7 +559,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      * be the one screen that does not say it.
      */
     #buildLog(board, isGM) {
-        const mask = maskLabel();
+        const mask = {
+            plot: maskLabel(EDIT_KIND.PLOT), node: maskLabel(EDIT_KIND.NODE),
+            force: maskLabel(EDIT_KIND.FORCE), asset: maskLabel(EDIT_KIND.ASSET)
+        };
         const nodeById = new Map(board.nodes.map((n) => [n.id, n]));
         const assetById = new Map(board.assets.map((a) => [a.id, a]));
 
@@ -529,11 +633,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      */
     #logSentence(e, { board, plot, node, force, asset, isGM, mask }) {
         const F = (key, data) => game.i18n.format(key, data);
-        const name = (entity) => projectIdentity(entity, isGM, mask).name;
+        // One line can name a Plot, a Thread, a Force and an Asset, and each is
+        // masked as its own kind of thing.
+        const name = (entity, kind) => projectIdentity(entity, isGM, mask[kind]).name;
 
-        const thread = node ? name(node) : '';
-        const who = force ? name(force) : '';
-        const where = plot ? name(plot) : '';
+        const thread = node ? name(node, 'node') : '';
+        const who = force ? name(force, 'force') : '';
+        const where = plot ? name(plot, 'plot') : '';
 
         switch (e.kind) {
             case LOG_KIND.PUSH: {
@@ -562,10 +668,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 return F('RSR.log.reopen', { thread });
             case LOG_KIND.COMMIT:
                 return thread
-                    ? F('RSR.log.commit', { force: who, asset: name(asset), thread })
-                    : F('RSR.log.commitPlot', { force: who, asset: name(asset), plot: where });
+                    ? F('RSR.log.commit', { force: who, asset: name(asset, 'asset'), thread })
+                    : F('RSR.log.commitPlot', { force: who, asset: name(asset, 'asset'), plot: where });
             case LOG_KIND.RELEASE:
-                return F('RSR.log.release', { force: who, asset: name(asset) });
+                return F('RSR.log.release', { force: who, asset: name(asset, 'asset') });
             case LOG_KIND.CONDITION:
                 // The condition is stored as its id and named here, like every
                 // other name in this file, so the line reads in the reader's
@@ -574,7 +680,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 // rendering a raw id at the table.
                 return F('RSR.log.condition', {
                     force: who,
-                    asset: name(asset),
+                    asset: name(asset, 'asset'),
                     condition: game.i18n.localize(
                         Cond.labelOf(Cond.rowFor(board.conditions, e.condition))
                     )
@@ -621,8 +727,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      * resolved here and the template just picks the block that is truthy.
      */
     #buildThread(board, plot, node, isGM) {
-        const identity = projectIdentity(node, isGM, maskLabel());
+        const identity = projectIdentity(node, isGM, maskLabel(EDIT_KIND.NODE));
         const mode = resolveMode(node, plot);
+        // What the mode is, and whether this viewer may know it. They are two
+        // different questions: the numbers below still come from the real mode —
+        // a clock counts its segments however little the table is told — while
+        // `shown` decides both the chip and the shape, and is null under a mask.
+        const shown = projectMode(node, isGM, mode);
         const concluded = node.status === NODE_STATUS.CONCLUDED;
         const locked = node.status === NODE_STATUS.LOCKED;
         const assets = assetsForNode(board, node.id);
@@ -635,8 +746,8 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             id: node.id,
             ...identity,
             isExample: node.isExample,
-            mode,
-            modeLabel: `RSR.thread.mode.${mode}`,
+            mode: shown,
+            modeLabel: shown ? `RSR.thread.mode.${shown}` : null,
             inheritsMode: node.mode === null,
             status: node.status,
             statusLabel: `RSR.thread.status.${node.status}`,
@@ -663,7 +774,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             const masked = isMasked(asset, isGM);
             return {
                 id: asset.id,
-                name: projectIdentity(asset, isGM, maskLabel()).name,
+                name: projectIdentity(asset, isGM, maskLabel(EDIT_KIND.ASSET)).name,
                 canRelease: isGM,
                 ...(masked ? { isReady: true } : this.#conditionOf(asset))
             };
@@ -675,12 +786,12 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             .map((id) => board.nodes.find((n) => n.id === id))
             .filter(Boolean);
         row.prereqNames = visibleRows(prereqs, isGM)
-            .map((n) => projectIdentity(n, isGM, maskLabel()).name);
+            .map((n) => projectIdentity(n, isGM, maskLabel(EDIT_KIND.NODE)).name);
         row.hasUnseenPrereqs = prereqs.length > row.prereqNames.length;
 
         if (concluded) {
             const winner = node.concludedBy ? forceById(board, node.concludedBy) : null;
-            const chip = winner ? projectForceChip(winner, isGM, maskLabel()) : null;
+            const chip = winner ? projectForceChip(winner, isGM, maskLabel(EDIT_KIND.FORCE)) : null;
             row.concludedBy = chip;
             const outcome = node.outcomes.find((o) => o.forceId === node.concludedBy);
             // The delta is bookkeeping; the note is fiction. Players get the fiction.
@@ -689,13 +800,20 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             return row;
         }
 
-        if (mode === MODE.CONTESTED) {
+        // A rumour instead of a reading. Set on a masked Thread, it takes the
+        // place of every bar shape below — including the contested standings,
+        // which are the most precise reading on the board and would otherwise
+        // survive the one setting meant to withhold precision.
+        row.maskNote = maskNoteOf(node, isGM);
+        if (row.maskNote) return row;
+
+        if (shown === MODE.CONTESTED) {
             row.isContested = true;
             row.contenders = (plot.forceIds ?? [])
                 .map((id) => forceById(board, id))
                 .filter(Boolean)
                 .map((force) => {
-                    const chip = projectForceChip(force, isGM, maskLabel());
+                    const chip = projectForceChip(force, isGM, maskLabel(EDIT_KIND.FORCE));
                     if (!chip) return null;
                     return {
                         ...chip,
@@ -714,22 +832,33 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             return row;
         }
 
-        if (mode === MODE.CLOCK) {
+        if (shown === MODE.CLOCK) {
             row.isClock = true;
-            const filled = Math.min(node.segments, Math.max(0, node.progress.pool));
-            // An array the template can walk — Handlebars cannot count.
-            row.pips = Array.from({ length: node.segments }, (_, i) => ({ filled: i < filled }));
-            row.clock = projectProgress({
-                current: filled, total: node.segments, isGM, entity: node
+            // The pips are the count, drawn as dots, so they are withheld with
+            // it: projectClock returns them only when the numbers are readable,
+            // and the row falls back to a plain bar when they are not.
+            row.clock = projectClock({
+                current: node.progress.pool, total: node.segments, isGM, entity: node
             });
+            row.pips = row.clock.pips;
             return row;
         }
 
         // invest and fiat both read as one pool against a threshold. fiat simply
-        // has nothing pushing it, which reads correctly as an empty bar.
+        // has nothing pushing it, which reads correctly as an empty bar. A masked
+        // Thread of ANY mode lands here too, which is the point of the fallback:
+        // one plain bar says something is moving without saying what kind of
+        // thing it is. Its numbers are still its own, so they come from the real
+        // mode — a contest reads as its leading side, because that is how far
+        // along the situation actually is, and summing the sides would both read
+        // past the threshold and admit there is more than one of them.
         row.isPool = true;
         row.pool = projectProgress({
-            current: node.progress.pool, total: threshold, isGM, entity: node
+            current: mode === MODE.CONTESTED
+                ? Math.max(0, ...Object.values(node.progress.byForce ?? {}))
+                : node.progress.pool,
+            total: mode === MODE.CLOCK ? node.segments : threshold,
+            isGM, entity: node
         });
         return row;
     }
@@ -908,8 +1037,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      */
     _onRender(context, options) {
         super._onRender(context, options);
-        // v1 keeps the player write path closed, so only a GM moves Assets around.
-        if (!game.user.isGM) return;
+        // v1 keeps the player write path closed, so only a GM moves Assets around
+        // — and a GM previewing the table's board is not one of them, or the
+        // preview would be a screenshot with live controls behind it.
+        if (!this.#viewer()) return;
 
         new foundry.applications.ux.DragDrop.implementation({
             // Buttons inside a chip carry the same id so their handlers can read it;
@@ -1024,6 +1155,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     static async _onSelectView(event, target) {
         if (!await this.#leaveEditor()) return;
         this.setView(target.dataset.view);
+    }
+
+    static async _onTogglePreview() {
+        await this.togglePreview();
     }
 
     static async _onOpenPlot(event, target) {

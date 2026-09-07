@@ -4,7 +4,9 @@
 
     The mode decides the bar shape, and that branch was already resolved in
     _prepareContext: exactly one of isContested / isClock / isPool is true, or the
-    row is concluded.
+    row is concluded. A masked row is always the plain pool bar and never carries
+    a mode chip — pips are a clock and a column of contenders is a contest, so the
+    shape names the Thread's nature as loudly as the chip did.
 
     There is ONE control for moving this Thread, whatever its mode, and it opens a
     dialog. The row used to carry a strip of +1 / +3 / −1 buttons per Force and a
@@ -36,7 +38,11 @@
                 {{#if this.isLocked}}
                 <span class="rsr-chip rsr-chip-quiet">{{localize this.statusLabel}}</span>
                 {{/if}}
-            <span class="rsr-chip rsr-chip-mode">{{localize this.modeLabel}}</span>
+                {{!-- Absent under a mask: what KIND of Thread this is is part of
+                      what the mask withholds, so there is no key to localize. --}}
+                {{#if this.modeLabel}}
+                <span class="rsr-chip rsr-chip-mode">{{localize this.modeLabel}}</span>
+                {{/if}}
             {{/if}}
 
             {{#if @root.isGM}}
@@ -104,12 +110,30 @@
     </ul>
     {{/if}}
 
-    {{!-- Clock: discrete segments, so the table can count what is left. --}}
+    {{!-- What the table has heard, in place of what it cannot read. Set on a
+          masked Thread, and it comes INSTEAD of every bar below rather than
+          above them: a bar beside "rumours of a foreigner with a loaded purse"
+          would be answering the question the sentence just declined. --}}
+    {{#if this.maskNote}}
+    <p class="rsr-mask-note">{{this.maskNote}}</p>
+    {{/if}}
+
+    {{!-- Clock: discrete segments, so the table can count what is left — which is
+      exactly why a viewer who may not read the numbers does not get pips. Four
+      filled dots out of six IS the number, and counting them is not a workaround.
+      Withheld, the clock falls back to the same plain bar every other Thread
+      shows: the shape of the situation is public, its arithmetic is not. --}}
     {{#if this.isClock}}
     <div class="rsr-clock">
+        {{#if this.pips}}
         <span class="rsr-pips">
             {{#each this.pips}}<i class="rsr-pip{{#if this.filled}} is-filled{{/if}}"></i>{{/each}}
         </span>
+        {{else}}
+        <span class="rsr-bar">
+            <span class="rsr-bar-fill" style="width: {{this.clock.percent}}%"></span>
+        </span>
+        {{/if}}
         {{#if this.clock.showValues}}
         <span class="rsr-bar-value">{{this.clock.current}}<span class="rsr-of">/{{this.clock.total}}</span></span>
         {{/if}}

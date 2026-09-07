@@ -66,6 +66,33 @@
                        data-tooltip="{{localize 'RSR.editor.hideValuesHint'}}"></i>
                 </span>
             </div>
+
+            {{!-- The placeholder is the real default, localized, so an empty box
+                  reads as what the table would actually see rather than as
+                  nothing. --}}
+            <div class="rsr-form-row">
+                <label for="rsr-f-maskLabel">{{localize "RSR.editor.maskLabel"}}</label>
+                <span class="rsr-form-inline">
+                    <input type="text" id="rsr-f-maskLabel" name="maskLabel"
+                           value="{{editor.maskLabel}}"
+                           placeholder="{{localize editor.maskDefault}}">
+                    <i class="fa-regular fa-circle-question rsr-info"
+                       data-tooltip="{{localize 'RSR.editor.maskLabelHint'}}"></i>
+                </span>
+            </div>
+
+            {{!-- Only where there is a reading for it to stand in for. --}}
+            {{#if editor.hasMaskNote}}
+            <div class="rsr-form-row is-stacked">
+                <label for="rsr-f-maskNote">{{localize "RSR.editor.maskNote"}}</label>
+                <span class="rsr-form-inline">
+                    <i class="fa-regular fa-circle-question rsr-info"
+                       data-tooltip="{{localize editor.maskNoteHint}}"></i>
+                </span>
+                <textarea id="rsr-f-maskNote" name="maskNote" rows="2"
+                          placeholder="{{localize 'RSR.editor.maskNotePlaceholder'}}">{{editor.maskNote}}</textarea>
+            </div>
+            {{/if}}
         </section>
         {{/if}}
     </form>

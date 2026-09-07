@@ -125,5 +125,21 @@ const withId = N.normalizePlot({ id: 'keep-me' });
 eq('existing id preserved', withId.id, 'keep-me');
 eq('missing id generated', N.normalizePlot({}).id.length > 0, true);
 
+// ── what the table sees instead ──────────────────────────────────────────────
+// maskLabel is on every entity, because every kind of row can be masked and
+// every mask can be given a name. maskNote is only on the two that draw a
+// reading for it to stand in for — an unused field on a Force is weight the
+// next reader has to ask about.
+eq('a plot keeps its mask name', N.normalizePlot({ maskLabel: 'Unknown war' }).maskLabel, 'Unknown war');
+eq('a thread keeps its mask note',
+    N.normalizeNode({ maskNote: 'Rumours in the market.' }).maskNote, 'Rumours in the market.');
+eq('a force is named but has no note', 'maskNote' in N.normalizeForce({}), false);
+eq('an asset is named but has no note', 'maskNote' in N.normalizeAsset({}), false);
+eq('a force can still be named', N.normalizeForce({ maskLabel: 'A third party' }).maskLabel, 'A third party');
+eq('an unset mask name is empty, not a default',
+    [N.normalizePlot({}).maskLabel, N.normalizeNode({}).maskLabel], ['', '']);
+eq('a non-string mask name is dropped', N.normalizeNode({ maskLabel: 7 }).maskLabel, '');
+eq('a non-string mask note is dropped', N.normalizeNode({ maskNote: {} }).maskNote, '');
+
 console.log(`\n${fail === 0 ? '  all passed' : `  ${fail} FAILED`}\n`);
 process.exit(fail === 0 ? 0 : 1);

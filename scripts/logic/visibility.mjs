@@ -45,17 +45,45 @@ export const showValues = (entity, isGM) => isGM || !entity?.hideValues;
  * replaced, not blanked and not passed through, because a blank field still
  * carries the original in the context object it came from.
  *
+ * **The row may name its own mask.** A bare "???" tells a player that something
+ * is being withheld and nothing about what KIND of something, which is a worse
+ * answer than the module can give: "Unknown activity — ???" says a Thread is
+ * running. The default comes from the caller, because kinds are the app's idea
+ * and not this module's, and `maskLabel` on the row itself beats it — so a GM
+ * can call one Thread *Something at the east gate* without any call site here
+ * gaining an argument to forget.
+ *
  * @param {object} entity
  * @param {boolean} isGM
- * @param {string} maskedLabel  already-localized stand-in, e.g. "???"
+ * @param {string} maskedLabel  already-localized stand-in for this KIND of row
  */
 export function projectIdentity(entity, isGM, maskedLabel = '???') {
     const masked = isMasked(entity, isGM);
+    const own = typeof entity?.maskLabel === 'string' ? entity.maskLabel.trim() : '';
     return {
         masked,
-        name: masked ? maskedLabel : (entity?.name ?? ''),
+        name: masked ? (own || maskedLabel) : (entity?.name ?? ''),
         description: masked ? '' : (entity?.description ?? '')
     };
+}
+
+/**
+ * What the table is told in place of a reading, or ''.
+ *
+ * A masked row keeps its bar by default, and that is usually right: the table
+ * knows something is being attempted and can see it moving. Sometimes it is
+ * wrong — they have heard a rumour, not watched a siege — and then a bar is a
+ * precision nobody has earned. So a mask note replaces the reading outright: no
+ * bar, no pips, no contested standings, just the line the GM wrote.
+ *
+ * Writing the line IS the switch, which is why there is no second toggle beside
+ * it. A GM who wants the bar back deletes the sentence, and a GM who wants the
+ * bar gone has to say what the table hears instead — which is the question they
+ * should be answering anyway.
+ */
+export function maskNoteOf(entity, isGM) {
+    if (!isMasked(entity, isGM)) return '';
+    return typeof entity?.maskNote === 'string' ? entity.maskNote.trim() : '';
 }
 
 /**
@@ -88,4 +116,51 @@ export function projectForceChip(force, isGM, maskedLabel = '???') {
     if (isHidden(force, isGM)) return null;
     const { masked, name } = projectIdentity(force, isGM, maskedLabel);
     return { id: masked ? null : force.id, name, masked };
+}
+
+/**
+ * The Phase's tone, for a viewer who may not be allowed to know the Phase.
+ *
+ * Found in the M5 sweep. A masked Plot dropped its Phase LABEL and kept the tone
+ * that label was painted in, so the State bar went red at "Rain of Fire" and the
+ * table read the mood of a Phase whose name was being withheld. A tone is a
+ * one-word summary of the thing the mask exists to withhold, so it goes with it.
+ */
+export const projectTone = (entity, isGM, tone) =>
+    (isMasked(entity, isGM) ? 'neutral' : (tone || 'neutral'));
+
+/**
+ * The mode a viewer may know a Thread is running on, or null.
+ *
+ * Found in M5 round 3. A masked Thread was still wearing its mode chip, so a row
+ * the table was told nothing about announced that it was Contested — which is
+ * not a detail, it is the nature of the thing: contested means somebody is being
+ * opposed, invest means somebody is paying, a clock means somebody is running
+ * out of time. The mask exists to withhold exactly that.
+ *
+ * Returning null rather than a flag is the point: the caller has nothing left to
+ * build a chip out of, and the shape it draws instead falls through to the one
+ * plain bar every withheld reading already falls back to. A masked clock's pips
+ * and a masked contest's column of named contenders name the mode as loudly as
+ * the chip did.
+ */
+export const projectMode = (entity, isGM, mode) =>
+    (isMasked(entity, isGM) ? null : (mode ?? null));
+
+/**
+ * A clock reading. The same as projectProgress, plus the pips.
+ *
+ * Also found in the M5 sweep, and the sharper of the two. A continuous bar is a
+ * deliberate exception to hideValues — the SHAPE of a situation is public even
+ * when its arithmetic is not, and a width is a fuzzy read. Pips are not: four
+ * filled dots out of six is the exact number, printed as dots, and the table can
+ * count them. So a clock whose numbers are withheld renders as a plain bar, like
+ * every other Thread whose numbers are withheld, and the pips never leave here.
+ */
+export function projectClock({ current, total, isGM, entity }) {
+    const reading = projectProgress({ current, total, isGM, entity });
+    if (!reading.showValues) return { ...reading, pips: null };
+    const size = Math.max(0, Math.trunc(Number(total) || 0));
+    const filled = Math.min(size, Math.max(0, Math.trunc(Number(current) || 0)));
+    return { ...reading, pips: Array.from({ length: size }, (_, i) => ({ filled: i < filled })) };
 }

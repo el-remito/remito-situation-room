@@ -26,10 +26,14 @@
         {{/if}}
     </header>
 
+    {{#if this.showBar}}
     <div class="rsr-state-bar" role="img"
-         aria-label="{{localize 'RSR.plot.state'}} {{this.percent}}%">
+         aria-label="{{localize 'RSR.plot.state'}}{{#if this.showState}} {{this.state}} / {{this.stateMax}}{{/if}}">
         <div class="rsr-state-fill rsr-tone-{{this.phaseTone}}" style="width: {{this.percent}}%"></div>
     </div>
+    {{else}}
+    <p class="rsr-mask-note">{{this.maskNote}}</p>
+    {{/if}}
 
     {{#if this.showState}}
     <p class="rsr-state-value">{{this.state}} / {{this.stateMax}}</p>

@@ -1,0 +1,107 @@
+{{!--
+    The world's condition table.
+
+    Not an entity editor: this one screen edits a list, and Save replaces the whole
+    list rather than patching a row. It is here rather than in Settings because it
+    is a repeating widget, and the board editors are what this module has for those
+    — same draft, same Save/Revert bar, same harvest.
+
+    Rows are keyed by id, not by index. Rows are added and deleted while the editor
+    is open, and an index would rebind a name someone had just typed to whichever
+    row slid into that slot.
+--}}
+
+<section class="rsr-form-section">
+    <p class="rsr-form-note">{{localize "RSR.asset.conditionsIntro"}}</p>
+
+    <div class="rsr-cond-table">
+        <header class="rsr-cond-head">
+            <span>{{localize "RSR.asset.conditionsName"}}</span>
+            <span>{{localize "RSR.asset.conditionsEffect"}}
+                <i class="fa-regular fa-circle-question rsr-info"
+                   data-tooltip="{{localize 'RSR.asset.conditionsEffectHint'}}"></i>
+            </span>
+            <span>{{localize "RSR.asset.conditionsInPlay"}}
+                <i class="fa-regular fa-circle-question rsr-info"
+                   data-tooltip="{{localize 'RSR.asset.conditionsInPlayHint'}}"></i>
+            </span>
+            <span>{{localize "RSR.asset.conditionsCycles"}}
+                <i class="fa-regular fa-circle-question rsr-info"
+                   data-tooltip="{{localize 'RSR.asset.conditionsCyclesHint'}}"></i>
+            </span>
+            <span>{{localize "RSR.asset.conditionsBecomes"}}</span>
+            <span>{{localize "RSR.asset.conditionsFinal"}}
+                <i class="fa-regular fa-circle-question rsr-info"
+                   data-tooltip="{{localize 'RSR.asset.conditionsFinalHint'}}"></i>
+            </span>
+            <span></span>
+        </header>
+
+        {{#each editor.rows}}
+        <div class="rsr-cond-row{{#if this.isProtected}} is-protected{{/if}}">
+            <span class="rsr-cond-name">
+                <input type="text" id="rsr-cond-label-{{this.id}}"
+                       data-row-group="conditions" data-row-key="{{this.id}}" data-row-field="label"
+                       value="{{this.label}}" placeholder="{{localize this.placeholder}}">
+                {{#if this.usedBy}}
+                <em class="rsr-cond-used">{{localize "RSR.asset.conditionsUsedBy" count=this.usedBy}}</em>
+                {{/if}}
+            </span>
+
+            <select id="rsr-cond-effect-{{this.id}}"
+                    data-row-group="conditions" data-row-key="{{this.id}}" data-row-field="effect">
+                {{#each this.effects}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                {{/each}}
+            </select>
+
+            <span class="rsr-form-check">
+                <input type="checkbox" id="rsr-cond-inplay-{{this.id}}"
+                       data-row-group="conditions" data-row-key="{{this.id}}" data-row-field="inPlay"
+                       {{#if this.inPlay}}checked{{/if}}>
+            </span>
+
+            <input type="number" id="rsr-cond-cycles-{{this.id}}" class="rsr-cond-cycles"
+                   data-row-group="conditions" data-row-key="{{this.id}}" data-row-field="cycles"
+                   value="{{this.cycles}}">
+
+            <select id="rsr-cond-becomes-{{this.id}}"
+                    data-row-group="conditions" data-row-key="{{this.id}}" data-row-field="becomes">
+                {{#each this.successors}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                {{/each}}
+            </select>
+
+            <span class="rsr-form-check">
+                <input type="checkbox" id="rsr-cond-final-{{this.id}}"
+                       data-row-group="conditions" data-row-key="{{this.id}}" data-row-field="isFinal"
+                       {{#if this.isFinal}}checked{{/if}}>
+            </span>
+
+            {{!-- Ready has no delete button. Everything unrecognised resolves to it,
+                  so a table without it has no answer to "what is normal". --}}
+            {{#unless this.isProtected}}
+            <button type="button" class="rsr-icon-btn rsr-danger" data-action="removeCondition"
+                    data-condition-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.asset.conditionsDelete'}}">
+                <i class="fa-solid fa-trash" inert></i>
+            </button>
+            {{else}}
+            <span></span>
+            {{/unless}}
+        </div>
+        {{/each}}
+    </div>
+
+    <div class="rsr-form-add">
+        <button type="button" class="rsr-btn" data-action="addCondition">
+            <i class="fa-solid fa-plus" inert></i>
+            <span>{{localize "RSR.asset.conditionsAdd"}}</span>
+        </button>
+        <button type="button" class="rsr-btn" data-action="restoreConditions"
+                data-tooltip="{{localize 'RSR.asset.conditionsRestoreHint'}}">
+            <i class="fa-solid fa-rotate-left" inert></i>
+            <span>{{localize "RSR.asset.conditionsRestore"}}</span>
+        </button>
+    </div>
+</section>

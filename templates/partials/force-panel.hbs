@@ -1,0 +1,138 @@
+{{!--
+    One Force in the GM's Cockpit: its purse, where it is in play, what it is good
+    and bad at, and what it still has in hand.
+
+    data-force-id makes the panel a drop target twice over — an Asset dropped back
+    onto it is released from wherever it was committed, and a Foundry document
+    dropped onto it becomes a new Asset owned by this Force.
+--}}
+<article class="rsr-force-panel" data-force-id="{{this.id}}">
+
+    <header class="rsr-force-head">
+        {{#if this.img}}
+        <img class="rsr-force-img" src="{{this.img}}" alt="">
+        {{/if}}
+
+        <h4 class="rsr-force-name">{{this.name}}</h4>
+
+        {{#if this.isHiddenFromPlayers}}
+        <span class="rsr-chip rsr-chip-veil">{{localize this.visibilityLabel}}</span>
+        {{/if}}
+        {{#if this.isMaskedFromPlayers}}
+        <span class="rsr-chip rsr-chip-veil">{{localize this.visibilityLabel}}</span>
+        {{/if}}
+
+        <span class="rsr-row-tools">
+            <button type="button" class="rsr-icon-btn" data-action="editForce" data-force-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.editForce'}}">
+                <i class="fa-solid fa-pen" inert></i>
+            </button>
+            <button type="button" class="rsr-icon-btn rsr-danger" data-action="removeForce" data-force-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.deleteForce'}}">
+                <i class="fa-solid fa-trash" inert></i>
+            </button>
+        </span>
+    </header>
+
+    <div class="rsr-purse">
+        <span class="rsr-purse-value" data-tooltip="{{localize 'RSR.force.resources'}}">
+            <i class="{{this.icon}}" inert></i> {{this.resources}}
+        </span>
+
+        {{#if this.hasIncome}}
+        <span class="rsr-purse-income{{#unless this.willBePaid}} is-idle{{/unless}}"
+              data-tooltip="{{localize 'RSR.force.incomeTooltip'}}">
+            {{numberFormat this.income sign=true}}
+        </span>
+        {{/if}}
+
+        {{#unless this.isActive}}
+        <span class="rsr-chip rsr-chip-quiet">{{localize "RSR.force.paused"}}</span>
+        {{/unless}}
+
+        <span class="rsr-controls rsr-controls-inline">
+            {{!-- The pause switch. This, and only this, decides whether a Force
+                  draws income — never where it happens to be standing. --}}
+            {{#if this.isActive}}
+            <button type="button" class="rsr-mini" data-action="toggleForceActive"
+                    name="pause-{{this.id}}" data-force-id="{{this.id}}" data-active="false"
+                    data-tooltip="{{localize 'RSR.force.pauseHint'}}">
+                <i class="fa-solid fa-pause" inert></i>
+            </button>
+            {{else}}
+            <button type="button" class="rsr-mini rsr-mini-primary" data-action="toggleForceActive"
+                    name="pause-{{this.id}}" data-force-id="{{this.id}}" data-active="true"
+                    data-tooltip="{{localize 'RSR.force.resumeHint'}}">
+                <i class="fa-solid fa-play" inert></i>
+            </button>
+            {{/if}}
+            <button type="button" class="rsr-mini" data-action="nudgeResources"
+                    name="purse-{{this.id}}-up" data-force-id="{{this.id}}" data-delta="1">+1</button>
+            <button type="button" class="rsr-mini" data-action="nudgeResources"
+                    name="purse-{{this.id}}-down" data-force-id="{{this.id}}" data-delta="-1">&minus;1</button>
+            <button type="button" class="rsr-mini" data-action="adjustResources"
+                    name="purse-{{this.id}}-set" data-force-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.force.adjustHint'}}">
+                <i class="fa-solid fa-sliders" inert></i>
+            </button>
+        </span>
+    </div>
+
+    {{!-- Where this Force is in play. A Force on no Active Plot is paid nothing,
+          and that is the single most common reason a turn "did not work". --}}
+    {{#if this.plots.length}}
+    <ul class="rsr-force-plots">
+        {{#each this.plots}}
+        <li class="rsr-plot-tag{{#unless this.isActive}} is-quiet{{/unless}}" data-plot-id="{{this.id}}">
+            {{this.name}}
+            {{#unless this.isActive}}<em>{{localize this.lifecycleLabel}}</em>{{/unless}}
+        </li>
+        {{/each}}
+    </ul>
+    {{else}}
+    <p class="rsr-force-idle">{{localize "RSR.force.unengaged"}}</p>
+    {{/if}}
+
+    {{#if this.strengths.length}}
+    <ul class="rsr-tags rsr-tags-strength">
+        {{#each this.strengths}}<li>{{this}}</li>{{/each}}
+    </ul>
+    {{/if}}
+    {{#if this.weaknesses.length}}
+    <ul class="rsr-tags rsr-tags-weakness">
+        {{#each this.weaknesses}}<li>{{this}}</li>{{/each}}
+    </ul>
+    {{/if}}
+
+    <footer class="rsr-force-foot">
+        <h5>{{localize "RSR.asset.plural"}}</h5>
+        <button type="button" class="rsr-mini" data-action="createAsset" data-force-id="{{this.id}}">
+            <i class="fa-solid fa-plus" inert></i>
+            <span>{{localize "RSR.editor.newAsset"}}</span>
+        </button>
+    </footer>
+
+    {{#if this.assets.length}}
+    <ul class="rsr-assets">
+        {{#each this.assets}}
+        {{> "modules/remito-situation-room/templates/partials/asset-chip.hbs"}}
+        {{/each}}
+    </ul>
+    {{else}}
+    <p class="rsr-empty rsr-empty-inline">{{localize "RSR.asset.none"}}</p>
+    {{/if}}
+
+    {{!-- Held and lost are two lists rather than one. A Force with four wrecks at
+          the bottom of its panel reads as a Force with four Assets right up until
+          you get as far as the badges. --}}
+    {{#if this.lost.length}}
+    <details class="rsr-lost">
+        <summary>{{localize "RSR.asset.lost" count=this.lost.length}}</summary>
+        <ul class="rsr-assets">
+            {{#each this.lost}}
+            {{> "modules/remito-situation-room/templates/partials/asset-chip.hbs"}}
+            {{/each}}
+        </ul>
+    </details>
+    {{/if}}
+</article>

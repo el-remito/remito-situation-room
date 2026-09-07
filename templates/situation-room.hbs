@@ -30,6 +30,12 @@
 
     <section class="rsr-body">
 
+        {{!-- Edit mode renders over everything: when it is open the view builders
+              never run, so there is nothing underneath to render anyway. --}}
+        {{#if isEditing}}
+        {{> "modules/remito-situation-room/templates/partials/editor.hbs"}}
+        {{/if}}
+
         {{#if isSituation}}
 
             {{!-- Drilled into one Plot --}}
@@ -40,35 +46,74 @@
                     <span>{{localize "RSR.board.allPlots"}}</span>
                 </button>
 
+                {{!-- Reading order, top to bottom: what this is, what it is
+                      about, where it stands, what standing there looks like, and
+                      who is standing in it. --}}
                 <header class="rsr-plot-detail-head">
                     <h2 class="rsr-plot-title">{{openPlot.name}}</h2>
-                    {{#if openPlot.phaseLabel}}
-                    <span class="rsr-chip rsr-tone-{{openPlot.phaseTone}}">{{openPlot.phaseLabel}}</span>
-                    {{/if}}
                     {{#unless openPlot.isActive}}
                     <span class="rsr-chip rsr-chip-quiet">{{localize openPlot.lifecycleLabel}}</span>
                     {{/unless}}
+                    {{#if openPlot.isExample}}
+                    <span class="rsr-chip rsr-chip-example">{{localize "RSR.help.exampleTag"}}</span>
+                    {{/if}}
                 </header>
-
-                <div class="rsr-state-bar rsr-state-bar-lg" role="img"
-                     aria-label="{{localize 'RSR.plot.state'}} {{openPlot.percent}}%">
-                    <div class="rsr-state-fill rsr-tone-{{openPlot.phaseTone}}"
-                         style="width: {{openPlot.percent}}%"></div>
-                </div>
-                {{#if openPlot.showState}}
-                <p class="rsr-state-value">{{openPlot.state}} / {{openPlot.stateMax}}</p>
-                {{/if}}
 
                 {{#if openPlot.description}}
                 <p class="rsr-plot-desc">{{openPlot.description}}</p>
                 {{/if}}
 
-                {{#if openPlot.forces.length}}
-                <ul class="rsr-force-chips">
-                    {{#each openPlot.forces}}
-                    <li class="rsr-force-chip{{#if this.masked}} is-masked{{/if}}">{{this.name}}</li>
+                {{!-- The State line. The reading sits WITH the Phase it belongs
+                      to: "Critical, 58 of 100" is one fact, and it was previously
+                      split across the width of the window. --}}
+                <section class="rsr-state-block">
+                    <div class="rsr-state-line">
+                        <span class="rsr-state-label">{{localize "RSR.plot.state"}}</span>
+                        {{#if openPlot.phaseLabel}}
+                        <span class="rsr-chip rsr-tone-{{openPlot.phaseTone}}">{{openPlot.phaseLabel}}</span>
+                        {{/if}}
+                        {{#if openPlot.showState}}
+                        <span class="rsr-state-count rsr-tone-{{openPlot.phaseTone}}">
+                            {{openPlot.state}}<span class="rsr-of">/{{openPlot.stateMax}}</span>
+                        </span>
+                        {{/if}}
+                        <div class="rsr-state-bar rsr-state-bar-lg" role="img"
+                             aria-label="{{localize 'RSR.plot.state'}} {{openPlot.percent}}%">
+                            <div class="rsr-state-fill rsr-tone-{{openPlot.phaseTone}}"
+                                 style="width: {{openPlot.percent}}%"></div>
+                        </div>
+                    </div>
+
+                    {{!-- What this Phase looks like from the table. Only ever the
+                          CURRENT one: the ladder never leaves _prepareContext. --}}
+                    {{#if openPlot.phaseDescription}}
+                    <p class="rsr-phase-desc">{{openPlot.phaseDescription}}</p>
+                    {{/if}}
+                </section>
+
+                {{!-- The roster, in whatever groupings the GM arranged it in.
+                      Cosmetic by design — nothing reads a grouping — but which
+                      side a Force is on is the first question anyone asks. --}}
+                {{#if openPlot.groups.length}}
+                <section class="rsr-involved">
+                    <h4 class="rsr-involved-title">{{localize "RSR.plot.involved"}}</h4>
+                    {{#each openPlot.groups}}
+                    <div class="rsr-group">
+                        {{#if this.hasLabel}}
+                        <span class="rsr-group-label">{{this.label}}</span>
+                        {{else}}
+                            {{#if this.isRemainder}}
+                            <span class="rsr-group-label is-quiet">{{localize "RSR.plot.ungrouped"}}</span>
+                            {{/if}}
+                        {{/if}}
+                        <ul class="rsr-force-chips">
+                            {{#each this.forces}}
+                            <li class="rsr-force-chip{{#if this.masked}} is-masked{{/if}}">{{this.name}}</li>
+                            {{/each}}
+                        </ul>
+                    </div>
                     {{/each}}
-                </ul>
+                </section>
                 {{/if}}
 
                 {{#if openPlot.gmNotes}}
@@ -76,7 +121,10 @@
                 {{/if}}
 
                 <header class="rsr-section-head">
-                    <h3>{{localize "RSR.thread.plural"}}</h3>
+                    <h3>
+                        {{localize "RSR.thread.plural"}}
+                        <span class="rsr-count">{{openPlot.threadCount}}</span>
+                    </h3>
                     {{#if isGM}}
                     <button type="button" class="rsr-btn" data-action="createThread">
                         <i class="fa-solid fa-plus" inert></i>
@@ -84,6 +132,39 @@
                     </button>
                     {{/if}}
                 </header>
+
+                {{!-- The hand. Drag one of these onto a Thread below to commit
+                      it; drag a committed Asset back onto its Force to release. --}}
+                {{#if openPlot.tray.length}}
+                <div class="rsr-tray">
+                    {{#each openPlot.tray}}
+                    <div class="rsr-tray-force" data-force-id="{{this.id}}">
+                        <span class="rsr-tray-name">
+                            <i class="{{this.icon}}" inert></i> {{this.name}}
+                        </span>
+                        {{#each this.assets}}
+                        <span class="rsr-tray-asset{{#if this.isHiddenFromPlayers}} is-veiled{{/if}}"
+                              data-asset-id="{{this.id}}"
+                              data-tooltip="{{localize 'RSR.asset.dragHint'}}">
+                            <i class="fa-solid fa-grip-vertical" inert></i>
+                            {{this.name}}
+                            {{!-- Recovering and Destroyed never reach the tray at
+                                  all: uncommittedAssets drops what is out of play,
+                                  so an Asset here is Ready, Damaged or Inactive. --}}
+                            {{#unless this.isReady}}
+                            <span class="rsr-condition is-{{this.condition}}">{{localize this.conditionLabel}}</span>
+                            {{/unless}}
+                            {{#if this.hasModifier}}
+                            <em>{{localize this.modifierLabel}}
+                                {{#if this.modifierOff}}<s>{{this.modifierValue}}</s> {{this.modifierWorth}}
+                                {{else}}{{this.modifierValue}}{{/if}}</em>
+                            {{/if}}
+                        </span>
+                        {{/each}}
+                    </div>
+                    {{/each}}
+                </div>
+                {{/if}}
 
                 {{#if openPlot.threads.length}}
                 <ul class="rsr-threads">
@@ -98,34 +179,102 @@
 
             {{!-- The Plot list --}}
             {{else}}
+            {{!-- Two columns of Plots and a chronicle in the third. The grid
+                  is capped at two deliberately: a card that keeps narrowing to fit
+                  another column stops being readable, and what belongs in the space
+                  that would have been the third column is what has been happening. --}}
             <div class="rsr-view rsr-view-situation">
-                {{#if isGM}}
-                <header class="rsr-section-head">
-                    <h3>{{localize "RSR.plot.plural"}}</h3>
-                    <button type="button" class="rsr-btn" data-action="createPlot">
-                        <i class="fa-solid fa-plus" inert></i>
-                        <span>{{localize "RSR.editor.newPlot"}}</span>
-                    </button>
-                </header>
-                {{/if}}
+                <div class="rsr-situation-split">
+                    <div class="rsr-situation-main">
+                        {{#if isGM}}
+                        <header class="rsr-section-head">
+                            <h3>{{localize "RSR.plot.plural"}}</h3>
+                            <button type="button" class="rsr-btn" data-action="createPlot">
+                                <i class="fa-solid fa-plus" inert></i>
+                                <span>{{localize "RSR.editor.newPlot"}}</span>
+                            </button>
+                        </header>
+                        {{/if}}
 
-                {{#if plots.length}}
-                <div class="rsr-plot-grid">
-                    {{#each plots}}
-                    {{> "modules/remito-situation-room/templates/partials/plot-card.hbs"}}
-                    {{/each}}
+                        {{#if plots.length}}
+                        <div class="rsr-plot-grid">
+                            {{#each plots}}
+                            {{> "modules/remito-situation-room/templates/partials/plot-card.hbs"}}
+                            {{/each}}
+                        </div>
+                        {{else}}
+                        <p class="rsr-empty">{{localize "RSR.board.noPlots"}}</p>
+                        {{/if}}
+                    </div>
+
+                    {{> "modules/remito-situation-room/templates/partials/log.hbs"}}
                 </div>
-                {{else}}
-                <p class="rsr-empty">{{localize "RSR.board.noPlots"}}</p>
-                {{/if}}
             </div>
             {{/if}}
 
         {{/if}}
 
-        {{#if isCockpit}}
+        {{!-- The Cockpit. GM-only, and the context proves it: `cockpit` is null
+              for anyone else, so there is nothing here to hide. --}}
+        {{#if cockpit}}
         <div class="rsr-view rsr-view-cockpit">
-            <p class="rsr-placeholder">{{localize 'RSR.board.cockpitPending'}}</p>
+
+            <header class="rsr-section-head">
+                <h3>{{localize "RSR.force.plural"}}</h3>
+                <span class="rsr-head-tools">
+                    <button type="button" class="rsr-btn" data-action="createForce">
+                        <i class="fa-solid fa-plus" inert></i>
+                        <span>{{localize "RSR.editor.newForce"}}</span>
+                    </button>
+                    <button type="button" class="rsr-btn rsr-btn-primary" data-action="advanceTurn"
+                            data-tooltip="{{localize 'RSR.turn.tooltip'}}">
+                        <i class="fa-solid fa-hourglass-end" inert></i>
+                        <span>{{localize "RSR.turn.advance"}}</span>
+                    </button>
+                </span>
+            </header>
+
+            <p class="rsr-turn-line">
+                {{localize "RSR.turn.standing" turn=cockpit.turn count=cockpit.payingCount}}
+            </p>
+
+            {{!-- The footnote. Every Force and what the next cycle does to it,
+                  including the ones it does nothing to — those are the rows a GM
+                  is looking for when a cycle seems not to have worked. --}}
+            {{#if cockpit.roster.length}}
+            <details class="rsr-roster" data-sync="cycle-roster" open>
+                <summary>{{localize "RSR.turn.rosterTitle"}}</summary>
+                <ul class="rsr-bill">
+                    {{#each cockpit.roster}}
+                    <li class="{{#unless this.willBePaid}}is-idle{{/unless}}">
+                        <span class="rsr-bill-name">{{this.name}}</span>
+                        <span class="rsr-bill-delta">{{#if this.willBePaid}}{{numberFormat this.paid sign=true}}{{else}}&mdash;{{/if}}</span>
+                        <span class="rsr-bill-total">{{this.from}} &rarr; {{this.to}}</span>
+                        <span class="rsr-bill-why">{{#if this.reason}}{{localize this.reason}}{{/if}}</span>
+                    </li>
+                    {{/each}}
+                </ul>
+            </details>
+            {{/if}}
+
+            {{#if cockpit.forces.length}}
+            <div class="rsr-force-grid">
+                {{#each cockpit.forces}}
+                {{> "modules/remito-situation-room/templates/partials/force-panel.hbs"}}
+                {{/each}}
+            </div>
+            {{else}}
+            <p class="rsr-empty">{{localize "RSR.force.none"}}</p>
+            {{/if}}
+        </div>
+        {{/if}}
+
+        {{#if settings}}
+        <div class="rsr-view rsr-view-settings">
+            <header class="rsr-section-head">
+                <h3>{{localize "RSR.settings.title"}}</h3>
+            </header>
+            {{> "modules/remito-situation-room/templates/partials/settings.hbs"}}
         </div>
         {{/if}}
 

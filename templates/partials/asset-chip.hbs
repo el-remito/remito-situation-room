@@ -1,0 +1,96 @@
+{{!--
+    One Asset in a Force's hand, in the GM's Cockpit.
+
+    The whole chip is the drag handle — data-asset-id is both the drag payload and
+    the drop target for a Foundry document, so dragging this onto a Thread commits
+    it and dragging an Actor onto it links the two. Nothing here is projected: the
+    Cockpit is GM-only, and the visibility chip exists to tell the GM what the
+    TABLE sees, which is the opposite job.
+--}}
+<li class="rsr-asset{{#if this.isCommitted}} is-committed{{/if}}{{#unless this.isReady}} is-conditioned{{/unless}}"
+    data-asset-id="{{this.id}}">
+
+    <header class="rsr-asset-head">
+        {{#if this.img}}
+        <img class="rsr-asset-img" src="{{this.img}}" alt="">
+        {{/if}}
+
+        <span class="rsr-asset-name">{{this.name}}</span>
+
+        {{!-- The badge is the control. A condition is a mid-session thing, and
+              making the GM open an editor to say the dragon has been driven off is
+              two clicks too many. --}}
+        <button type="button" class="rsr-condition-btn" data-action="setAssetCondition"
+                data-asset-id="{{this.id}}"
+                data-tooltip="{{localize 'RSR.asset.conditionSet'}}">
+            {{#if this.isReady}}
+            <i class="fa-regular fa-circle-dot" inert></i>
+            {{else}}
+            <span class="rsr-condition is-{{this.condition}}">
+                {{localize this.conditionLabel}}{{#if this.cyclesLeft}} &middot; {{this.cyclesLeft}}{{/if}}
+            </span>
+            {{/if}}
+        </button>
+
+        {{#if this.hasLink}}
+        <i class="fa-solid fa-link rsr-asset-link" data-tooltip="{{this.uuid}}"></i>
+        {{/if}}
+
+        {{#if this.isHiddenFromPlayers}}
+        <span class="rsr-chip rsr-chip-veil">{{localize this.visibilityLabel}}</span>
+        {{/if}}
+        {{#if this.isMaskedFromPlayers}}
+        <span class="rsr-chip rsr-chip-veil">{{localize this.visibilityLabel}}</span>
+        {{/if}}
+
+        <span class="rsr-row-tools">
+            <button type="button" class="rsr-icon-btn" data-action="editAsset" data-asset-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.editAsset'}}">
+                <i class="fa-solid fa-pen" inert></i>
+            </button>
+            <button type="button" class="rsr-icon-btn rsr-danger" data-action="removeAsset" data-asset-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.deleteAsset'}}">
+                <i class="fa-solid fa-trash" inert></i>
+            </button>
+        </span>
+    </header>
+
+    {{!-- Struck rather than dropped when a condition suppresses it: the GM needs
+          to see WHICH benefit is switched off, not that one used to be there. --}}
+    {{!-- Scaled, not removed: which benefit has been cut and by how much is the
+          thing the GM is looking for. The original is struck beside what it is
+          actually worth right now. --}}
+    {{#if this.hasModifier}}
+    <p class="rsr-asset-mod">
+        <i class="fa-solid fa-bolt" inert></i>
+        {{localize this.modifierLabel}}
+        {{#if this.modifierOff}}
+        <s>{{this.modifierValue}}</s> <strong>{{this.modifierWorth}}</strong>
+        {{else}}
+        {{this.modifierValue}}
+        {{/if}}
+    </p>
+    {{/if}}
+
+    {{#if this.isCommitted}}
+    <p class="rsr-asset-where">
+        <i class="fa-solid fa-thumbtack" inert></i>
+        <span>{{this.committedTo}}</span>
+        <button type="button" class="rsr-mini" data-action="releaseAsset" data-asset-id="{{this.id}}"
+                data-tooltip="{{localize 'RSR.asset.releaseHint'}}">
+            {{localize "RSR.asset.release"}}
+        </button>
+    </p>
+    {{/if}}
+
+    {{#if this.strengths.length}}
+    <ul class="rsr-tags rsr-tags-strength">
+        {{#each this.strengths}}<li>{{this}}</li>{{/each}}
+    </ul>
+    {{/if}}
+    {{#if this.weaknesses.length}}
+    <ul class="rsr-tags rsr-tags-weakness">
+        {{#each this.weaknesses}}<li>{{this}}</li>{{/each}}
+    </ul>
+    {{/if}}
+</li>

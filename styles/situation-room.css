@@ -396,12 +396,20 @@
 .rsr-prereq em { font-style: normal; color: var(--rsr-ink); }
 .rsr-delta { margin-left: 0.4rem; color: var(--rsr-gold); }
 
+/* inline-FLEX, not inline-block: the chip holds a name, sometimes a condition
+   pill and sometimes a release button, and on the baseline each of those sits a
+   different distance below its own box. Centring them is the only arrangement in
+   which adding a condition does not shift the name it belongs to. The gap is
+   explicit because a flex container drops the whitespace the markup relied on. */
 .rsr-asset-chip {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
     margin-left: 0.3rem;
     padding: 0.05rem 0.45rem;
     background: var(--rsr-panel-soft);
     border-radius: 999px;
+    vertical-align: middle;
 }
 
 /* ── Bars: contested, clock, pool ── */
@@ -496,19 +504,6 @@
 }
 
 /* ── Editors (DialogV2 windows carry .rsr, so the tokens reach them) ── */
-
-.rsr-editor .rsr-checklist {
-    display: flex; flex-direction: column; gap: 0.15rem;
-    max-height: 9rem; overflow-y: auto;
-    width: 100%;
-}
-
-.rsr-editor .rsr-checkline {
-    display: flex; align-items: center; gap: 0.4rem;
-    font-weight: normal;
-}
-
-.rsr-editor .rsr-checkline input { flex: 0 0 auto; }
 
 .rsr-editor .rsr-outcome-row {
     display: flex; align-items: center; gap: 0.4rem;
@@ -644,3 +639,1267 @@
 /* An outcome with a delta but no note is legitimate — the row keeps its top line
    and simply loses the second. */
 .rsr-conclude-note:empty { display: none; }
+
+/* ── M4 — Forces, Resources, Assets ─────────────────────────────────────── */
+
+/* The Cockpit. Wider cards than the Plot grid: a Force panel carries a purse, a
+   roster, two tag columns and a hand of Assets, and squeezing that to 320px turns
+   every line into two. */
+.rsr-force-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.rsr-head-tools { display: flex; align-items: center; gap: 0.4rem; }
+
+.rsr-turn-line {
+    margin: 0 0 0.6rem;
+    font-size: var(--font-size-12, 12px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-force-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.7rem 0.8rem;
+    background: var(--rsr-panel);
+    border: 1px solid var(--rsr-border);
+    border-radius: 6px;
+}
+
+.rsr-force-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.rsr-force-img {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border: 1px solid var(--rsr-border);
+    border-radius: 4px;
+}
+
+.rsr-force-name {
+    flex: 1 1 auto;
+    margin: 0;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-14, 14px);
+    border: none;
+}
+
+/* What the TABLE cannot see, shown on the GM's own copy. Violet throughout, per
+   the colour rule at the top of this file. */
+.rsr-chip-veil {
+    border-color: var(--rsr-withheld);
+    color: var(--rsr-withheld);
+}
+
+/* ── the purse ── */
+
+.rsr-purse {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.45rem;
+    background: var(--rsr-panel-soft);
+    border-radius: 4px;
+}
+
+.rsr-purse-value {
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-14, 14px);
+    font-variant-numeric: tabular-nums;
+    color: var(--rsr-gold);
+}
+
+.rsr-purse-inline { font-size: var(--font-size-12, 12px); }
+
+.rsr-purse-income {
+    flex: 1 1 auto;
+    font-size: var(--font-size-11, 11px);
+    font-variant-numeric: tabular-nums;
+    color: var(--rsr-strength);
+}
+
+/* An income that will not actually be paid this turn, because the Force stands on
+   no Active Plot. Greyed rather than hidden: the number is still the truth about
+   the Force, it just is not going to happen. */
+.rsr-purse-income.is-idle {
+    color: var(--rsr-ink-muted);
+    text-decoration: line-through;
+}
+
+.rsr-force-idle,
+.rsr-empty-inline {
+    margin: 0;
+    font-size: var(--font-size-11, 11px);
+    font-style: italic;
+    color: var(--rsr-ink-muted);
+}
+
+/* ── where a Force is in play ── */
+
+.rsr-force-plots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rsr-plot-tag {
+    padding: 0.05rem 0.5rem;
+    background: var(--rsr-gold-dim);
+    border: 1px solid var(--rsr-gold-soft);
+    border-radius: 999px;
+    font-size: var(--font-size-11, 11px);
+}
+
+.rsr-plot-tag.is-quiet {
+    background: transparent;
+    border-color: var(--rsr-border);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-plot-tag em { font-style: normal; opacity: 0.75; }
+
+/* ── strengths and weaknesses ── */
+
+/* Two lists, not two columns of a table: they are different lengths far more often
+   than they are equal, and a grid would leave one side ragged with empty cells. */
+.rsr-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rsr-tags li {
+    padding: 0.05rem 0.45rem;
+    border: 1px solid var(--rsr-border);
+    border-radius: 3px;
+    font-size: var(--font-size-11, 11px);
+    line-height: 1.5;
+}
+
+.rsr-tags-strength li { border-color: var(--rsr-strength); color: var(--rsr-strength); }
+.rsr-tags-weakness li { border-color: var(--rsr-weakness); color: var(--rsr-weakness); }
+
+/* ── Assets ── */
+
+.rsr-force-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.2rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--rsr-border);
+}
+
+.rsr-force-foot h5 {
+    margin: 0;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-12, 12px);
+    border: none;
+}
+
+.rsr-assets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rsr-asset {
+    padding: 0.4rem 0.5rem;
+    background: var(--rsr-panel-deep);
+    border: 1px solid var(--rsr-border);
+    border-left: 3px solid transparent;
+    border-radius: 4px;
+    /* Every Asset is a drag handle. The cursor is the only affordance saying so,
+       so it is not optional. */
+    cursor: grab;
+}
+
+.rsr-asset:active { cursor: grabbing; }
+
+/* A committed Asset is spent, in the sense that matters: it is doing something
+   somewhere and cannot do it twice. */
+.rsr-asset.is-committed { border-left-color: var(--rsr-gold); }
+
+.rsr-asset-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.rsr-asset-img {
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
+    border: 1px solid var(--rsr-border);
+    border-radius: 3px;
+}
+
+.rsr-asset-name { flex: 1 1 auto; }
+.rsr-asset-link { color: var(--rsr-ink-muted); font-size: var(--font-size-11, 11px); }
+
+.rsr-asset-mod,
+.rsr-asset-where {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.25rem 0 0;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-asset-mod { color: var(--rsr-gold); }
+.rsr-asset-where span { flex: 1 1 auto; }
+
+.rsr-asset .rsr-tags { margin-top: 0.3rem; }
+
+/* ── spenders on a Thread row ── */
+
+.rsr-spenders {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rsr-spender {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--font-size-12, 12px);
+}
+
+.rsr-spender-name { color: var(--rsr-ink-muted); }
+
+/* A Force that cannot pay keeps its button visible but inert: hiding it would
+   read as "this Force cannot push this Thread", which is a different sentence. */
+.rsr-mini:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.rsr-mini:disabled:hover {
+    border-color: var(--rsr-border);
+    color: var(--rsr-ink);
+}
+
+/* The committed-Asset chips on a Thread row are drag handles too. */
+.rsr-asset-chip { cursor: grab; }
+
+.rsr-icon-tiny {
+    padding: 0 0.15rem;
+    font-size: var(--font-size-11, 11px);
+    line-height: 1;
+}
+
+/* ── the bill, in the Advance Turn confirmation ── */
+
+.rsr-bill {
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rsr-bill li {
+    display: grid;
+    grid-template-columns: 1fr 3rem 5rem;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.2rem 0.4rem;
+    border-bottom: 1px solid var(--rsr-border);
+}
+
+.rsr-bill-name { font-family: var(--rsr-heading); }
+
+.rsr-bill-delta,
+.rsr-bill-total {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-12, 12px);
+}
+
+.rsr-bill-delta { color: var(--rsr-strength); }
+.rsr-bill-total { color: var(--rsr-ink-muted); }
+
+/* ── M4b — Help typography, Settings, the Asset tray ────────────────────── */
+
+/* Help is documentation, so it gets documentation's typography: a measure narrow
+   enough to read, real paragraph spacing, and bold on the nouns the module
+   introduces. A wall of prose is not neutral — it is unreadable, and unread help
+   is the same as no help. */
+.rsr-help-body {
+    max-width: 64ch;
+    font-size: var(--font-size-13, 13px);
+    line-height: 1.6;
+}
+
+.rsr-help-body p { margin: 0 0 0.7rem; }
+.rsr-help-body p:last-child { margin-bottom: 0; }
+
+/* The nouns this module invents — Plot, State, Phase, Thread, Force, Resources,
+   Asset — are bold on first use in each section. They are the vocabulary a reader
+   has to acquire, and bold is what makes a term findable on a re-read. */
+.rsr-help-body strong { color: var(--rsr-gold); font-weight: 600; }
+.rsr-help-body em { color: var(--rsr-ink); font-style: italic; }
+
+.rsr-help-body ul {
+    margin: 0 0 0.7rem;
+    padding-left: 1.1rem;
+    list-style: disc;
+}
+
+.rsr-help-body li { margin-bottom: 0.35rem; }
+
+/* The one thing in a section a reader must not skim past. */
+.rsr-help-body .rsr-help-callout {
+    margin: 0.8rem 0 0;
+    padding: 0.5rem 0.7rem;
+    background: var(--rsr-gold-dim);
+    border-left: 3px solid var(--rsr-gold);
+    border-radius: 0 4px 4px 0;
+}
+
+.rsr-help-body .rsr-help-callout strong { color: var(--rsr-ink); }
+
+/* ── the cycle roster ── */
+
+.rsr-roster {
+    margin: 0 0 0.75rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--rsr-panel);
+    border: 1px solid var(--rsr-border);
+    border-radius: 5px;
+}
+
+.rsr-roster > summary {
+    cursor: pointer;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-12, 12px);
+}
+
+.rsr-roster .rsr-bill { margin-top: 0.4rem; }
+.rsr-roster .rsr-bill li:last-child { border-bottom: none; }
+
+/* A row the next cycle will not move. Dimmed, never dropped: the whole point of
+   the roster is that the Force getting nothing is the one being looked for. */
+.rsr-bill li.is-idle { opacity: 0.6; }
+.rsr-bill li.is-idle .rsr-bill-delta { color: var(--rsr-ink-muted); }
+
+.rsr-bill-why {
+    font-size: var(--font-size-11, 11px);
+    font-style: italic;
+    color: var(--rsr-ink-muted);
+}
+
+/* The bill grew a fourth column for the reason. */
+.rsr-bill li { grid-template-columns: 1fr 3rem 5rem minmax(0, 8rem); }
+
+/* ── the Asset tray, above the Threads it drops onto ── */
+
+.rsr-tray {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.5rem 0 0.25rem;
+    padding: 0.45rem 0.55rem;
+    background: var(--rsr-panel-soft);
+    border: 1px dashed var(--rsr-border);
+    border-radius: 5px;
+}
+
+.rsr-tray-force {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.rsr-tray-name {
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-tray-asset {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    background: var(--rsr-panel);
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    font-size: var(--font-size-11, 11px);
+    cursor: grab;
+}
+
+.rsr-tray-asset:active { cursor: grabbing; }
+.rsr-tray-asset:hover { border-color: var(--rsr-gold-soft); }
+.rsr-tray-asset i { color: var(--rsr-ink-muted); }
+.rsr-tray-asset em { font-style: normal; color: var(--rsr-gold); }
+
+/* An Asset the table cannot see, sitting in the GM's own tray. */
+.rsr-tray-asset.is-veiled { border-color: var(--rsr-withheld); }
+
+/* ── Settings ── */
+
+.rsr-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    max-width: 46rem;
+}
+
+.rsr-settings-group {
+    padding: 0.7rem 0.85rem;
+    background: var(--rsr-panel);
+    border: 1px solid var(--rsr-border);
+    border-radius: 6px;
+}
+
+.rsr-settings-group h4 {
+    margin: 0 0 0.15rem;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-13, 13px);
+    border: none;
+}
+
+.rsr-settings-note,
+.rsr-settings .hint {
+    margin: 0 0 0.5rem;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-settings .hint { margin: 0.15rem 0 0.6rem; }
+
+.rsr-settings-row {
+    display: grid;
+    grid-template-columns: minmax(10rem, 16rem) 1fr auto;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.35rem;
+}
+
+.rsr-settings-row label { font-size: var(--font-size-12, 12px); }
+
+.rsr-settings-row input,
+.rsr-settings-row select { min-width: 0; }
+
+/* A live look at whatever Font Awesome class was typed, so the GM can tell a
+   working icon from a typo without saving first. */
+.rsr-icon-preview {
+    color: var(--rsr-gold);
+    font-size: var(--font-size-14, 14px);
+}
+
+.rsr-settings-foot {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+/* ── M4c — the State line, groupings, the chronicle ─────────────────────── */
+
+/* The board is a resizable window, so what "narrow" means here is the window's
+   width and not the viewport's. Container queries are the only thing that can
+   ask that question; a media query would collapse the layout because the SCREEN
+   is small, which is a different fact entirely. */
+.rsr-body { container-type: inline-size; container-name: rsr-board; }
+
+/* ── the State line ── */
+
+.rsr-state-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+/* Phase and reading sit together, because "Critical, 58 of 100" is one fact.
+   The reading used to live at the far right of a 1100px window, which put the
+   number that matters most as far as it could get from the word explaining it. */
+.rsr-state-line {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.rsr-state-label {
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-12, 12px);
+    color: var(--rsr-ink-muted);
+}
+
+/* Coloured by the Phase's own tone, so the number and the word agree. The tone
+   classes also carry a background for chips; a bare reading wants none. */
+.rsr-state-line .rsr-state-count {
+    background: none;
+    border: none;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-16, 16px);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.rsr-state-count .rsr-of {
+    font-size: var(--font-size-12, 12px);
+    opacity: 0.7;
+}
+
+/* The bar takes what is left, after the words have what they need. */
+.rsr-state-line .rsr-state-bar { flex: 1 1 auto; min-width: 6rem; }
+
+/* One line about what this Phase looks like from the table. Distinct from the
+   GM's own notes on the same Phase, which are violet and marked with an eye. */
+.rsr-phase-desc {
+    margin: 0;
+    font-style: italic;
+    color: var(--rsr-ink-muted);
+}
+
+/* ── the roster, in its groupings ── */
+
+.rsr-involved {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.rsr-involved-title {
+    margin: 0;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-12, 12px);
+    color: var(--rsr-ink-muted);
+    border: none;
+}
+
+.rsr-group {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.rsr-group-label {
+    min-width: 7rem;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-gold);
+}
+
+/* "Everyone else" is not an arrangement, so it does not get to look like one. */
+.rsr-group-label.is-quiet { color: var(--rsr-ink-muted); font-style: italic; }
+
+/* ── the push dialog ── */
+
+.rsr-push-reading {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--rsr-border);
+}
+
+.rsr-push-reading strong { flex: 1; color: var(--rsr-gold); }
+.rsr-push-mode { font-size: var(--font-size-11, 11px); color: var(--rsr-ink-muted); }
+
+/* ── the Plot list beside its chronicle ── */
+
+.rsr-situation-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem);
+    align-items: start;
+    gap: 0.9rem;
+}
+
+.rsr-situation-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+/* Capped at two. A card that keeps narrowing to fit another column stops being
+   readable, and the space a third would have taken is worth more as an account
+   of what has been happening. */
+.rsr-plot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@container rsr-board (max-width: 780px) {
+    .rsr-situation-split { grid-template-columns: minmax(0, 1fr); }
+    .rsr-plot-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── the chronicle ── */
+
+.rsr-log {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.6rem 0.7rem;
+    background: var(--rsr-panel-deep);
+    border: 1px solid var(--rsr-border);
+    border-radius: 6px;
+    min-width: 0;
+}
+
+.rsr-log-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.rsr-log-head h3 {
+    margin: 0;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-13, 13px);
+    border: none;
+}
+
+.rsr-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    /* Long enough to be a record, short enough that the Plots stay the subject. */
+    max-height: 34rem;
+    overflow-y: auto;
+}
+
+/* Icon in the gutter, cycle above, sentence beneath: the same shape whether the
+   line has a note, a cost, both or neither. */
+.rsr-log-row {
+    display: grid;
+    grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 0.15rem 0.4rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--rsr-border);
+    font-size: var(--font-size-11, 11px);
+}
+
+.rsr-log-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+.rsr-log-icon { grid-column: 1; grid-row: 1; color: var(--rsr-ink-muted); }
+.rsr-log-when {
+    grid-column: 2;
+    grid-row: 1;
+    color: var(--rsr-ink-muted);
+    font-family: var(--rsr-heading);
+}
+
+/* Sentence and note each take the full width under the gutter, and fall into
+   whatever row they land in — a line may have both, either or neither. */
+.rsr-log-text { grid-column: 2 / -1; margin: 0; }
+
+/* The GM's own words, and the only part of an entry that outlives a hidden row.
+   Gold, because on this column it is the thing worth reading. */
+.rsr-log-note {
+    grid-column: 2 / -1;
+    margin: 0;
+    color: var(--rsr-gold);
+    font-style: italic;
+}
+
+.rsr-log-cost {
+    grid-column: 3;
+    grid-row: 1;
+    color: var(--rsr-ink-muted);
+    white-space: nowrap;
+}
+
+/* An entry that survived only as its note, because what it was about is not for
+   this reader. Violet is always and only "withheld". */
+.rsr-log-row.is-veiled .rsr-log-icon { color: var(--rsr-withheld); }
+
+.rsr-log-empty { margin: 0.3rem 0; }
+
+/* ── M4d — the in-board editors ─────────────────────────────────────────── */
+
+/* Editing moved out of DialogV2 because a modal cannot hold a repeating widget:
+   the Phase ladder had become a pipe-delimited textarea, and the roster a column
+   of wrapped checkboxes with a horizontal scrollbar. Here there is room. */
+
+.rsr-view-editor { gap: 0.6rem; }
+
+.rsr-editor-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.rsr-editor-title {
+    margin: 0;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-16, 16px);
+    border: none;
+}
+
+.rsr-editor-subject { color: var(--rsr-gold); }
+
+.rsr-editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-width: 62rem;
+}
+
+.rsr-form-section {
+    padding: 0.7rem 0.85rem;
+    background: var(--rsr-panel);
+    border: 1px solid var(--rsr-border);
+    border-radius: 6px;
+}
+
+.rsr-form-section h3 {
+    margin: 0 0 0.5rem;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-13, 13px);
+    border: none;
+}
+
+/* Label left, control right, on one grid, so every row in a section lines up
+   whatever happens to be in it. */
+.rsr-form-row {
+    display: grid;
+    grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    margin-bottom: 0.4rem;
+}
+
+.rsr-form-row:last-child { margin-bottom: 0; }
+.rsr-form-row.is-tall { align-items: start; }
+.rsr-form-row > label { font-size: var(--font-size-12, 12px); }
+.rsr-form-row input,
+.rsr-form-row select,
+.rsr-form-row textarea { min-width: 0; }
+.rsr-editor-form textarea { font-family: var(--rsr-body); resize: vertical; }
+
+.rsr-form-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.rsr-form-inline > label { font-size: var(--font-size-11, 11px); color: var(--rsr-ink-muted); }
+.rsr-form-inline input[type="number"] { flex: 0 0 5rem; }
+.rsr-form-inline file-picker { flex: 1; min-width: 0; }
+
+.rsr-form-check { display: flex; align-items: center; gap: 0.5rem; }
+.rsr-form-check input { flex: 0 0 auto; }
+
+.rsr-form-note {
+    margin: 0 0 0.4rem;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-form-note.is-cost { color: var(--rsr-gold); }
+
+.rsr-form-add {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.rsr-form-add input[type="text"] { flex: 0 1 12rem; }
+
+/* The explanation a reader can ask for. Every dialog used to carry a paragraph
+   under each field, which is most of why they had to be scrolled. */
+.rsr-info {
+    margin-left: 0.3rem;
+    color: var(--rsr-ink-muted);
+    cursor: help;
+    font-size: var(--font-size-11, 11px);
+}
+
+.rsr-info:hover { color: var(--rsr-gold); }
+
+/* Anything only the GM ever reads is tinted, so the two audiences on a Phase
+   card are told apart at a glance rather than by reading the labels. */
+.rsr-gm-field { border-color: var(--rsr-withheld); }
+
+.rsr-uuid {
+    padding: 0.1rem 0.35rem;
+    background: var(--rsr-panel-soft);
+    border-radius: 3px;
+    font-size: var(--font-size-11, 11px);
+}
+
+/* ── Phase cards ── */
+
+.rsr-phase-card {
+    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    background: var(--rsr-panel-deep);
+    border: 1px solid var(--rsr-border);
+    border-radius: 5px;
+}
+
+.rsr-phase-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.rsr-phase-head > label {
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-phase-threshold { flex: 0 0 5rem; }
+.rsr-phase-label { flex: 1; min-width: 0; }
+.rsr-phase-tone { flex: 0 0 8rem; }
+
+/* ── the roster, as columns of chips ── */
+
+.rsr-roster-board {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.rsr-roster-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1 1 12rem;
+    min-width: 10rem;
+    min-height: 5rem;
+    padding: 0.45rem 0.5rem;
+    background: var(--rsr-panel-deep);
+    border: 1px solid var(--rsr-border);
+    border-radius: 5px;
+}
+
+/* "Everyone else" is not an arrangement, so its column does not look like one —
+   but it always renders, because it is where a Force is dropped to un-group it. */
+.rsr-roster-col.is-unheaded { border-style: dashed; background: none; }
+
+.rsr-roster-col-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem;
+}
+
+.rsr-roster-heading {
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-gold);
+}
+
+.rsr-roster-heading.is-quiet { color: var(--rsr-ink-muted); font-style: italic; }
+
+.rsr-roster-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.4rem;
+    background: var(--rsr-panel);
+    border: 1px solid var(--rsr-border);
+    border-radius: 4px;
+    font-size: var(--font-size-11, 11px);
+    cursor: grab;
+}
+
+.rsr-roster-chip:active { cursor: grabbing; }
+.rsr-roster-chip:hover { border-color: var(--rsr-gold-soft); }
+.rsr-roster-chip i { color: var(--rsr-ink-muted); }
+.rsr-roster-name { flex: 1; }
+
+/* ── tag and prerequisite chips ── */
+
+.rsr-tag-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.rsr-tag-title {
+    margin: 0 0 0.3rem;
+    font-size: var(--font-size-11, 11px);
+    border: none;
+}
+
+.rsr-tag-title.is-strength { color: var(--rsr-strength); }
+.rsr-tag-title.is-weakness { color: var(--rsr-weakness); }
+
+.rsr-chip-row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+
+.rsr-edit-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    background: var(--rsr-panel-soft);
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    font-size: var(--font-size-11, 11px);
+}
+
+.rsr-edit-chip.is-strength { border-color: var(--rsr-strength); }
+.rsr-edit-chip.is-weakness { border-color: var(--rsr-weakness); }
+
+/* ── outcome rows, in the board editor rather than a dialog ── */
+
+.rsr-editor-form .rsr-outcome-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.3rem;
+}
+
+.rsr-editor-form .rsr-outcome-force { flex: 0 0 10rem; font-size: var(--font-size-12, 12px); }
+.rsr-editor-form .rsr-outcome-delta { flex: 0 0 5rem; }
+.rsr-editor-form .rsr-outcome-row input[type="text"] { flex: 1; min-width: 0; }
+
+/* ── the Save bar ── */
+
+/* Sticky to the bottom of the scrolling body: a form long enough to scroll must
+   not put its Save button somewhere you have to go looking for. */
+.rsr-editor-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    padding: 0.5rem 0.6rem;
+    background: var(--rsr-panel-deep);
+    border: 1px solid var(--rsr-border);
+    border-radius: 6px;
+}
+
+.rsr-editor-bar.is-dirty { border-color: var(--rsr-gold-soft); }
+
+.rsr-editor-status {
+    flex: 1;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-gold);
+}
+
+.rsr-editor-status i { font-size: 0.5rem; vertical-align: middle; }
+.rsr-editor-status.is-clean { color: var(--rsr-ink-muted); }
+
+/* ── the push dialog, compact ── */
+
+.rsr-push-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.15rem;
+}
+
+.rsr-push-name {
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-14, 14px);
+    color: var(--rsr-gold);
+}
+
+.rsr-push-reading {
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--rsr-border);
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-push-grid {
+    display: grid;
+    grid-template-columns: minmax(4rem, auto) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.45rem 0.6rem;
+}
+
+.rsr-push-grid > label { font-size: var(--font-size-12, 12px); white-space: nowrap; }
+
+.rsr-push-field {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.rsr-push-field input[type="number"] { flex: 0 0 4.5rem; }
+.rsr-push-field select { flex: 1; min-width: 0; }
+
+.rsr-push-inline-label {
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+    white-space: nowrap;
+}
+
+/* Fills the amount rather than pushing by it: the GM still sees what is about to
+   happen, and can still change it before pressing the button that does it.
+
+   `color` is not optional here, and its absence is what made these three buttons
+   render as empty boxes: Daggerheart paints buttons gold with dark navy text
+   (--dh-button-color-text), so dropping the background without also claiming the
+   foreground leaves navy glyphs on a near-black dialog. Any button this module
+   restyles has to state both. */
+.rsr-quick {
+    flex: 0 0 auto;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0.1rem 0.45rem;
+    background: var(--rsr-panel-soft);
+    border: 1px solid var(--rsr-border);
+    border-radius: 3px;
+    color: var(--rsr-ink);
+    font-size: var(--font-size-11, 11px);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+}
+
+.rsr-quick:hover { border-color: var(--rsr-gold-soft); color: var(--rsr-gold); }
+
+/* ── M4e — round-5 corrections ──────────────────────────────────────────── */
+
+/* The note is the only field in the push dialog whose answer is a sentence, so it
+   gets the width of the dialog rather than a column of it. The example in its
+   placeholder was being cut off at six words, which is a poor advertisement for
+   the one field that decides what the table reads. */
+.rsr-push-note-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.55rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--rsr-border);
+}
+
+.rsr-push-note-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.rsr-push-note-head > label { font-size: var(--font-size-12, 12px); }
+.rsr-push-note-head select { flex: 0 1 auto; min-width: 0; }
+
+.rsr-push-note-block textarea {
+    width: 100%;
+    min-height: 3.6rem;
+    font-family: var(--rsr-body);
+    font-size: var(--font-size-12, 12px);
+    resize: vertical;
+}
+
+/* What the table reads of one line, shown to the GM only. It sits on the row it
+   is about rather than in a legend, because the question it answers — "did I say
+   that out loud?" — is asked one line at a time. */
+.rsr-log-seen {
+    align-self: start;
+    font-size: var(--font-size-10, 10px);
+}
+
+/* An Asset chip in the Force editor is a way into that Asset's own screen. It is
+   a button, so it has to restate its colours: Daggerheart paints buttons gold with
+   dark text, and a chip that inherited that would read as a call to action in the
+   middle of a list of names. */
+.rsr-edit-chip.is-link {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    background: var(--rsr-panel-soft);
+    border: 1px solid var(--rsr-border);
+    color: var(--rsr-ink);
+    font-family: var(--rsr-body);
+    font-size: var(--font-size-11, 11px);
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.rsr-edit-chip.is-link:hover {
+    background: var(--rsr-panel-soft);
+    border-color: var(--rsr-gold-soft);
+    color: var(--rsr-gold);
+}
+
+.rsr-chip-pen { color: var(--rsr-ink-muted); font-size: var(--font-size-10, 10px); }
+.rsr-edit-chip.is-link:hover .rsr-chip-pen { color: var(--rsr-gold); }
+
+/* ── M4f — Asset conditions ─────────────────────────────────────────────── */
+
+/* A condition is a word, not an icon: "Damaged" and "Recovering" are the GM's own
+   vocabulary and the whole point is that the table hears them. It renders wherever
+   an Asset does, and never when the Asset is Ready — a board that badges every row
+   with its default has spent the reader's attention on nothing. */
+.rsr-condition {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid currentcolor;
+    border-radius: 999px;
+    font-size: var(--font-size-10, 10px);
+    line-height: 1.5;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* Warm for "still there, not helping", cold for "off the board". Violet stays
+   reserved for withheld, and red is never used for a condition, because a
+   Destroyed Asset is a fact about the fiction and not an error.
+
+   Only the six the module ships with are named here. A condition the GM invented
+   gets the inherited colour, which is correct rather than unfinished: this file
+   cannot know what "Mutinous" should look like, and guessing would be worse than
+   the neutral it already has. */
+.rsr-condition { color: var(--rsr-ink-muted); }
+.rsr-condition.is-damaged { color: var(--rsr-gold); }
+.rsr-condition.is-suppressed { color: var(--rsr-gold-soft); }
+.rsr-condition.is-inactive { color: var(--rsr-ink-muted); }
+.rsr-condition.is-recovering { color: var(--rsr-strength); }
+.rsr-condition.is-destroyed { color: var(--rsr-ink-muted); opacity: 0.85; }
+
+/* The name of an Asset that is off the board reads as spent rather than as
+   missing: it is still the GM's record of something they own. */
+.rsr-asset.is-conditioned .rsr-asset-name,
+.rsr-asset-chip.is-conditioned { opacity: 0.75; }
+
+/* The suppressed benefit is struck, not removed. Which one is switched off is the
+   thing the GM is trying to see. */
+.rsr-asset-mod.is-off,
+.rsr-tray-asset em.is-off {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+/* Said next to the picker in the editor, before Save rather than after. */
+.rsr-form-note.is-condition { color: var(--rsr-gold); }
+
+/* ── M4g — the condition table ──────────────────────────────────────────── */
+
+/* The badge is also the control that changes it. A condition is a mid-session
+   thing, and making the GM open an editor to say the dragon has been driven off
+   is two clicks too many. Ready renders as a quiet dot rather than a word — the
+   affordance is there, the noise is not. */
+.rsr-condition-btn {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--rsr-ink-muted);
+    cursor: pointer;
+}
+
+.rsr-condition-btn:hover { background: none; color: var(--rsr-gold); }
+.rsr-condition-btn > i { font-size: var(--font-size-11, 11px); opacity: 0.5; }
+.rsr-condition-btn:hover > i { opacity: 1; }
+
+/* What the benefit is actually worth, beside what it was. */
+.rsr-asset-mod s,
+.rsr-tray-asset em s { opacity: 0.55; }
+.rsr-asset-mod strong { color: var(--rsr-gold); }
+
+/* What a Force has lost, folded away. Two lists rather than one sorted list: a
+   panel with four wrecks at the bottom reads as four Assets until you get to the
+   badges. */
+.rsr-lost { margin-top: 0.4rem; }
+
+.rsr-lost > summary {
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+    cursor: pointer;
+}
+
+.rsr-lost > summary:hover { color: var(--rsr-gold); }
+.rsr-lost .rsr-asset { opacity: 0.7; }
+
+/* ── the table editor ── */
+
+/* A grid rather than a table element, so the whole row can reflow on a narrow
+   window without the columns coming apart from their headings. */
+.rsr-cond-table {
+    display: grid;
+    grid-template-columns:
+        minmax(8rem, 1.6fr) minmax(6rem, 1fr) auto minmax(3.5rem, auto)
+        minmax(6rem, 1fr) auto auto;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    overflow-x: auto;
+}
+
+.rsr-cond-head,
+.rsr-cond-row {
+    display: contents;
+}
+
+.rsr-cond-head > span {
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--rsr-border);
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-10, 10px);
+    color: var(--rsr-ink-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.rsr-cond-name { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.rsr-cond-name input { min-width: 0; }
+.rsr-cond-cycles { max-width: 4.5rem; }
+
+/* How many Assets are standing in this row right now — which is what makes the
+   delete button honest about what it is about to ask. */
+.rsr-cond-used {
+    font-size: var(--font-size-10, 10px);
+    color: var(--rsr-gold);
+    font-style: normal;
+}
+
+.rsr-cond-row.is-protected .rsr-cond-name input { border-style: dashed; }
+
+/* Every Asset that has to be rehomed, one picker each. */
+.rsr-rehome-all {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rsr-border);
+}
+
+.rsr-rehome-all > label { font-size: var(--font-size-12, 12px); white-space: nowrap; }
+.rsr-rehome-all select { flex: 1; min-width: 0; }

@@ -20,8 +20,10 @@
 
 import { MODULE_ID, SETTINGS, VISIBILITY } from './constants.mjs';
 import {
-    normalizePlots, normalizeNodes, normalizeForces, normalizeAssets, normalizeTurn
+    normalizePlots, normalizeNodes, normalizeForces, normalizeAssets, normalizeTurn,
+    normalizeConstants, normalizeLog, normalizeConditions
 } from './data/normalize.mjs';
+import { resolveConditions } from './logic/condition.mjs';
 import { refreshAll } from './ui/refresh.mjs';
 
 /** Collections stored as ArrayField(ObjectField), each normalized on the way out. */
@@ -29,7 +31,9 @@ const COLLECTIONS = {
     [SETTINGS.PLOTS]: normalizePlots,
     [SETTINGS.NODES]: normalizeNodes,
     [SETTINGS.FORCES]: normalizeForces,
-    [SETTINGS.ASSETS]: normalizeAssets
+    [SETTINGS.ASSETS]: normalizeAssets,
+    [SETTINGS.LOG]: normalizeLog,
+    [SETTINGS.CONDITIONS]: normalizeConditions
 };
 
 export function registerSettings() {
@@ -45,6 +49,17 @@ export function registerSettings() {
         });
     }
 
+    // World-wide defaults, edited in the board's own Settings segment rather than
+    // in Foundry's settings sheet — they are campaign numbers, and they belong
+    // beside the things they are defaults for.
+    game.settings.register(MODULE_ID, SETTINGS.CONSTANTS, {
+        scope: 'world',
+        config: false,
+        type: new ObjectField(),
+        default: {},
+        onChange: refreshAll
+    });
+
     game.settings.register(MODULE_ID, SETTINGS.TURN, {
         scope: 'world',
         config: false,
@@ -53,18 +68,20 @@ export function registerSettings() {
         onChange: refreshAll
     });
 
+    /**
+     * The pre-split default visibility, kept registered and read exactly once.
+     *
+     * There is now one default per KIND of row, and they live in the `constants`
+     * object where the Settings segment edits them. This setting is no longer
+     * written and no longer appears in Foundry's own settings sheet — it survives
+     * so that a world that set it before the split opens with the GM's choice
+     * carried across all four kinds instead of quietly reverting to Hidden.
+     */
     game.settings.register(MODULE_ID, SETTINGS.DEFAULT_VISIBILITY, {
-        name: 'RSR.settings.defaultVisibility.name',
-        hint: 'RSR.settings.defaultVisibility.hint',
         scope: 'world',
-        config: true,
+        config: false,
         type: String,
-        default: VISIBILITY.HIDDEN,
-        choices: {
-            [VISIBILITY.VISIBLE]: 'RSR.visibility.visible',
-            [VISIBILITY.MASKED]: 'RSR.visibility.masked',
-            [VISIBILITY.HIDDEN]: 'RSR.visibility.hidden'
-        }
+        default: VISIBILITY.HIDDEN
     });
 }
 
@@ -97,11 +114,47 @@ const readCollection = (key) => COLLECTIONS[key](game.settings.get(MODULE_ID, ke
 export const getPlots = () => readCollection(SETTINGS.PLOTS);
 export const getNodes = () => readCollection(SETTINGS.NODES);
 export const getForces = () => readCollection(SETTINGS.FORCES);
-export const getAssets = () => readCollection(SETTINGS.ASSETS);
+/**
+ * Every Asset, with its condition already resolved.
+ *
+ * This is the one place the GM's condition table is applied, and applying it here
+ * is what keeps `effectiveThreshold(node, assets)` from becoming
+ * `effectiveThreshold(node, assets, conditions)` all the way down the pure layer.
+ * Nothing downstream takes a new argument, so nothing downstream can forget one.
+ *
+ * The attached `rule` is derived, not stored: normalizeAsset builds a fresh object
+ * from known keys, so it is dropped again on the way back in.
+ */
+export const getAssets = () =>
+    resolveConditions(readCollection(SETTINGS.ASSETS), getConditions());
+
+/** The GM's condition table. Seeded with the module's six when the world has none. */
+export const getConditions = () => readCollection(SETTINGS.CONDITIONS);
+export const getLog = () => readCollection(SETTINGS.LOG);
 export const getTurn = () => normalizeTurn(game.settings.get(MODULE_ID, SETTINGS.TURN));
 
-export const getDefaultVisibility = () =>
-    game.settings.get(MODULE_ID, SETTINGS.DEFAULT_VISIBILITY) ?? VISIBILITY.HIDDEN;
+/**
+ * World-wide defaults, with the one upgrade this module carries.
+ *
+ * Default visibility used to be a single setting for every kind of row. A world
+ * written before the split has no `defaultVisibility` key in its constants at
+ * all, and that absence — not a value — is what distinguishes "never saved" from
+ * "saved as Hidden". So the old setting is read here, once, and handed to the
+ * normalizer as the seed for all four kinds.
+ */
+export function getConstants() {
+    const raw = game.settings.get(MODULE_ID, SETTINGS.CONSTANTS);
+    const stored = raw && typeof raw === 'object' ? raw : {};
+    if (stored.defaultVisibility === undefined) {
+        const legacy = game.settings.get(MODULE_ID, SETTINGS.DEFAULT_VISIBILITY);
+        return normalizeConstants({ ...stored, defaultVisibility: legacy });
+    }
+    return normalizeConstants(stored);
+}
+
+/** What a new row of one kind starts as. `kind` is a key of constants.defaultVisibility. */
+export const getDefaultVisibility = (kind) =>
+    getConstants().defaultVisibility[kind] ?? VISIBILITY.HIDDEN;
 
 // ── writes ───────────────────────────────────────────────────────────────────
 // GM-only by construction: data/state.mjs routes a non-GM caller through the relay
@@ -114,4 +167,8 @@ export const setPlots = (rows) => writeCollection(SETTINGS.PLOTS, rows);
 export const setNodes = (rows) => writeCollection(SETTINGS.NODES, rows);
 export const setForces = (rows) => writeCollection(SETTINGS.FORCES, rows);
 export const setAssets = (rows) => writeCollection(SETTINGS.ASSETS, rows);
+export const setConditions = (rows) => writeCollection(SETTINGS.CONDITIONS, rows);
+export const setLog = (rows) => writeCollection(SETTINGS.LOG, rows);
 export const setTurn = (turn) => game.settings.set(MODULE_ID, SETTINGS.TURN, normalizeTurn(turn));
+export const setConstants = (constants) =>
+    game.settings.set(MODULE_ID, SETTINGS.CONSTANTS, normalizeConstants(constants));

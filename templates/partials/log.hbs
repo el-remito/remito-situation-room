@@ -1,0 +1,58 @@
+{{!--
+    The chronicle: what has happened, newest first.
+
+    It stands beside the Plot list rather than inside a Plot, because the question
+    it answers — "what has moved since we last played?" — is not asked about one
+    Plot at a time.
+
+    Every line was built in _prepareContext against this viewer. A development
+    about something the table may not know exists arrives here as its note alone,
+    with nothing attached to say what it was about; one about a masked row arrives
+    with "???" where the name would be; one the GM kept to themselves does not
+    arrive at all. There is nothing left to hide at this layer.
+
+    `seen` is set for the GM alone, on any line the table reads less of than they
+    do — either because the GM said so when they wrote it, or because it was
+    sealed by what was secret at the time.
+--}}
+<aside class="rsr-log" aria-label="{{localize 'RSR.log.title'}}">
+
+    <header class="rsr-log-head">
+        <h3>{{localize "RSR.log.title"}}</h3>
+        {{#if @root.isGM}}
+        <button type="button" class="rsr-icon-btn" data-action="clearLog"
+                data-tooltip="{{localize 'RSR.log.clearHint'}}">
+            <i class="fa-solid fa-broom" inert></i>
+        </button>
+        {{/if}}
+    </header>
+
+    {{#if log.length}}
+    <ol class="rsr-log-list">
+        {{#each log}}
+        <li class="rsr-log-row{{#if this.masked}} is-veiled{{/if}}">
+            <i class="rsr-log-icon {{this.icon}}" inert></i>
+            <span class="rsr-log-when">{{this.when}}</span>
+            {{#if this.seen}}
+            <span class="rsr-chip rsr-chip-veil rsr-log-seen"
+                  data-tooltip="{{localize 'RSR.log.seenChipHint'}}">{{localize this.seen}}</span>
+            {{/if}}
+            {{#if this.text}}
+            <p class="rsr-log-text">{{this.text}}</p>
+            {{/if}}
+            {{#if this.note}}
+            <p class="rsr-log-note">{{this.note}}</p>
+            {{/if}}
+            {{#if this.cost}}
+            <span class="rsr-log-cost" data-tooltip="{{localize 'RSR.log.costHint'}}">
+                {{numberFormat this.cost sign=true}}
+            </span>
+            {{/if}}
+        </li>
+        {{/each}}
+    </ol>
+    {{else}}
+    <p class="rsr-empty rsr-log-empty">{{localize "RSR.log.empty"}}</p>
+    {{/if}}
+
+</aside>

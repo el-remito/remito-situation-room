@@ -10,8 +10,9 @@
  *   1. imports      — every relative import specifier resolves to a real file
  *   2. i18n         — every RSR.* key used exists, and every key defined is used
  *   3. data-action  — every data-action in a template has a registered handler
- *   4. naming       — "Thread" appears only in lang/en.json; no user-visible "Node"
+ *   4. naming       — UI words live only in lang/en.json (Thread/node, Cycle/turn)
  *   5. funnels      — game.settings only in settings.mjs, game.socket only in relay.mjs
+ *   6. i18n shape   — no key is a prefix of another (Foundry expands the flat file)
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -96,7 +97,9 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
     // Keys reached through a variant suffix (RSR.help.x.body.gm) or an enum value
     // are assembled at render time, so a prefix here spares a false positive.
     const DYNAMIC_PREFIXES = ['RSR.help.', 'RSR.thread.mode.', 'RSR.thread.status.',
-        'RSR.plot.lifecycle.', 'RSR.asset.modifier.', 'RSR.visibility.'];
+        'RSR.plot.lifecycle.', 'RSR.asset.modifier.', 'RSR.visibility.',
+        'RSR.settings.visibility.', 'RSR.editor.tone.', 'RSR.asset.condition.',
+        'RSR.asset.effectScale.'];
 
     for (const file of [...sources, ...templates]) {
         for (const m of read(file).matchAll(/['"](RSR\.[A-Za-z0-9_.]+)['"]/g)) used.add(m[1]);
@@ -151,18 +154,38 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
     const problems = [];
     for (const file of [...sources, ...templates]) {
         const body = stripComments(read(file));
-        // "Thread" as a user-facing word must live only in lang/en.json. Prose in
-        // comments is how the rule gets explained, so only quoted strings count.
-        for (const m of body.matchAll(/['"]([^'"\n]*\bThreads?\b[^'"\n]*)['"]/g)) {
-            if (!m[1].startsWith('RSR.')) problems.push(`${rel(file)}: literal "Thread" in a string — belongs in lang/en.json`);
+        // Two words are split the same way: the code word and the UI word are
+        // different, and the UI word lives in exactly one file. Prose in comments is
+        // how the rule gets explained, so only quoted strings count.
+        //
+        //   node  -> "Thread"      turn -> "Cycle"
+        //
+        // Both directions are checked. A UI word appearing in code means a string was
+        // built where it should have been localized; a code word reaching a user means
+        // the split was forgotten in the other direction.
+        const UI_WORDS = [
+            { word: 'Thread', pattern: /['"]([^'"\n]*\bThreads?\b[^'"\n]*)['"]/g },
+            { word: 'Cycle', pattern: /['"]([^'"\n]*\bCycles?\b[^'"\n]*)['"]/g }
+        ];
+        const CODE_WORDS = [
+            { word: 'Node', ui: 'Thread', pattern: /['"]([^'"\n]*\bNodes?\b[^'"\n]*)['"]/g },
+            { word: 'Turn', ui: 'Cycle', pattern: /['"]([^'"\n]*\bTurns?\b[^'"\n]*)['"]/g }
+        ];
+
+        for (const { word, pattern } of UI_WORDS) {
+            for (const m of body.matchAll(pattern)) {
+                if (m[1].startsWith('RSR.')) continue;            // an i18n key, not prose
+                problems.push(`${rel(file)}: literal "${word}" in a string — belongs in lang/en.json`);
+            }
         }
-        // The inverse: "Node" must never reach a user. Identifiers are fine.
-        for (const m of body.matchAll(/['"]([^'"\n]*\bNodes?\b[^'"\n]*)['"]/g)) {
-            if (/^[A-Za-z0-9_.]+$/.test(m[1])) continue;          // an identifier or key
-            problems.push(`${rel(file)}: user-visible "Node" in a string — should read Thread`);
+        for (const { word, ui, pattern } of CODE_WORDS) {
+            for (const m of body.matchAll(pattern)) {
+                if (/^[A-Za-z0-9_.]+$/.test(m[1])) continue;      // an identifier or key
+                problems.push(`${rel(file)}: user-visible "${word}" in a string — should read ${ui}`);
+            }
         }
     }
-    report('naming rule: Thread only in lang, Node never user-visible', problems);
+    report('naming rule: UI words only in lang, code words never user-visible', problems);
 }
 
 // ── 5. the single-funnel invariants ──────────────────────────────────────────
@@ -191,6 +214,30 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
         }
     }
     report('single-funnel invariants (settings, socket)', problems);
+}
+
+// ── 6. no i18n key may be a prefix of another ────────────────────────────────
+{
+    /**
+     * Foundry runs expandObject() over the flat language file, turning "a.b.c" into
+     * nested objects. So a file holding BOTH "RSR.asset.modifier" and
+     * "RSR.asset.modifier.costReduction" cannot represent both: one is a string,
+     * the other needs that same slot to be an object. Whichever loses is simply
+     * absent at runtime, and localize() then renders the raw key — which looks like
+     * a typo in a template rather than a collision in the file.
+     *
+     * Verified against helpers/localization.mjs:368 (expandObject on load) and :436
+     * (getProperty on read).
+     */
+    const keys = Object.keys(JSON.parse(read(join(ROOT, 'lang', 'en.json'))));
+    const problems = [];
+    const sorted = [...keys].sort();
+    for (let i = 0; i < sorted.length; i++) {
+        for (let j = i + 1; j < sorted.length && sorted[j].startsWith(`${sorted[i]}.`); j++) {
+            problems.push(`"${sorted[i]}" is a prefix of "${sorted[j]}" — one of them will not exist`);
+        }
+    }
+    report(`i18n keys nest cleanly (${keys.length} keys)`, problems);
 }
 
 // ── summary ──────────────────────────────────────────────────────────────────

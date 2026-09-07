@@ -16,7 +16,10 @@
  * Pure — returns rows, writes nothing. data/state.mjs owns the writing.
  */
 
-import { LIFECYCLE, MODE, NODE_STATUS, VISIBILITY, POLARITY, ASSET_MODIFIER } from '../constants.mjs';
+import {
+    LIFECYCLE, LOG_KIND, MODE, NODE_STATUS, VISIBILITY, POLARITY, ASSET_MODIFIER,
+    ASSET_CONDITION
+} from '../constants.mjs';
 
 /** Stable ids so Generate is an overwrite, not an append. */
 const ID = {
@@ -29,19 +32,23 @@ const ID = {
     subject: 'rsr-ex-node-subject',
     gate: 'rsr-ex-node-gate',
     battalion: 'rsr-ex-asset-battalion',
-    dragon: 'rsr-ex-asset-dragon'
+    dragon: 'rsr-ex-asset-dragon',
+    runners: 'rsr-ex-asset-runners'
 };
 
 const example = { isExample: true };
 
 /**
- * @returns {{plots: object[], nodes: object[], forces: object[], assets: object[]}}
+ * @returns {{plots: object[], nodes: object[], forces: object[], assets: object[],
+ *            log: object[]}}
  */
 export function buildExample() {
     const forces = [
         {
             ...example, id: ID.legion, name: 'The Iron Legion', img: '',
             resources: 12, income: 4, isPlayerForce: false, sort: 0,
+            // Coin, and paid every cycle: the Legion is a going concern.
+            icon: 'fa-solid fa-coins', isActive: true,
             visibility: VISIBILITY.VISIBLE, hideValues: false,
             tags: [
                 { text: 'Siegecraft', polarity: POLARITY.STRENGTH },
@@ -52,6 +59,8 @@ export function buildExample() {
         {
             ...example, id: ID.guard, name: 'The Northwall Guard', img: '',
             resources: 7, income: 3, isPlayerForce: false, sort: 1,
+            // A different Force counts a different thing. The Guard is fed, not paid.
+            icon: 'fa-solid fa-wheat-awn', isActive: true,
             visibility: VISIBILITY.VISIBLE, hideValues: false,
             tags: [
                 { text: 'Knows every stone of the wall', polarity: POLARITY.STRENGTH },
@@ -74,21 +83,32 @@ export function buildExample() {
         // Authored low-to-high. normalize sorts anyway, but reading them in order
         // is how a GM checks their own ladder.
         phases: [
+            // Two texts per Phase, two audiences: `description` is printed under
+            // the State bar for everyone, `gmNotes` is what the GM does about it.
             { id: 'rsr-ex-phase-quiet', label: 'Quiet', tone: 'calm', threshold: 0,
+              description: 'Trade moves. The road south is open and nobody hurries.',
               gmNotes: 'Rumours only. The Legion is a story told by merchants.',
               revealNodeIds: [], lockNodeIds: [] },
             { id: 'rsr-ex-phase-tense', label: 'Tense', tone: 'neutral', threshold: 25,
+              description: 'Refugees at the gate, and grain costs twice what it did.',
               gmNotes: 'Refugees on the road. Grain prices double.',
               revealNodeIds: [], lockNodeIds: [] },
             { id: 'rsr-ex-phase-critical', label: 'Critical', tone: 'warn', threshold: 50,
+              description: 'Siege lines are visible from the wall. Nobody on it sleeps.',
               gmNotes: 'Siege lines visible from the wall. The Guard stops sleeping.',
               revealNodeIds: [], lockNodeIds: [] },
             { id: 'rsr-ex-phase-fire', label: 'Rain of Fire', tone: 'danger', threshold: 75,
+              description: 'The bombardment has started. Nothing in the city is safe.',
               gmNotes: 'Bombardment begins. Every scene in the city takes a complication.',
               revealNodeIds: [], lockNodeIds: [] }
         ],
         defaultMode: MODE.FIAT,
         forceIds: [ID.legion, ID.guard],
+        // Cosmetic, and the first question anyone asks about a war.
+        forceGroups: {
+            [ID.legion]: 'The Besiegers',
+            [ID.guard]: 'The Defenders'
+        },
         playerAssignable: false,
         visibility: VISIBILITY.VISIBLE,
         hideValues: false,
@@ -175,6 +195,31 @@ export function buildExample() {
             ],
             plotId: ID.plot, nodeId: ID.siege,
             modifier: { kind: ASSET_MODIFIER.COST_REDUCTION, value: 2 },
+            // Damaged: still on the Thread and still counted as being there, and
+            // its 2-point discount is HALVED rather than switched off, so the
+            // Siege Thread reads 9 against the 8 it would read at full strength.
+            // Half of a benefit is the thing worth seeing on a first look.
+            condition: ASSET_CONDITION.DAMAGED, conditionCycles: 0,
+            visibility: VISIBILITY.VISIBLE, hideValues: false
+        },
+        {
+            // Mechanically inert, because most Assets are fiction rather than
+            // arithmetic — and Recovering, so the Guard's tray is EMPTY. That is
+            // the half of the condition rule worth seeing: an Asset that is out of
+            // play is not offered as something to commit, however uncommitted it
+            // technically is.
+            ...example, id: ID.runners, forceId: ID.guard, sort: 0,
+            // Recovering, with two Cycles left. Press Next Cycle twice and it
+            // returns to Ready on its own and says so in the chronicle — which is
+            // the one thing about conditions that cannot be seen standing still.
+            condition: ASSET_CONDITION.RECOVERING, conditionCycles: 2,
+            name: 'The River Runners', img: '', uuid: null,
+            tags: [
+                { text: 'Know every channel of the delta', polarity: POLARITY.STRENGTH },
+                { text: 'Loyal only to whoever paid last', polarity: POLARITY.WEAKNESS }
+            ],
+            plotId: null, nodeId: null,
+            modifier: { kind: ASSET_MODIFIER.NONE, value: 0 },
             visibility: VISIBILITY.VISIBLE, hideValues: false
         },
         {
@@ -191,7 +236,53 @@ export function buildExample() {
         }
     ];
 
-    return { plots, nodes, forces, assets };
+    // A few developments, so the chronicle column has something in it the first
+    // time a GM looks at the board — including the two cases worth seeing side by
+    // side. One is about the hidden Thread and is SEALED: a player reads its note
+    // and nothing else, and will still read only that if the GM reveals the Thread
+    // tomorrow, because revealing what is happening now is not a confession about
+    // what happened then. The other names nothing secret at all and is MASKED by
+    // the GM's own choice at the moment of writing — the table gets the fiction
+    // without the mechanism.
+    //
+    // `at` counts backwards from the moment Generate is pressed. Stored, but not
+    // printed: the board's own clock is what a reader is told, and "four minutes
+    // ago" would be a lie about a campaign that has been running for months.
+    const now = Date.now();
+    const ago = (minutes) => now - (minutes * 60000);
+
+    const log = [
+        {
+            ...example, id: 'rsr-ex-log-grain', kind: LOG_KIND.PUSH, turn: 2, at: ago(4),
+            plotId: ID.plot, nodeId: ID.grain, forceId: ID.guard, assetId: null,
+            amount: 3, cost: -3,
+            note: 'The runners took the north channel and lost only one boat.'
+        },
+        {
+            ...example, id: 'rsr-ex-log-battalion', kind: LOG_KIND.COMMIT, turn: 2, at: ago(9),
+            plotId: ID.plot, nodeId: ID.siege, forceId: ID.legion, assetId: ID.battalion,
+            amount: 0, cost: 0, note: ''
+        },
+        {
+            ...example, id: 'rsr-ex-log-gate', kind: LOG_KIND.PUSH, turn: 1, at: ago(30),
+            plotId: ID.plot, nodeId: ID.gate, forceId: ID.legion, assetId: null,
+            amount: 0, cost: 0, visibility: VISIBILITY.VISIBLE, sealed: true,
+            note: 'Something moved against the east gate in the dark. No one will say what.'
+        },
+        {
+            ...example, id: 'rsr-ex-log-subject', kind: LOG_KIND.CONCLUDE, turn: 1, at: ago(48),
+            plotId: ID.plot, nodeId: ID.subject, forceId: ID.legion, assetId: null,
+            amount: 15, cost: 0, visibility: VISIBILITY.MASKED, sealed: false,
+            note: 'They know what the wards do now.'
+        },
+        {
+            ...example, id: 'rsr-ex-log-cycle', kind: LOG_KIND.CYCLE, turn: 1, at: ago(60),
+            plotId: null, nodeId: null, forceId: null, assetId: null,
+            amount: 2, cost: 0, note: ''
+        }
+    ];
+
+    return { plots, nodes, forces, assets, log };
 }
 
 /** Ids the fixture owns, so a caller can tell example rows from hand-authored ones. */

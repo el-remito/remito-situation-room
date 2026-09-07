@@ -4,8 +4,13 @@
 
     The mode decides the bar shape, and that branch was already resolved in
     _prepareContext: exactly one of isContested / isClock / isPool is true, or the
-    row is concluded. No comparison happens here, because module templates in v14
-    have no `eq` helper.
+    row is concluded.
+
+    There is ONE control for moving this Thread, whatever its mode, and it opens a
+    dialog. The row used to carry a strip of +1 / +3 / −1 buttons per Force and a
+    second strip of purses beneath it, and none of it said the thing a GM needed to
+    know: whether pressing a button was going to cost anybody anything. That
+    question now gets asked out loud, once, in a place with room to answer it.
 --}}
 <li class="rsr-thread{{#if this.masked}} is-masked{{/if}}{{#if this.isLocked}} is-locked{{/if}}{{#if this.isConcluded}} is-concluded{{/if}}"
     data-thread-id="{{this.id}}">
@@ -73,7 +78,8 @@
     {{/if}}
     {{/if}}
 
-    {{!-- Contested: one bar per Force, because they do not share a pool. --}}
+    {{!-- Contested: one bar per Force, because they do not share a pool. The
+          per-Force control only preselects that side in the dialog. --}}
     {{#if this.isContested}}
     <ul class="rsr-contenders">
         {{#each this.contenders}}
@@ -86,17 +92,12 @@
             <span class="rsr-bar-value">{{this.current}}<span class="rsr-of">/{{this.total}}</span></span>
             {{/if}}
             {{#if this.canPush}}
-            <span class="rsr-controls rsr-controls-inline">
-                <button type="button" class="rsr-mini" data-action="advanceThread"
-                        name="push-{{../id}}-{{this.id}}-1"
-                        data-thread-id="{{../id}}" data-force-id="{{this.id}}" data-amount="1">+1</button>
-                <button type="button" class="rsr-mini" data-action="advanceThread"
-                        name="push-{{../id}}-{{this.id}}-3"
-                        data-thread-id="{{../id}}" data-force-id="{{this.id}}" data-amount="3">+3</button>
-                <button type="button" class="rsr-mini" data-action="advanceThread"
-                        name="push-{{../id}}-{{this.id}}-m1"
-                        data-thread-id="{{../id}}" data-force-id="{{this.id}}" data-amount="-1">&minus;1</button>
-            </span>
+            <button type="button" class="rsr-mini" data-action="pushThread"
+                    name="push-{{../id}}-{{this.id}}"
+                    data-thread-id="{{../id}}" data-force-id="{{this.id}}"
+                    data-tooltip="{{localize 'RSR.editor.pushForHint'}}">
+                <i class="fa-solid fa-arrow-right-long" inert></i>
+            </button>
             {{/if}}
         </li>
         {{/each}}
@@ -112,16 +113,6 @@
         {{#if this.clock.showValues}}
         <span class="rsr-bar-value">{{this.clock.current}}<span class="rsr-of">/{{this.clock.total}}</span></span>
         {{/if}}
-        {{#if this.canPush}}
-        <span class="rsr-controls rsr-controls-inline">
-            <button type="button" class="rsr-mini" data-action="advanceThread"
-                    name="push-{{this.id}}-1"
-                    data-thread-id="{{this.id}}" data-amount="1">+1</button>
-            <button type="button" class="rsr-mini" data-action="advanceThread"
-                    name="push-{{this.id}}-m1"
-                    data-thread-id="{{this.id}}" data-amount="-1">&minus;1</button>
-        </span>
-        {{/if}}
     </div>
     {{/if}}
 
@@ -134,29 +125,37 @@
         {{#if this.pool.showValues}}
         <span class="rsr-bar-value">{{this.pool.current}}<span class="rsr-of">/{{this.pool.total}}</span></span>
         {{/if}}
-        {{#if this.canPush}}
-        <span class="rsr-controls rsr-controls-inline">
-            <button type="button" class="rsr-mini" data-action="advanceThread"
-                    name="push-{{this.id}}-1"
-                    data-thread-id="{{this.id}}" data-amount="1">+1</button>
-            <button type="button" class="rsr-mini" data-action="advanceThread"
-                    name="push-{{this.id}}-3"
-                    data-thread-id="{{this.id}}" data-amount="3">+3</button>
-            <button type="button" class="rsr-mini" data-action="advanceThread"
-                    name="push-{{this.id}}-m1"
-                    data-thread-id="{{this.id}}" data-amount="-1">&minus;1</button>
-        </span>
-        {{/if}}
     </div>
+    {{/if}}
+
+    {{!-- Committed Assets. data-asset-id makes each one draggable: back onto its
+          Force panel to release it, onto another Thread to move it. --}}
     {{#if this.committedAssets.length}}
     <p class="rsr-committed">
         {{localize "RSR.asset.committed"}}
-        {{#each this.committedAssets}}<span class="rsr-asset-chip">{{this}}</span>{{/each}}
+        {{#each this.committedAssets}}
+        <span class="rsr-asset-chip{{#unless this.isReady}} is-conditioned{{/unless}}"
+              data-asset-id="{{this.id}}">
+            {{this.name}}
+            {{#unless this.isReady}}
+            <span class="rsr-condition is-{{this.condition}}">
+                {{localize this.conditionLabel}}{{#if this.cyclesLeft}} &middot; {{this.cyclesLeft}}{{/if}}
+            </span>
+            {{/unless}}
+            {{#if this.canRelease}}
+            <button type="button" class="rsr-icon-btn rsr-icon-tiny" data-action="releaseAsset"
+                    data-asset-id="{{this.id}}" data-tooltip="{{localize 'RSR.asset.releaseHint'}}">
+                <i class="fa-solid fa-xmark" inert></i>
+            </button>
+            {{/if}}
+        </span>
+        {{/each}}
     </p>
     {{/if}}
-    {{/if}}
 
-    {{#if this.canConclude}}
+    {{!-- One push control and one conclusion, side by side, because those are the
+          only two things a GM does to a Thread. --}}
+    {{#if this.canPush}}
     <div class="rsr-controls rsr-controls-foot">
         {{#if this.discounted}}
         <span class="rsr-discount" data-tooltip="{{localize 'RSR.thread.discountHint'}}">
@@ -166,11 +165,19 @@
         {{#if this.isFull}}
         <span class="rsr-ready">{{localize "RSR.thread.ready"}}</span>
         {{/if}}
+        <button type="button" class="rsr-mini" data-action="pushThread"
+                name="push-{{this.id}}" data-thread-id="{{this.id}}"
+                data-tooltip="{{localize 'RSR.editor.pushHint'}}">
+            <i class="fa-solid fa-arrow-right-long" inert></i>
+            <span>{{localize "RSR.editor.push"}}</span>
+        </button>
+        {{#if this.canConclude}}
         <button type="button" class="rsr-mini rsr-mini-primary" data-action="concludeThread"
                 data-thread-id="{{this.id}}">
             <i class="fa-solid fa-gavel" inert></i>
             <span>{{localize "RSR.editor.conclude"}}</span>
         </button>
+        {{/if}}
     </div>
     {{/if}}
 

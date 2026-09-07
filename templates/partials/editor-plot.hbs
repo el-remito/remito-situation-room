@@ -1,0 +1,189 @@
+{{!--
+    The Plot editor.
+
+    Same reading order as the Plot itself: what it is, what it is about, where it
+    stands, the ladder it stands on, and who is standing in it.
+
+    Two widgets carry the round. Phases are cards, not the pipe-delimited textarea
+    the GM was previously asked to type by hand. The roster is columns of chips
+    dragged between headings, and only members render: a world with fifty Forces
+    must not put fifty rows in front of a GM who wants two of them.
+--}}
+
+<section class="rsr-form-section">
+    <div class="rsr-form-row">
+        <label for="rsr-f-name">{{localize "RSR.editor.name"}}</label>
+        <input type="text" id="rsr-f-name" name="name" value="{{editor.draft.name}}">
+    </div>
+    <div class="rsr-form-row is-tall">
+        <label for="rsr-f-description">{{localize "RSR.editor.description"}}</label>
+        <textarea id="rsr-f-description" name="description" rows="3">{{editor.draft.description}}</textarea>
+    </div>
+</section>
+
+<section class="rsr-form-section">
+    <h3>
+        {{localize "RSR.plot.state"}}
+        <i class="fa-regular fa-circle-question rsr-info"
+           data-tooltip="{{localize 'RSR.editor.stateHint'}}"></i>
+    </h3>
+    <div class="rsr-form-row">
+        <label for="rsr-f-state">{{localize "RSR.editor.stateNow"}}</label>
+        <span class="rsr-form-inline">
+            <input type="number" id="rsr-f-state" name="state" value="{{editor.draft.state}}">
+            <label for="rsr-f-stateMin">{{localize "RSR.editor.stateFrom"}}</label>
+            <input type="number" id="rsr-f-stateMin" name="stateMin" value="{{editor.draft.stateMin}}">
+            <label for="rsr-f-stateMax">{{localize "RSR.editor.stateTo"}}</label>
+            <input type="number" id="rsr-f-stateMax" name="stateMax" value="{{editor.draft.stateMax}}">
+        </span>
+    </div>
+</section>
+
+{{!-- Phases. No reordering control: normalize sorts by threshold, so the order is
+      derived and a drag handle here would be a lie. --}}
+<section class="rsr-form-section">
+    <h3>
+        {{localize "RSR.editor.phases"}}
+        <i class="fa-regular fa-circle-question rsr-info"
+           data-tooltip="{{localize 'RSR.editor.phasesHint'}}"></i>
+    </h3>
+
+    {{#each editor.phases}}
+    <article class="rsr-phase-card">
+        <header class="rsr-phase-head">
+            <label for="rsr-ph-threshold-{{this.index}}">{{localize "RSR.editor.phaseAt"}}</label>
+            <input type="number" id="rsr-ph-threshold-{{this.index}}" class="rsr-phase-threshold"
+                   data-row-group="phases" data-row-key="{{this.index}}" data-row-field="threshold"
+                   value="{{this.threshold}}">
+
+            <input type="text" id="rsr-ph-label-{{this.index}}" class="rsr-phase-label"
+                   data-row-group="phases" data-row-key="{{this.index}}" data-row-field="label"
+                   value="{{this.label}}" placeholder="{{localize 'RSR.editor.phaseLabel'}}">
+
+            <select id="rsr-ph-tone-{{this.index}}" class="rsr-phase-tone"
+                    data-row-group="phases" data-row-key="{{this.index}}" data-row-field="tone">
+                {{#each this.tones}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                {{/each}}
+            </select>
+
+            <button type="button" class="rsr-icon-btn rsr-danger" data-action="removePhase"
+                    data-index="{{this.index}}" data-tooltip="{{localize 'RSR.editor.removePhase'}}">
+                <i class="fa-solid fa-trash" inert></i>
+            </button>
+        </header>
+
+        <div class="rsr-form-row">
+            <label for="rsr-ph-description-{{this.index}}">{{localize "RSR.editor.phaseSeen"}}</label>
+            <input type="text" id="rsr-ph-description-{{this.index}}"
+                   data-row-group="phases" data-row-key="{{this.index}}" data-row-field="description"
+                   value="{{this.description}}" placeholder="{{localize 'RSR.editor.phaseSeenPlaceholder'}}">
+        </div>
+        <div class="rsr-form-row">
+            <label for="rsr-ph-gmNotes-{{this.index}}">{{localize "RSR.editor.phaseNotes"}}</label>
+            <input type="text" id="rsr-ph-gmNotes-{{this.index}}" class="rsr-gm-field"
+                   data-row-group="phases" data-row-key="{{this.index}}" data-row-field="gmNotes"
+                   value="{{this.gmNotes}}" placeholder="{{localize 'RSR.editor.phaseNotesPlaceholder'}}">
+        </div>
+    </article>
+    {{/each}}
+
+    <div class="rsr-form-add">
+        <button type="button" class="rsr-btn" data-action="addPhase">
+            <i class="fa-solid fa-plus" inert></i>
+            <span>{{localize "RSR.editor.addPhase"}}</span>
+        </button>
+    </div>
+</section>
+
+{{!-- The roster. Drag a chip between headings to regroup it; drag it clear of
+      every column to take it off the Plot. --}}
+<section class="rsr-form-section">
+    <h3>
+        {{localize "RSR.plot.involved"}}
+        <i class="fa-regular fa-circle-question rsr-info"
+           data-tooltip="{{localize 'RSR.editor.groupHint'}}"></i>
+    </h3>
+
+    <div class="rsr-roster-board" data-roster-board>
+        {{#each editor.columns}}
+        <div class="rsr-roster-col{{#unless this.hasLabel}} is-unheaded{{/unless}}" data-group="{{this.label}}">
+            <header class="rsr-roster-col-head">
+                {{#if this.hasLabel}}
+                <span class="rsr-roster-heading">{{this.label}}</span>
+                <button type="button" class="rsr-icon-btn rsr-icon-tiny" data-action="removeGroup"
+                        data-group="{{this.label}}" data-tooltip="{{localize 'RSR.editor.removeGroup'}}">
+                    <i class="fa-solid fa-xmark" inert></i>
+                </button>
+                {{else}}
+                <span class="rsr-roster-heading is-quiet">{{localize "RSR.editor.noHeading"}}</span>
+                {{/if}}
+            </header>
+
+            {{#each this.forces}}
+            <span class="rsr-roster-chip" data-roster-force="{{this.id}}">
+                <i class="{{this.icon}}" inert></i>
+                <span class="rsr-roster-name">{{this.name}}</span>
+                <button type="button" class="rsr-icon-btn rsr-icon-tiny" data-action="removeRosterForce"
+                        data-force-id="{{this.id}}" data-tooltip="{{localize 'RSR.editor.removeFromPlot'}}">
+                    <i class="fa-solid fa-xmark" inert></i>
+                </button>
+            </span>
+            {{/each}}
+        </div>
+        {{/each}}
+    </div>
+
+    <div class="rsr-form-add">
+        <select id="rsr-pick-force" name="pick-force">
+            <option value="">{{localize "RSR.editor.pickForce"}}</option>
+            {{#each editor.available}}
+            <option value="{{this.id}}">{{this.name}}</option>
+            {{/each}}
+        </select>
+        <input type="text" id="rsr-pick-group" name="pick-group" list="rsr-known-groups"
+               placeholder="{{localize 'RSR.editor.groupPlaceholder'}}">
+        <button type="button" class="rsr-btn" data-action="addRosterForce">
+            <i class="fa-solid fa-plus" inert></i>
+            <span>{{localize "RSR.editor.addForce"}}</span>
+        </button>
+
+        <input type="text" id="rsr-new-group" name="new-group" list="rsr-known-groups"
+               placeholder="{{localize 'RSR.editor.newGroupPlaceholder'}}">
+        <button type="button" class="rsr-btn" data-action="addGroup">
+            <i class="fa-solid fa-plus" inert></i>
+            <span>{{localize "RSR.editor.addGroup"}}</span>
+        </button>
+
+        <datalist id="rsr-known-groups">
+            {{#each editor.knownGroups}}<option value="{{this}}"></option>{{/each}}
+        </datalist>
+    </div>
+</section>
+
+<section class="rsr-form-section">
+    <div class="rsr-form-row">
+        <label for="rsr-f-lifecycle">{{localize "RSR.editor.lifecycle"}}</label>
+        <span class="rsr-form-inline">
+            <select id="rsr-f-lifecycle" name="lifecycle">
+                {{#each editor.lifecycles}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                {{/each}}
+            </select>
+            <i class="fa-regular fa-circle-question rsr-info"
+               data-tooltip="{{localize 'RSR.editor.lifecycleHint'}}"></i>
+        </span>
+    </div>
+    <div class="rsr-form-row">
+        <label for="rsr-f-defaultMode">{{localize "RSR.editor.defaultMode"}}</label>
+        <span class="rsr-form-inline">
+            <select id="rsr-f-defaultMode" name="defaultMode">
+                {{#each editor.modes}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                {{/each}}
+            </select>
+            <i class="fa-regular fa-circle-question rsr-info"
+               data-tooltip="{{localize 'RSR.editor.defaultModeHint'}}"></i>
+        </span>
+    </div>
+</section>

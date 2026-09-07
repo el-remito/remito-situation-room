@@ -1,0 +1,96 @@
+{{!--
+    The editor shell: back, title, the form, and the Save bar.
+
+    Edit mode renders OVER whatever view is open — the segments stay, the body is
+    replaced. Nothing here reaches the world until Save; the draft lives in the
+    application instance, and logic/editing.mjs explains why this is the one
+    control on the board that does not write immediately.
+
+    Everything inside is a real <form>, because that is what lets the harvest read
+    controls by name. Its submit event is swallowed in _onRender: every button in
+    here is type="button", but a lone text field would still submit on Enter.
+--}}
+<div class="rsr-view rsr-view-editor">
+
+    <header class="rsr-editor-head">
+        <button type="button" class="rsr-back" data-action="closeEdit">
+            <i class="fa-solid fa-chevron-left" inert></i>
+            <span>{{localize "RSR.editor.back"}}</span>
+        </button>
+        <h2 class="rsr-editor-title">
+            {{localize editor.title}}
+            {{#if editor.name}}<span class="rsr-editor-subject">{{editor.name}}</span>{{/if}}
+        </h2>
+    </header>
+
+    <form class="rsr-editor-form" autocomplete="off">
+        {{#if editor.isPlot}}
+        {{> "modules/remito-situation-room/templates/partials/editor-plot.hbs"}}
+        {{/if}}
+        {{#if editor.isThread}}
+        {{> "modules/remito-situation-room/templates/partials/editor-thread.hbs"}}
+        {{/if}}
+        {{#if editor.isForce}}
+        {{> "modules/remito-situation-room/templates/partials/editor-force.hbs"}}
+        {{/if}}
+        {{#if editor.isAsset}}
+        {{> "modules/remito-situation-room/templates/partials/editor-asset.hbs"}}
+        {{/if}}
+        {{#if editor.isConditions}}
+        {{> "modules/remito-situation-room/templates/partials/editor-conditions.hbs"}}
+        {{/if}}
+
+        {{!-- What the table sees. Last, and on every editor of a ROW, because it is
+              the question a GM answers about a row rather than a property of it.
+              The world's condition table is not a row and has no audience. --}}
+        {{#if editor.isEntity}}
+        <section class="rsr-form-section">
+            <h3>{{localize "RSR.settings.tableTitle"}}</h3>
+            <div class="rsr-form-row">
+                <label for="rsr-f-visibility">{{localize "RSR.editor.visibility"}}</label>
+                <span class="rsr-form-inline">
+                    <select id="rsr-f-visibility" name="visibility">
+                        {{#each editor.visibility}}
+                        <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                        {{/each}}
+                    </select>
+                    <i class="fa-regular fa-circle-question rsr-info"
+                       data-tooltip="{{localize 'RSR.editor.visibilityHint'}}"></i>
+                </span>
+            </div>
+            <div class="rsr-form-row">
+                <label for="rsr-f-hideValues">{{localize "RSR.visibility.hideValues"}}</label>
+                <span class="rsr-form-check">
+                    <input type="checkbox" id="rsr-f-hideValues" name="hideValues"{{#if editor.hideValues}} checked{{/if}}>
+                    <i class="fa-regular fa-circle-question rsr-info"
+                       data-tooltip="{{localize 'RSR.editor.hideValuesHint'}}"></i>
+                </span>
+            </div>
+        </section>
+        {{/if}}
+    </form>
+
+    {{!-- The Save bar. A count rather than a dot: "3 unsaved changes" answers
+          whether you touched more than you meant to. --}}
+    <footer class="rsr-editor-bar{{#if editor.isDirty}} is-dirty{{/if}}">
+        {{#if editor.isDirty}}
+        <span class="rsr-editor-status">
+            <i class="fa-solid fa-circle" inert></i>
+            {{localize "RSR.editor.unsaved" count=editor.dirtyCount}}
+        </span>
+        {{else}}
+        <span class="rsr-editor-status is-clean">{{localize "RSR.editor.noChanges"}}</span>
+        {{/if}}
+
+        <button type="button" class="rsr-btn" data-action="revertEdit"
+                {{#unless editor.isDirty}}disabled{{/unless}}
+                data-tooltip="{{localize 'RSR.editor.revertHint'}}">
+            <i class="fa-solid fa-rotate-left" inert></i>
+            <span>{{localize "RSR.editor.revert"}}</span>
+        </button>
+        <button type="button" class="rsr-btn rsr-btn-primary" data-action="saveEdit">
+            <i class="fa-solid fa-floppy-disk" inert></i>
+            <span>{{localize "RSR.editor.save"}}</span>
+        </button>
+    </footer>
+</div>

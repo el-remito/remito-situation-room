@@ -13,7 +13,14 @@
     {{#each helpSections}}
     <details class="rsr-help-section" data-sync="help-{{this.key}}"{{#if @first}} open{{/if}}>
         <summary>{{localize this.title}}</summary>
-        <div class="rsr-help-body">{{localize this.body}}</div>
+        {{!--
+            Raw HTML, deliberately. The body strings are OUR OWN markup in
+            lang/en.json — paragraphs, lists and bold terms, which is what makes
+            these sections readable rather than a wall of prose. Nothing
+            user-authored reaches this: no Plot name, Force name or GM note is
+            ever interpolated into a help string.
+        --}}
+        <div class="rsr-help-body">{{{localize this.body}}}</div>
     </details>
     {{/each}}
 

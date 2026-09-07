@@ -1,0 +1,115 @@
+{{!--
+    The Settings segment: the numbers a GM sets once for a campaign.
+
+    A plain <form> inside the board rather than a dialog, because these are read
+    together and edited rarely — a dialog per number would be worse. The Save
+    handler reads target.closest('form'), so the form element itself matters.
+
+    Everything here seeds a NEW row. Changing a default never reaches back and
+    rewrites a Plot, Thread, Force or Asset that already exists, which is why each
+    hint says what it applies to.
+--}}
+<form class="rsr-settings">
+
+    <section class="rsr-settings-group">
+        <h4>{{localize "RSR.settings.forcesTitle"}}</h4>
+        <p class="rsr-settings-note">{{localize "RSR.settings.forcesNote"}}</p>
+
+        <div class="rsr-settings-row">
+            <label for="rsr-forceResources">{{localize "RSR.settings.forceResources"}}</label>
+            <input type="number" id="rsr-forceResources" name="forceResources"
+                   value="{{settings.constants.forceResources}}">
+        </div>
+
+        <div class="rsr-settings-row">
+            <label for="rsr-forceIncome">{{localize "RSR.settings.forceIncome"}}</label>
+            <input type="number" id="rsr-forceIncome" name="forceIncome"
+                   value="{{settings.constants.forceIncome}}">
+        </div>
+
+        <div class="rsr-settings-row">
+            <label for="rsr-forceIcon">{{localize "RSR.settings.forceIcon"}}</label>
+            <input type="text" id="rsr-forceIcon" name="forceIcon"
+                   value="{{settings.constants.forceIcon}}"
+                   placeholder="{{settings.defaults.forceIcon}}">
+            <i class="{{settings.constants.forceIcon}} rsr-icon-preview" inert></i>
+        </div>
+        <p class="hint">{{localize "RSR.settings.forceIconHint"}}</p>
+
+        <div class="rsr-settings-row">
+            <label for="rsr-assetCost">{{localize "RSR.settings.assetCost"}}</label>
+            <input type="number" id="rsr-assetCost" name="assetCost" min="0"
+                   value="{{settings.constants.assetCost}}">
+        </div>
+        <p class="hint">{{localize "RSR.settings.assetCostHint"}}</p>
+    </section>
+
+    <section class="rsr-settings-group">
+        <h4>{{localize "RSR.settings.plotsTitle"}}</h4>
+        <p class="rsr-settings-note">{{localize "RSR.settings.plotsNote"}}</p>
+
+        <div class="rsr-settings-row">
+            <label for="rsr-threadThreshold">{{localize "RSR.settings.threadThreshold"}}</label>
+            <input type="number" id="rsr-threadThreshold" name="threadThreshold" min="1"
+                   value="{{settings.constants.threadThreshold}}">
+        </div>
+
+        <div class="rsr-settings-row">
+            <label for="rsr-clockSegments">{{localize "RSR.settings.clockSegments"}}</label>
+            <input type="number" id="rsr-clockSegments" name="clockSegments" min="1"
+                   value="{{settings.constants.clockSegments}}">
+        </div>
+
+        <div class="rsr-settings-row">
+            <label for="rsr-stateMin">{{localize "RSR.settings.stateRange"}}</label>
+            <input type="number" id="rsr-stateMin" name="stateMin" value="{{settings.constants.stateMin}}">
+            <input type="number" name="stateMax" value="{{settings.constants.stateMax}}">
+        </div>
+        <p class="hint">{{localize "RSR.settings.stateRangeHint"}}</p>
+    </section>
+
+    <section class="rsr-settings-group">
+        <h4>{{localize "RSR.settings.tableTitle"}}</h4>
+
+        <p class="rsr-settings-note">{{localize "RSR.settings.defaultVisibility.hint"}}</p>
+
+        {{!-- One default per KIND of row. A GM usually wants the sides named from
+              the start and the Threads they are running kept quiet, and a single
+              setting for all four made them correct every new Force by hand. --}}
+        {{#each settings.visibilityKinds}}
+        <div class="rsr-settings-row">
+            <label for="rsr-visibility-{{this.kind}}">{{localize this.label}}</label>
+            <select id="rsr-visibility-{{this.kind}}" name="visibility-{{this.kind}}">
+                {{#each this.options}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>
+                    {{localize this.label}}
+                </option>
+                {{/each}}
+            </select>
+        </div>
+        {{/each}}
+    </section>
+
+    {{!-- The condition table is a list, not a number, so it gets its own screen
+          rather than a section of this form. The button is here because this is
+          where a GM comes looking for the things they set once. --}}
+    <section class="rsr-settings-section">
+        <h3>{{localize "RSR.asset.conditionsTitle"}}</h3>
+        <p class="rsr-form-note">{{localize "RSR.asset.conditionsSettingsNote"}}</p>
+        <button type="button" class="rsr-btn" data-action="editConditions">
+            <i class="fa-solid fa-heart-crack" inert></i>
+            <span>{{localize "RSR.asset.conditionsEdit"}}</span>
+        </button>
+    </section>
+
+    <footer class="rsr-settings-foot">
+        <button type="button" class="rsr-btn rsr-btn-primary" data-action="saveSettings">
+            <i class="fa-solid fa-floppy-disk" inert></i>
+            <span>{{localize "RSR.settings.save"}}</span>
+        </button>
+        <button type="button" class="rsr-btn" data-action="resetSettings">
+            <i class="fa-solid fa-rotate-left" inert></i>
+            <span>{{localize "RSR.settings.reset"}}</span>
+        </button>
+    </footer>
+</form>

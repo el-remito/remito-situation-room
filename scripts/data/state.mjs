@@ -11,13 +11,16 @@
  * it is why deletes here have to sweep references by hand: nothing else will.
  */
 
-import { LIFECYCLE } from '../constants.mjs';
+import { LIFECYCLE, LOG_KIND, VISIBILITY } from '../constants.mjs';
+import * as Cond from '../logic/condition.mjs';
 import * as S from '../settings.mjs';
 import { registerOperations, requestWrite } from './relay.mjs';
 import { buildExample } from './example-plot.mjs';
 import {
     resolveMode, addToPool, tickClock, addForForce, concludeThread, reopenThread
 } from '../logic/progress.mjs';
+import * as Econ from '../logic/economy.mjs';
+import * as Log from '../logic/log.mjs';
 import { MODE } from '../constants.mjs';
 
 // ── reads ────────────────────────────────────────────────────────────────────
@@ -29,7 +32,10 @@ export function readBoard() {
         nodes: S.getNodes(),
         forces: S.getForces(),
         assets: S.getAssets(),
-        turn: S.getTurn()
+        turn: S.getTurn(),
+        constants: S.getConstants(),
+        conditions: S.getConditions(),
+        log: S.getLog()
     };
 }
 
@@ -68,6 +74,29 @@ export function forcesOnActivePlots(board) {
     return board.forces.filter((f) => ids.has(f.id));
 }
 
+/** The full roster, in board order. The Cockpit lists every Force, engaged or not. */
+export const allForces = (board) => [...board.forces].sort(bySort);
+
+/** Which Plots a Force is on — the Cockpit's answer to "is this Force in play?". */
+export const plotsForForce = (board, forceId) =>
+    board.plots.filter((p) => p.forceIds.includes(forceId)).sort(bySort);
+
+/**
+ * What Advance Turn would pay, without paying it. A read, so no relay: the
+ * confirmation shows the GM the bill before they sign it.
+ */
+/**
+ * What the next cycle does to every Force, without doing it. A read, so no relay.
+ * The full roster comes back, including the Forces it will not move, because
+ * "why did nobody pay the Guard?" is answered by the row the Guard is on.
+ */
+export const turnPreview = (board = readBoard()) => Econ.incomeRoster(board.forces);
+
+/** The chronicle, newest first. Already normalized; the viewer is applied on render. */
+export const readLog = (board = readBoard(), count = 30) => Log.recent(board.log, count);
+/** The GM's condition table, for a form that needs to offer it. */
+export const readConditions = () => S.getConditions();
+
 // ── write helpers ────────────────────────────────────────────────────────────
 
 const nextSort = (rows) => (rows.length ? Math.max(...rows.map((r) => r.sort)) + 1 : 0);
@@ -88,6 +117,37 @@ function mergeById(rows, incoming) {
     const merged = rows.map((r) => byId.get(r.id) ?? r);
     for (const r of incoming) if (!rows.some((x) => x.id === r.id)) merged.push(r);
     return merged;
+}
+
+/**
+ * Write one line of the chronicle.
+ *
+ * Called from inside the operations, never from the UI: a development is recorded
+ * by the same write that made it, so the log cannot disagree with the board. What
+ * is stored is references and a kind — the sentence is built at render time, when
+ * the viewer is known. See logic/log.mjs.
+ */
+async function record(patch) {
+    const row = Log.entry({
+        ...patch,
+        turn: S.getTurn().count,
+        at: Date.now(),
+        // The seal is taken here rather than passed in, so no operation can
+        // forget it: this is the only place a line is written, which makes it the
+        // only place that has to know what was public when it was.
+        sealed: Log.sealOf(namedBy(patch))
+    });
+    await S.setLog(Log.append(S.getLog(), { id: foundry.utils.randomID(), ...row }));
+}
+
+/** The rows a line names, looked up so `sealOf` can ask what they were then. */
+function namedBy({ plotId = null, nodeId = null, forceId = null, assetId = null }) {
+    return [
+        plotId ? S.getPlots().find((p) => p.id === plotId) : null,
+        nodeId ? S.getNodes().find((n) => n.id === nodeId) : null,
+        forceId ? S.getForces().find((f) => f.id === forceId) : null,
+        assetId ? S.getAssets().find((a) => a.id === assetId) : null
+    ];
 }
 
 // ── operations (GM side) ─────────────────────────────────────────────────────
@@ -163,8 +223,106 @@ const operations = {
         await S.setAssets(S.getAssets().filter((a) => a.forceId !== forceId));
     },
 
+    /**
+     * Developing an Asset costs its Force whatever the world says an Asset costs.
+     *
+     * Charged on CREATION only, and never on an edit: renaming a battalion is not
+     * raising a second one. The affordability guard is here as well as in the
+     * editor, because the purse can change between opening a form and saving it.
+     */
     async 'asset.upsert'({ patch }) {
-        await S.setAssets(upsertRow(S.getAssets(), patch));
+        const assets = S.getAssets();
+        const before = assets.find((a) => a.id === patch.id) ?? null;
+        const isNew = !patch.id || !before;
+        const cost = isNew ? S.getConstants().assetCost : 0;
+
+        if (cost > 0) {
+            const forces = S.getForces();
+            const owner = forces.find((f) => f.id === patch.forceId) ?? null;
+            if (!owner || !Econ.canAfford(owner, cost)) return;
+            await S.setForces(forces.map((f) => (f.id === owner.id
+                ? { ...f, resources: Econ.spend(f, cost) }
+                : f)));
+        }
+
+        // The editor does not own the condition. asset.setCondition does, because
+        // putting an Asset into one releases it, starts a timer and writes a line
+        // in the chronicle, and none of those belong to "the GM saved a form".
+        await S.setAssets(upsertRow(assets, patch));
+    },
+
+    /**
+     * Put an Asset into a condition.
+     *
+     * Its own operation for three reasons that all point the same way: it releases
+     * the Asset when the condition is out of play, it starts that condition's
+     * timer, and it is a development the chronicle records with a note and an
+     * audience of the GM's choosing.
+     */
+    async 'asset.setCondition'({
+        assetId, condition, cycles = null, note = '', visibility = VISIBILITY.VISIBLE
+    }) {
+        const assets = S.getAssets();
+        const asset = assets.find((a) => a.id === assetId) ?? null;
+        if (!asset) return;
+
+        const row = Cond.rowFor(S.getConditions(), condition);
+        // An id the table does not hold would silently resolve to the fallback,
+        // which is the opposite of what the GM pressed. Refused instead.
+        if (row.id !== condition) return;
+
+        const asked = Number.isFinite(Number(cycles)) ? Math.max(0, Math.trunc(cycles)) : null;
+        const next = {
+            ...asset,
+            condition: row.id,
+            conditionCycles: asked ?? row.cycles,
+            // Out of play means off whatever it was on, in the same write that set
+            // it. The alternative is a Thread rendering a destroyed battalion until
+            // someone notices, and a rule every caller has to remember.
+            ...(row.inPlay === false ? { plotId: null, nodeId: null } : {})
+        };
+        await S.setAssets(assets.map((a) => (a.id === assetId ? next : a)));
+
+        // Only a CHANGE is a development, and a re-set that restarts a timer is
+        // one. A note makes anything worth recording.
+        const still = asset.condition === row.id
+            && asset.conditionCycles === next.conditionCycles;
+        if (still && !note) return;
+        await record({
+            kind: LOG_KIND.CONDITION,
+            plotId: asset.plotId, nodeId: asset.nodeId,
+            forceId: asset.forceId, assetId,
+            condition: row.id, note, visibility,
+            isExample: asset.isExample
+        });
+    },
+
+    /**
+     * Replace the GM's condition table.
+     *
+     * `moves` maps an Asset id to the condition it should end up in, which is how
+     * deleting a condition that Assets are standing in is resolved: the GM says
+     * what each of them becomes, one at a time, and both writes land in the same
+     * operation so the table can never be saved while Assets point at a row that
+     * is gone.
+     */
+    async 'condition.setAll'({ rows, moves = {} }) {
+        await S.setConditions(rows);
+        const ids = Object.keys(moves);
+        if (!ids.length) return;
+
+        const conditions = S.getConditions();
+        const assets = S.getAssets();
+        await S.setAssets(assets.map((a) => {
+            if (!ids.includes(a.id)) return a;
+            const row = Cond.rowFor(conditions, moves[a.id]);
+            return {
+                ...a,
+                condition: row.id,
+                conditionCycles: 0,
+                ...(row.inPlay === false ? { plotId: null, nodeId: null } : {})
+            };
+        }));
     },
 
     async 'asset.delete'({ assetId }) {
@@ -175,7 +333,21 @@ const operations = {
      * Push a Thread along. The mode decides which pile the amount lands in, and
      * logic/progress.mjs does the arithmetic — this only reads, routes and writes.
      */
-    async 'node.advance'({ nodeId, forceId = null, amount = 1 }) {
+    /**
+     * Push a Thread along.
+     *
+     * Both halves of a push are explicit. `amount` is how far the needle moves;
+     * `resourceDelta` is what it does to the Force's purse, and it is a separate
+     * number because those are not the same question. Most pushes cost what they
+     * move, some cost nothing, and a Force that has just sacked a supply train
+     * gains by pushing. Passing null for resourceDelta falls back to the automatic
+     * charge — the intent capped by what actually moved — which is the figure the
+     * push dialog offers as its starting point.
+     */
+    async 'node.advance'({
+        nodeId, forceId = null, amount = 1, resourceDelta = null, note = '',
+        visibility = VISIBILITY.VISIBLE
+    }) {
         const nodes = S.getNodes();
         const node = nodes.find((n) => n.id === nodeId);
         if (!node) return;
@@ -183,14 +355,50 @@ const operations = {
         const assets = S.getAssets().filter((a) => a.nodeId === nodeId);
         const mode = resolveMode(node, plot);
 
+        // The dialog refuses what a Force cannot afford, so this guard catches the
+        // case where the purse changed under a stale render — it refuses rather
+        // than half-applies. Only a spend can overdraw; a gain never needs checking.
+        const forces = S.getForces();
+        const spender = forceId ? forces.find((f) => f.id === forceId) ?? null : null;
+        const asked = Number.isFinite(resourceDelta) ? Math.trunc(resourceDelta) : null;
+        if (spender && asked !== null && asked < 0 && !Econ.canAfford(spender, -asked)) return;
+
         let progress;
         if (mode === MODE.CLOCK) progress = tickClock(node, amount, assets);
         else if (mode === MODE.CONTESTED) {
-            if (!forceId) return;               // contested spending must name a spender
+            if (!forceId) return;               // contested progress must name a side
             progress = addForForce(node, forceId, amount, assets);
         } else progress = addToPool(node, amount, assets);
 
         await S.setNodes(nodes.map((n) => (n.id === nodeId ? { ...n, progress } : n)));
+
+        // What actually moved, which is not always what was asked for: a tick into
+        // a full clock moves nothing, and an Asset's bonus progress is not billed.
+        const realized = mode === MODE.CONTESTED
+            ? (progress.byForce[forceId] ?? 0) - (node.progress.byForce[forceId] ?? 0)
+            : progress.pool - node.progress.pool;
+
+        // A negative delta is a spend, a positive one a windfall. With nothing
+        // passed, the Force pays for what it moved, exactly as it always did.
+        const delta = asked !== null
+            ? asked
+            : (spender ? -Econ.chargeFor(amount, realized) : 0);
+
+        if (spender && delta !== 0) {
+            await S.setForces(forces.map((f) => (f.id === spender.id
+                ? { ...f, resources: Econ.adjust(f, delta) }
+                : f)));
+        }
+
+        // A push that moved nothing, cost nothing and said nothing is not a
+        // development, and recording it would bury the ones that are.
+        if (realized === 0 && delta === 0 && !note) return;
+        await record({
+            kind: LOG_KIND.PUSH,
+            plotId: node.plotId, nodeId, forceId,
+            amount: realized, cost: delta, note, visibility,
+            isExample: node.isExample
+        });
     },
 
     /**
@@ -212,6 +420,16 @@ const operations = {
         await S.setPlots(plots.map((p) => (p.id === plot.id
             ? { ...p, state: result.plotState }
             : p)));
+
+        // The outcome note is the fiction the GM already wrote for this ending, so
+        // the chronicle says what happened rather than that something happened.
+        const outcome = node.outcomes.find((o) => o.forceId === forceId) ?? null;
+        await record({
+            kind: LOG_KIND.CONCLUDE,
+            plotId: plot.id, nodeId, forceId,
+            amount: result.delta, note: outcome?.note ?? '',
+            isExample: node.isExample
+        });
     },
 
     /** Undo a conclusion, reversing the delta that was actually applied. */
@@ -230,6 +448,107 @@ const operations = {
         await S.setPlots(plots.map((p) => (p.id === plot.id
             ? { ...p, state: result.plotState }
             : p)));
+
+        await record({
+            kind: LOG_KIND.REOPEN,
+            plotId: plot.id, nodeId,
+            isExample: node.isExample
+        });
+    },
+
+    /** Pause or resume a Force's income. The only thing that stops a Force earning. */
+    async 'force.setActive'({ forceId, isActive }) {
+        await S.setForces(S.getForces().map((f) => (f.id === forceId
+            ? { ...f, isActive: !!isActive }
+            : f)));
+    },
+
+    /**
+     * World-wide defaults, the per-kind default visibility among them. One object,
+     * one write, and it goes through the relay like everything else — a player
+     * must not be able to set what new rows show the table.
+     */
+    async 'constants.set'({ patch }) {
+        await S.setConstants({ ...S.getConstants(), ...patch });
+    },
+
+    /** GM fiat on a Force's purse — the escape hatch for everything the model misses. */
+    async 'force.adjust'({ forceId, delta }) {
+        await S.setForces(S.getForces().map((f) => (f.id === forceId
+            ? { ...f, resources: Econ.adjust(f, delta) }
+            : f)));
+    },
+
+    /**
+     * Move an Asset. Committing to a Thread commits it to that Thread's Plot in the
+     * same write, so the two fields can never disagree; passing neither releases it.
+     */
+    async 'asset.commit'({ assetId, nodeId = null, plotId = null }) {
+        const node = nodeId ? S.getNodes().find((n) => n.id === nodeId) ?? null : null;
+        const plot = !node && plotId ? S.getPlots().find((p) => p.id === plotId) ?? null : null;
+        const where = Econ.commitment(node, plot);
+        const assets = S.getAssets();
+        const asset = assets.find((a) => a.id === assetId) ?? null;
+        if (!asset) return;
+        // Refused rather than half-applied, for the same reason an unaffordable
+        // push is: the tray does not offer an out-of-play Asset, but a render can
+        // be stale by the time the drag lands. Releasing one is always allowed.
+        const committing = !!(where.nodeId || where.plotId);
+        if (committing && !Cond.isInPlay(asset)) return;
+        await S.setAssets(assets.map((a) => (a.id === assetId ? { ...a, ...where } : a)));
+
+        // Committing and releasing are the same write and read as opposite
+        // developments, which is what the two kinds are for.
+        await record({
+            kind: where.nodeId || where.plotId ? LOG_KIND.COMMIT : LOG_KIND.RELEASE,
+            plotId: where.plotId ?? asset.plotId,
+            nodeId: where.nodeId,
+            forceId: asset.forceId,
+            assetId,
+            isExample: asset.isExample
+        });
+    },
+
+    /**
+     * The one global clock. Every Force that is not paused is paid its income, and
+     * the counter and the purses move in a single operation so a cycle can never be
+     * counted without being paid.
+     */
+    async 'turn.advance'() {
+        const result = Econ.advanceTurn({ forces: S.getForces(), turn: S.getTurn() });
+        if (result.payments.length) await S.setForces(result.forces);
+
+        // Every running condition timer moves with the clock. Applied before the
+        // counter, so an Asset that finishes recovering has already finished by the
+        // time anyone reads the line about the cycle it finished in.
+        const assets = S.getAssets();
+        const moved = Cond.ticking(S.getConditions(), assets);
+        if (moved.length) {
+            const byId = new Map(moved.map((m) => [m.asset.id, m.change]));
+            await S.setAssets(assets.map((a) => (byId.has(a.id) ? { ...a, ...byId.get(a.id) } : a)));
+        }
+
+        await S.setTurn(result.turn);
+        // Recorded after the counter moves, so the entry names the cycle it opened.
+        await record({ kind: LOG_KIND.CYCLE, amount: result.payments.length });
+
+        // One line per Asset that actually arrived somewhere, not per Asset whose
+        // counter merely went down. A countdown is not a development; arriving is.
+        for (const { asset, change } of moved) {
+            if (change.condition === undefined) continue;
+            await record({
+                kind: LOG_KIND.CONDITION,
+                plotId: asset.plotId, nodeId: asset.nodeId,
+                forceId: asset.forceId, assetId: asset.id,
+                condition: change.condition,
+                isExample: asset.isExample
+            });
+        }
+    },
+
+    /** Wipe the chronicle. The board is untouched — this only forgets. */
+    async 'log.clear'() {
+        await S.setLog([]);
     },
 
     async 'turn.set'({ count }) {
@@ -242,11 +561,17 @@ const operations = {
      * copy of it — and never touches a hand-authored row.
      */
     async 'example.generate'() {
-        const { plots, nodes, forces, assets } = buildExample();
+        const { plots, nodes, forces, assets, log } = buildExample();
         await S.setForces(mergeById(S.getForces(), forces));
         await S.setPlots(mergeById(S.getPlots(), plots));
         await S.setNodes(mergeById(S.getNodes(), nodes));
         await S.setAssets(mergeById(S.getAssets(), assets));
+        // A few developments of its own, so the chronicle has something in it the
+        // first time a GM looks at the board. Replaces the previous example's
+        // entries rather than stacking a second copy of them.
+        await S.setLog(
+            [...log, ...S.getLog().filter((e) => !e.isExample)].slice(0, Log.LOG_LIMIT)
+        );
     },
 
     /**
@@ -259,6 +584,7 @@ const operations = {
         await S.setNodes(S.getNodes().filter((n) => !n.isExample));
         await S.setForces(S.getForces().filter((f) => !f.isExample));
         await S.setAssets(S.getAssets().filter((a) => !a.isExample));
+        await S.setLog(S.getLog().filter((e) => !e.isExample));
     }
 };
 
@@ -277,14 +603,36 @@ export const deleteNode = (nodeId) => write('node.delete', { nodeId });
 export const upsertForce = (patch) => write('force.upsert', { patch });
 export const deleteForce = (forceId) => write('force.delete', { forceId });
 export const upsertAsset = (patch) => write('asset.upsert', { patch });
+export const setAssetCondition = (
+    assetId,
+    { condition, cycles = null, note = '', visibility = VISIBILITY.VISIBLE } = {}
+) => write('asset.setCondition', { assetId, condition, cycles, note, visibility });
+export const setConditions = (rows, moves = {}) => write('condition.setAll', { rows, moves });
 export const deleteAsset = (assetId) => write('asset.delete', { assetId });
-export const advanceNode = (nodeId, amount, forceId = null) =>
-    write('node.advance', { nodeId, amount, forceId });
+export const advanceNode = (
+    nodeId,
+    {
+        amount = 1, forceId = null, resourceDelta = null, note = '',
+        visibility = VISIBILITY.VISIBLE
+    } = {}
+) => write('node.advance', { nodeId, amount, forceId, resourceDelta, note, visibility });
 export const concludeNode = (nodeId, forceId = null) => write('node.conclude', { nodeId, forceId });
 export const reopenNode = (nodeId) => write('node.reopen', { nodeId });
+export const adjustForceResources = (forceId, delta) => write('force.adjust', { forceId, delta });
+export const setForceActive = (forceId, isActive) =>
+    write('force.setActive', { forceId, isActive });
+export const setConstants = (patch) => write('constants.set', { patch });
+export const commitAsset = (assetId, { nodeId = null, plotId = null } = {}) =>
+    write('asset.commit', { assetId, nodeId, plotId });
+export const releaseAsset = (assetId) => write('asset.commit', { assetId });
+export const advanceTurn = () => write('turn.advance', {});
 export const setTurnCount = (count) => write('turn.set', { count });
 export const generateExample = () => write('example.generate', {});
 export const removeExample = () => write('example.remove', {});
+export const clearLog = () => write('log.clear', {});
+
+/** The world's defaults, for a form that needs to seed a new row from them. */
+export const readConstants = () => S.getConstants();
 
 /** A read, so no relay: any client can ask whether the example is currently present. */
 export const hasExample = (board = readBoard()) => board.plots.some((p) => p.isExample);

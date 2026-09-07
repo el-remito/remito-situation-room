@@ -1,0 +1,139 @@
+{{!--
+    The Force editor.
+
+    Strengths and weaknesses are chips: type and press the button, click the ✕ to
+    drop one. They are two columns because the split is the meaning — writing what
+    a Force is good at is a different job from writing what will get it killed.
+
+    Its Assets are listed but not edited here. An Asset has its own screen, and a
+    Force with six of them would otherwise be a page of nested forms — but the
+    chips are the way in to those screens, so getting to one is a click rather than
+    a trip back out to the Cockpit and down again.
+--}}
+
+<section class="rsr-form-section">
+    <div class="rsr-form-row">
+        <label for="rsr-f-name">{{localize "RSR.editor.name"}}</label>
+        <input type="text" id="rsr-f-name" name="name" value="{{editor.draft.name}}">
+    </div>
+
+    <div class="rsr-form-row">
+        <label for="rsr-f-img">{{localize "RSR.editor.image"}}</label>
+        <span class="rsr-form-inline">
+            <file-picker id="rsr-f-img" name="img" type="imagevideo" value="{{editor.draft.img}}"></file-picker>
+            <i class="fa-regular fa-circle-question rsr-info"
+               data-tooltip="{{localize 'RSR.editor.imageHint'}}"></i>
+        </span>
+    </div>
+
+    <div class="rsr-form-row">
+        <label for="rsr-f-icon">{{localize "RSR.force.icon"}}</label>
+        <span class="rsr-form-inline">
+            <input type="text" id="rsr-f-icon" name="icon" value="{{editor.draft.icon}}">
+            <i class="{{editor.icon}} rsr-icon-preview" inert></i>
+            <i class="fa-regular fa-circle-question rsr-info"
+               data-tooltip="{{localize 'RSR.force.iconHint'}}"></i>
+        </span>
+    </div>
+</section>
+
+<section class="rsr-form-section">
+    <h3>{{localize "RSR.force.resources"}}</h3>
+
+    <div class="rsr-form-row">
+        <label for="rsr-f-resources">{{localize "RSR.editor.purse"}}</label>
+        <span class="rsr-form-inline">
+            <input type="number" id="rsr-f-resources" name="resources" value="{{editor.draft.resources}}">
+            <i class="fa-regular fa-circle-question rsr-info"
+               data-tooltip="{{localize 'RSR.force.resourcesHint'}}"></i>
+            <label for="rsr-f-income">{{localize "RSR.force.income"}}</label>
+            <input type="number" id="rsr-f-income" name="income" value="{{editor.draft.income}}">
+            <i class="fa-regular fa-circle-question rsr-info"
+               data-tooltip="{{localize 'RSR.force.incomeHint'}}"></i>
+        </span>
+    </div>
+
+    {{!-- The pause switch. This, and only this, decides whether a Force draws
+          income — never where it happens to be standing. --}}
+    <div class="rsr-form-row">
+        <label for="rsr-f-isActive">{{localize "RSR.force.active"}}</label>
+        <span class="rsr-form-check">
+            <input type="checkbox" id="rsr-f-isActive" name="isActive"{{#if editor.draft.isActive}} checked{{/if}}>
+            <i class="fa-regular fa-circle-question rsr-info"
+               data-tooltip="{{localize 'RSR.force.activeHint'}}"></i>
+        </span>
+    </div>
+</section>
+
+<section class="rsr-form-section">
+    <h3>
+        {{localize "RSR.force.tags"}}
+        <i class="fa-regular fa-circle-question rsr-info"
+           data-tooltip="{{localize 'RSR.force.tagsHint'}}"></i>
+    </h3>
+
+    <div class="rsr-tag-columns">
+        <div class="rsr-tag-column">
+            <h4 class="rsr-tag-title is-strength">{{localize "RSR.force.strengths"}}</h4>
+            <div class="rsr-chip-row">
+                {{#each editor.strengths}}
+                <span class="rsr-edit-chip is-strength">
+                    <span>{{this.text}}</span>
+                    <button type="button" class="rsr-icon-btn rsr-icon-tiny" data-action="removeTag"
+                            data-polarity="strength" data-index="{{this.index}}"
+                            data-tooltip="{{localize 'RSR.editor.removeTag'}}">
+                        <i class="fa-solid fa-xmark" inert></i>
+                    </button>
+                </span>
+                {{/each}}
+            </div>
+            <div class="rsr-form-add">
+                <input type="text" id="rsr-new-tag-strength" name="new-tag-strength"
+                       placeholder="{{localize 'RSR.editor.tagPlaceholder'}}">
+                <button type="button" class="rsr-btn" data-action="addTag" data-polarity="strength">
+                    <i class="fa-solid fa-plus" inert></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="rsr-tag-column">
+            <h4 class="rsr-tag-title is-weakness">{{localize "RSR.force.weaknesses"}}</h4>
+            <div class="rsr-chip-row">
+                {{#each editor.weaknesses}}
+                <span class="rsr-edit-chip is-weakness">
+                    <span>{{this.text}}</span>
+                    <button type="button" class="rsr-icon-btn rsr-icon-tiny" data-action="removeTag"
+                            data-polarity="weakness" data-index="{{this.index}}"
+                            data-tooltip="{{localize 'RSR.editor.removeTag'}}">
+                        <i class="fa-solid fa-xmark" inert></i>
+                    </button>
+                </span>
+                {{/each}}
+            </div>
+            <div class="rsr-form-add">
+                <input type="text" id="rsr-new-tag-weakness" name="new-tag-weakness"
+                       placeholder="{{localize 'RSR.editor.tagPlaceholder'}}">
+                <button type="button" class="rsr-btn" data-action="addTag" data-polarity="weakness">
+                    <i class="fa-solid fa-plus" inert></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+
+{{#if editor.assets.length}}
+<section class="rsr-form-section">
+    <h3>{{localize "RSR.asset.plural"}}</h3>
+    <p class="rsr-form-note">{{localize "RSR.editor.assetsElsewhere"}}</p>
+    <div class="rsr-chip-row">
+        {{#each editor.assets}}
+        <button type="button" class="rsr-edit-chip is-link" data-action="editAsset"
+                data-asset-id="{{this.id}}" data-tooltip="{{localize 'RSR.editor.editAsset'}}">
+            <span>{{this.name}}</span>
+            {{#if this.isCommitted}}<i class="fa-solid fa-shield-halved" inert></i>{{/if}}
+            <i class="fa-solid fa-pen rsr-chip-pen" inert></i>
+        </button>
+        {{/each}}
+    </div>
+</section>
+{{/if}}

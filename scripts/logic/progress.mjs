@@ -23,15 +23,22 @@
  */
 
 import { ASSET_MODIFIER, MODE, NODE_STATUS } from '../constants.mjs';
+import { effectiveValue } from './condition.mjs';
 
 /** A Thread's mode, resolving the inherit case. `null` on the node means inherit. */
 export const resolveMode = (node, plot) => node?.mode ?? plot?.defaultMode ?? MODE.FIAT;
 
 // ── asset modifiers ──────────────────────────────────────────────────────────
 
+// The one place an Asset's condition reaches the arithmetic. Every modifier
+// question in this file goes through here, so a Damaged battalion halves its
+// discount, halves its investment and halves its ticks — and a Suppressed one
+// contributes nothing — without any of those three having to know that conditions
+// exist. The Asset arrives with its rule already resolved; see condition.mjs for
+// why that is the read funnel's job rather than an argument threaded down here.
 const sumModifier = (assets, kind) => (assets ?? [])
     .filter((a) => a?.modifier?.kind === kind)
-    .reduce((total, a) => total + (Number(a.modifier.value) || 0), 0);
+    .reduce((total, a) => total + effectiveValue(a, a.modifier.value), 0);
 
 /**
  * What this Thread actually costs once committed Assets are counted.

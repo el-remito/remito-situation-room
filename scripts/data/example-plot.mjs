@@ -18,12 +18,13 @@
 
 import {
     LIFECYCLE, LOG_KIND, MODE, NODE_STATUS, VISIBILITY, POLARITY, ASSET_MODIFIER,
-    ASSET_CONDITION
+    ASSET_CONDITION, TURN_BEHAVIOUR
 } from '../constants.mjs';
 
 /** Stable ids so Generate is an overwrite, not an append. */
 const ID = {
     plot: 'rsr-ex-plot-northwall',
+    road: 'rsr-ex-plot-road',
     legion: 'rsr-ex-force-legion',
     guard: 'rsr-ex-force-guard',
     siege: 'rsr-ex-node-siege',
@@ -33,6 +34,7 @@ const ID = {
     gate: 'rsr-ex-node-gate',
     ledger: 'rsr-ex-node-ledger',
     quarter: 'rsr-ex-node-quarter',
+    envoy: 'rsr-ex-node-envoy',
     battalion: 'rsr-ex-asset-battalion',
     dragon: 'rsr-ex-asset-dragon',
     runners: 'rsr-ex-asset-runners'
@@ -114,7 +116,49 @@ export function buildExample() {
         playerAssignable: false,
         visibility: VISIBILITY.VISIBLE,
         hideValues: false,
+        // The world's clock, which is what almost every Plot wants.
+        turnBehaviour: TURN_BEHAVIOUR.DEFAULT,
+        turnCount: 0,
         sort: 0
+    }, {
+        // The second Plot exists for one reason: it does not keep the world's
+        // clock. A siege is counted in weeks and a journey of six hundred miles
+        // is not, and pressing Next Cycle for the siege should not move the
+        // envoy three days further down the road. Isolated, so it sits still
+        // until its own button is pressed — and the world's cycle now names it
+        // as one of the Plots it will not move.
+        ...example,
+        id: ID.road,
+        name: 'The Long Road South',
+        description: 'A Guard envoy rode out before the lines closed, carrying a plea to '
+            + 'the Duke at Vaelport. Nobody in Northwall knows where she is.',
+        lifecycle: LIFECYCLE.ACTIVE,
+        state: 20,
+        stateMin: 0,
+        stateMax: 100,
+        phases: [
+            { id: 'rsr-ex-phase-riding', label: 'Riding', tone: 'neutral', threshold: 0,
+              description: 'She is somewhere on the Salt Road. That is all anyone can say.',
+              gmNotes: 'Two weeks out. Legion outriders have the road as far as the ford.',
+              revealNodeIds: [], lockNodeIds: [] },
+            { id: 'rsr-ex-phase-heard', label: 'Heard From', tone: 'calm', threshold: 60,
+              description: 'A rider came back with her seal. The plea reached somebody.',
+              gmNotes: 'Vaelport now knows. What the Duke does about it is the next question.',
+              revealNodeIds: [], lockNodeIds: [] }
+        ],
+        defaultMode: MODE.INVEST,
+        forceIds: [ID.guard],
+        forceGroups: { [ID.guard]: 'The Petitioners' },
+        playerAssignable: false,
+        visibility: VISIBILITY.VISIBLE,
+        hideValues: false,
+        turnBehaviour: TURN_BEHAVIOUR.ISOLATED,
+        // Its own clock, three cycles behind whatever the world is on, and
+        // called something of its own — which is the point of being able to name
+        // one at all. Clear the field in the editor and it reads Plot Cycle.
+        turnLabel: 'Days on the Road',
+        turnCount: 3,
+        sort: 1
     }];
 
     // One thread per advancement mode, plus one concluded, one gated, and three
@@ -227,6 +271,20 @@ export function buildExample() {
             // because "Contested" would have told them somebody is being
             // opposed, and two named contenders would have told them who.
             visibility: VISIBILITY.MASKED, hideValues: false, playerAssignable: false
+        },
+        {
+            // On the other Plot, and therefore on the other clock. Pressing Next
+            // Cycle for the siege does not move her; the Long Road's own button
+            // does, and that is the whole of what this Thread is here to show.
+            ...example, id: ID.envoy, plotId: ID.road, sort: 0,
+            name: 'Reaching Vaelport',
+            description: 'Six hundred miles, two rivers, and a Legion patrol on the ford.',
+            mode: MODE.INVEST,
+            threshold: 12, segments: 6,
+            progress: { pool: 4, byForce: { [ID.guard]: 4 } },
+            outcomes: [{ forceId: ID.guard, delta: 40, note: 'The plea is read aloud at court.' }],
+            status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
+            visibility: VISIBILITY.VISIBLE, hideValues: false, playerAssignable: false
         }
     ];
 

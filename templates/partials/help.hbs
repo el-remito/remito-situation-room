@@ -10,8 +10,13 @@
 --}}
 <div class="rsr-help">
 
+    {{!-- Every section starts closed, the first one included. An open
+          section pushes the other seven off the bottom of the tab, so the
+          reader arriving with a question sees one answer and no list of
+          the others. `data-sync` keeps whatever they open across a
+          re-render; it is only the first paint this decides. --}}
     {{#each helpSections}}
-    <details class="rsr-help-section" data-sync="help-{{this.key}}"{{#if @first}} open{{/if}}>
+    <details class="rsr-help-section" data-sync="help-{{this.key}}">
         <summary>{{localize this.title}}</summary>
         {{!--
             Raw HTML, deliberately. The body strings are OUR OWN markup in

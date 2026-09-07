@@ -85,7 +85,14 @@ export const VISIBILITY = {
     HIDDEN: 'hidden'
 };
 
-/** Only ACTIVE plots are paid income by Advance Turn. ARCHIVED is filtered out of the board. */
+/**
+ * Whether a Plot is live on the board. ARCHIVED is filtered out of it entirely.
+ *
+ * This used to gate income, and no longer does: income belongs to the Force, not
+ * to where the Force is standing. Which clock a Plot keeps is `TURN_BEHAVIOUR`
+ * below, and lifecycle has nothing to say about it either — a Paused Plot is one
+ * the GM has set down, not one that has been taken off the calendar.
+ */
 export const LIFECYCLE = {
     ACTIVE: 'active',
     PAUSED: 'paused',
@@ -124,6 +131,35 @@ export const LOG_KIND = {
 export const POLARITY = {
     STRENGTH: 'strength',
     WEAKNESS: 'weakness'
+};
+
+/**
+ * Which clock a Plot keeps.
+ *
+ * The world has one cycle and most Plots ride it. Some do not: a siege is counted
+ * in weeks and an envoy's journey in months, and a GM who wants the second to sit
+ * still while the first moves had no way to say so — pausing the Plot was the
+ * nearest thing, and pausing means "I have set this down", which is a different
+ * statement and does not stop a cycle anyway.
+ *
+ *   DEFAULT   moves with the world's cycle, as everything did before.
+ *   ISOLATED  ignores it and carries its own button. The Plot keeps its own count,
+ *             so it can sit on Cycle 4 while the world is on 11.
+ *   NONE      keeps no clock at all, and has no button to press. For a Plot that
+ *             is not about elapsed time — a standing rivalry, a question of who
+ *             finds out first.
+ *
+ * What a cycle actually DOES to a Plot is deliberately narrow: it moves that
+ * Plot's own count, and it ticks the condition timers of the Assets committed to
+ * it. Income is untouched, because income belongs to the Force — a side gathering
+ * strength off-screen keeps gathering it whichever Plots it happens to stand on,
+ * and a Force standing on two Plots with two clocks has no sensible answer to
+ * "which one pays you".
+ */
+export const TURN_BEHAVIOUR = {
+    DEFAULT: 'default',
+    ISOLATED: 'isolated',
+    NONE: 'none'
 };
 
 /**
@@ -249,6 +285,15 @@ export const CONSTANT_DEFAULTS = {
     clockSegments: 6,
     stateMin: 0,
     stateMax: 100,
+    /**
+     * What this world calls the clock everything rides by default.
+     *
+     * Empty means the built-in word, which is why the default is '' and not the
+     * word itself: a GM who never touches this gets whatever the language file
+     * says, in their own language, rather than an English noun copied into their
+     * world settings the first time the board was opened.
+     */
+    turnLabel: '',
     /**
      * What the table may see of a row the moment it is created, per kind of row.
      *

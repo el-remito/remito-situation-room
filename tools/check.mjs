@@ -99,7 +99,7 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
     const DYNAMIC_PREFIXES = ['RSR.help.', 'RSR.thread.mode.', 'RSR.thread.status.',
         'RSR.plot.lifecycle.', 'RSR.asset.modifier.', 'RSR.visibility.',
         'RSR.settings.visibility.', 'RSR.editor.tone.', 'RSR.asset.condition.',
-        'RSR.asset.effectScale.'];
+        'RSR.asset.effectScale.', 'RSR.plot.turnBehaviour.', 'RSR.turn.reason.'];
 
     for (const file of [...sources, ...templates]) {
         for (const m of read(file).matchAll(/['"](RSR\.[A-Za-z0-9_.]+)['"]/g)) used.add(m[1]);

@@ -21,7 +21,7 @@
         <label for="rsr-f-img">{{localize "RSR.editor.image"}}</label>
         <span class="rsr-form-inline">
             <file-picker id="rsr-f-img" name="img" type="imagevideo" value="{{editor.draft.img}}"></file-picker>
-            <i class="fa-regular fa-circle-question rsr-info"
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.editor.imageHint'}}"></i>
         </span>
     </div>
@@ -31,7 +31,7 @@
         <span class="rsr-form-inline">
             <input type="text" id="rsr-f-icon" name="icon" value="{{editor.draft.icon}}">
             <i class="{{editor.icon}} rsr-icon-preview" inert></i>
-            <i class="fa-regular fa-circle-question rsr-info"
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.force.iconHint'}}"></i>
         </span>
     </div>
@@ -44,11 +44,11 @@
         <label for="rsr-f-resources">{{localize "RSR.editor.purse"}}</label>
         <span class="rsr-form-inline">
             <input type="number" id="rsr-f-resources" name="resources" value="{{editor.draft.resources}}">
-            <i class="fa-regular fa-circle-question rsr-info"
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.force.resourcesHint'}}"></i>
             <label for="rsr-f-income">{{localize "RSR.force.income"}}</label>
             <input type="number" id="rsr-f-income" name="income" value="{{editor.draft.income}}">
-            <i class="fa-regular fa-circle-question rsr-info"
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.force.incomeHint'}}"></i>
         </span>
     </div>
@@ -59,7 +59,7 @@
         <label for="rsr-f-isActive">{{localize "RSR.force.active"}}</label>
         <span class="rsr-form-check">
             <input type="checkbox" id="rsr-f-isActive" name="isActive"{{#if editor.draft.isActive}} checked{{/if}}>
-            <i class="fa-regular fa-circle-question rsr-info"
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.force.activeHint'}}"></i>
         </span>
     </div>
@@ -68,7 +68,7 @@
 <section class="rsr-form-section">
     <h3>
         {{localize "RSR.force.tags"}}
-        <i class="fa-regular fa-circle-question rsr-info"
+        <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.force.tagsHint'}}"></i>
     </h3>
 

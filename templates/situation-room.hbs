@@ -27,8 +27,8 @@
         {{/each}}
 
         {{#if isGM}}
-        <span class="rsr-turn-badge" data-tooltip="{{localize 'RSR.turn.tooltip'}}">
-            {{localize 'RSR.turn.label'}} {{turn}}
+        <span class="rsr-turn-badge" data-tooltip-class="rsr-tip" data-tooltip="{{localize 'RSR.turn.tooltip'}}">
+            {{turnLabel}} {{turn}}
         </span>
         {{/if}}
 
@@ -87,6 +87,30 @@
                     {{/unless}}
                     {{#if openPlot.isExample}}
                     <span class="rsr-chip rsr-chip-example">{{localize "RSR.help.exampleTag"}}</span>
+                    {{/if}}
+
+                    {{!-- This Plot's own clock, and the only button that moves
+                          it. Both GM-only by way of the context: a Plot on the
+                          world's clock has neither field, so there is nothing
+                          here to hide from anyone. --}}
+                    {{#if openPlot.offTheClock}}
+                    <span class="rsr-chip rsr-chip-quiet" data-tooltip="{{localize 'RSR.turn.noneHint'}}">
+                        {{localize "RSR.turn.offLabel"}}
+                    </span>
+                    {{/if}}
+                    {{#if openPlot.onOwnClock}}
+                    <span class="rsr-plot-clock">
+                        <span class="rsr-chip rsr-chip-clock" data-tooltip="{{localize 'RSR.turn.isolatedHint'}}">
+                            <i class="fa-solid fa-hourglass-half" inert></i>
+                            {{openPlot.plotTurnLabel}} {{openPlot.plotTurn}}
+                        </span>
+                        <button type="button" class="rsr-mini" data-action="advancePlotTurn"
+                                data-plot-id="{{openPlot.id}}"
+                                data-tooltip="{{localize 'RSR.turn.plotAdvanceHint'}}">
+                            <i class="fa-solid fa-hourglass-end" inert></i>
+                            <span>{{localize "RSR.turn.plotAdvance"}}</span>
+                        </button>
+                    </span>
                     {{/if}}
                 </header>
 
@@ -225,12 +249,28 @@
                 <div class="rsr-situation-split">
                     <div class="rsr-situation-main">
                         {{#if isGM}}
+                        {{!-- The world's clock is pressed from here, beside the
+                              Plots it moves. It used to sit in the Cockpit, one
+                              segment away from the isolated Plot buttons that do
+                              the same job at a smaller scale — two clocks on two
+                              screens, which is how a GM forgets one exists. It
+                              is named for the clock it moves, so it reads as the
+                              GLOBAL one next to a Plot keeping its own, and it
+                              follows the GM's own word for that clock. --}}
                         <header class="rsr-section-head">
                             <h3>{{localize "RSR.plot.plural"}}</h3>
-                            <button type="button" class="rsr-btn" data-action="createPlot">
-                                <i class="fa-solid fa-plus" inert></i>
-                                <span>{{localize "RSR.editor.newPlot"}}</span>
-                            </button>
+                            <span class="rsr-head-tools">
+                                <button type="button" class="rsr-btn rsr-btn-primary"
+                                        data-action="advanceTurn" data-tooltip-class="rsr-tip"
+                                        data-tooltip="{{localize 'RSR.turn.tooltip'}}">
+                                    <i class="fa-solid fa-hourglass-end" inert></i>
+                                    <span>{{localize "RSR.turn.advanceNamed" label=turnLabel}}</span>
+                                </button>
+                                <button type="button" class="rsr-btn" data-action="createPlot">
+                                    <i class="fa-solid fa-plus" inert></i>
+                                    <span>{{localize "RSR.editor.newPlot"}}</span>
+                                </button>
+                            </span>
                         </header>
                         {{/if}}
 
@@ -259,21 +299,18 @@
 
             <header class="rsr-section-head">
                 <h3>{{localize "RSR.force.plural"}}</h3>
-                <span class="rsr-head-tools">
-                    <button type="button" class="rsr-btn" data-action="createForce">
-                        <i class="fa-solid fa-plus" inert></i>
-                        <span>{{localize "RSR.editor.newForce"}}</span>
-                    </button>
-                    <button type="button" class="rsr-btn rsr-btn-primary" data-action="advanceTurn"
-                            data-tooltip="{{localize 'RSR.turn.tooltip'}}">
-                        <i class="fa-solid fa-hourglass-end" inert></i>
-                        <span>{{localize "RSR.turn.advance"}}</span>
-                    </button>
-                </span>
+                {{!-- The Next Cycle button used to stand here. It moved to the
+                      Plot list, where the isolated Plots keep their own buttons;
+                      what stays behind is the reading, because WHO gets paid is
+                      a Force question and this is the Forces screen. --}}
+                <button type="button" class="rsr-btn" data-action="createForce">
+                    <i class="fa-solid fa-plus" inert></i>
+                    <span>{{localize "RSR.editor.newForce"}}</span>
+                </button>
             </header>
 
             <p class="rsr-turn-line">
-                {{localize "RSR.turn.standing" turn=cockpit.turn count=cockpit.payingCount}}
+                {{localize "RSR.turn.standing" label=@root.turnLabel turn=cockpit.turn count=cockpit.payingCount}}
             </p>
 
             {{!-- The footnote. Every Force and what the next cycle does to it,

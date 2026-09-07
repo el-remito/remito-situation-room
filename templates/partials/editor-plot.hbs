@@ -24,7 +24,7 @@
 <section class="rsr-form-section">
     <h3>
         {{localize "RSR.plot.state"}}
-        <i class="fa-regular fa-circle-question rsr-info"
+        <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.editor.stateHint'}}"></i>
     </h3>
     <div class="rsr-form-row">
@@ -44,7 +44,7 @@
 <section class="rsr-form-section">
     <h3>
         {{localize "RSR.editor.phases"}}
-        <i class="fa-regular fa-circle-question rsr-info"
+        <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.editor.phasesHint'}}"></i>
     </h3>
 
@@ -101,7 +101,7 @@
 <section class="rsr-form-section">
     <h3>
         {{localize "RSR.plot.involved"}}
-        <i class="fa-regular fa-circle-question rsr-info"
+        <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.editor.groupHint'}}"></i>
     </h3>
 
@@ -170,8 +170,37 @@
                 <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
                 {{/each}}
             </select>
-            <i class="fa-regular fa-circle-question rsr-info"
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.editor.lifecycleHint'}}"></i>
+        </span>
+    </div>
+    {{!-- Which clock this Plot keeps. The count it has reached is not a field:
+          it moves by pressing a cycle, and a number the GM can type here is a
+          number that can disagree with the board. --}}
+    <div class="rsr-form-row">
+        <label for="rsr-f-turnBehaviour">{{localize "RSR.editor.turnBehaviour"}}</label>
+        <span class="rsr-form-inline">
+            <select id="rsr-f-turnBehaviour" name="turnBehaviour">
+                {{#each editor.behaviours}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                {{/each}}
+            </select>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.editor.turnBehaviourHint'}}"></i>
+        </span>
+    </div>
+    {{!-- Shown whatever the behaviour is, and used only by a Plot that keeps its
+          own clock. Hiding it behind the select above would mean re-rendering
+          the form on a change event, which is the one thing this editor does not
+          do — it harvests and redraws on a structural action, not on a keystroke. --}}
+    <div class="rsr-form-row">
+        <label for="rsr-f-turnLabel">{{localize "RSR.editor.turnLabel"}}</label>
+        <span class="rsr-form-inline">
+            <input type="text" id="rsr-f-turnLabel" name="turnLabel"
+                   value="{{editor.draft.turnLabel}}"
+                   placeholder="{{localize 'RSR.turn.plotLabel'}}">
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.editor.turnLabelHint'}}"></i>
         </span>
     </div>
     <div class="rsr-form-row">
@@ -182,7 +211,7 @@
                 <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
                 {{/each}}
             </select>
-            <i class="fa-regular fa-circle-question rsr-info"
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.editor.defaultModeHint'}}"></i>
         </span>
     </div>

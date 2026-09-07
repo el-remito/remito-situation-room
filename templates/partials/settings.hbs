@@ -5,9 +5,15 @@
     together and edited rarely — a dialog per number would be worse. The Save
     handler reads target.closest('form'), so the form element itself matters.
 
-    Everything here seeds a NEW row. Changing a default never reaches back and
-    rewrites a Plot, Thread, Force or Asset that already exists, which is why each
-    hint says what it applies to.
+    Everything here seeds a NEW row, with one exception marked below. Changing a
+    default never reaches back and rewrites a Plot, Thread, Force or Asset that
+    already exists, which is what makes this tab safe to touch mid-campaign.
+
+    Every field carries a ⓘ rather than a paragraph under it. Twelve fields with a
+    paragraph each is a wall nobody reads twice, and these are numbers a GM sets
+    once: the explanation should be there the first time and out of the way after.
+    Each badge names rsr-tip, which is what gives the tooltip documentation's
+    shape instead of a 320px centred block.
 --}}
 <form class="rsr-settings">
 
@@ -17,31 +23,47 @@
 
         <div class="rsr-settings-row">
             <label for="rsr-forceResources">{{localize "RSR.settings.forceResources"}}</label>
-            <input type="number" id="rsr-forceResources" name="forceResources"
-                   value="{{settings.constants.forceResources}}">
+            <span class="rsr-settings-controls">
+                <input type="number" id="rsr-forceResources" name="forceResources"
+                       value="{{settings.constants.forceResources}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.forceResourcesHint'}}"></i>
         </div>
 
         <div class="rsr-settings-row">
             <label for="rsr-forceIncome">{{localize "RSR.settings.forceIncome"}}</label>
-            <input type="number" id="rsr-forceIncome" name="forceIncome"
-                   value="{{settings.constants.forceIncome}}">
+            <span class="rsr-settings-controls">
+                <input type="number" id="rsr-forceIncome" name="forceIncome"
+                       value="{{settings.constants.forceIncome}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.forceIncomeHint'}}"></i>
         </div>
 
         <div class="rsr-settings-row">
             <label for="rsr-forceIcon">{{localize "RSR.settings.forceIcon"}}</label>
-            <input type="text" id="rsr-forceIcon" name="forceIcon"
-                   value="{{settings.constants.forceIcon}}"
-                   placeholder="{{settings.defaults.forceIcon}}">
-            <i class="{{settings.constants.forceIcon}} rsr-icon-preview" inert></i>
+            <span class="rsr-settings-controls">
+                <input type="text" id="rsr-forceIcon" name="forceIcon"
+                       value="{{settings.constants.forceIcon}}"
+                       placeholder="{{settings.defaults.forceIcon}}">
+                {{!-- A live look at whatever class was typed, so a typo shows
+                      itself before the GM saves. --}}
+                <i class="{{settings.constants.forceIcon}} rsr-icon-preview" inert></i>
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.forceIconHint'}}"></i>
         </div>
-        <p class="hint">{{localize "RSR.settings.forceIconHint"}}</p>
 
         <div class="rsr-settings-row">
             <label for="rsr-assetCost">{{localize "RSR.settings.assetCost"}}</label>
-            <input type="number" id="rsr-assetCost" name="assetCost" min="0"
-                   value="{{settings.constants.assetCost}}">
+            <span class="rsr-settings-controls">
+                <input type="number" id="rsr-assetCost" name="assetCost" min="0"
+                       value="{{settings.constants.assetCost}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.assetCostHint'}}"></i>
         </div>
-        <p class="hint">{{localize "RSR.settings.assetCostHint"}}</p>
     </section>
 
     <section class="rsr-settings-group">
@@ -50,26 +72,64 @@
 
         <div class="rsr-settings-row">
             <label for="rsr-threadThreshold">{{localize "RSR.settings.threadThreshold"}}</label>
-            <input type="number" id="rsr-threadThreshold" name="threadThreshold" min="1"
-                   value="{{settings.constants.threadThreshold}}">
+            <span class="rsr-settings-controls">
+                <input type="number" id="rsr-threadThreshold" name="threadThreshold" min="1"
+                       value="{{settings.constants.threadThreshold}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.threadThresholdHint'}}"></i>
         </div>
 
         <div class="rsr-settings-row">
             <label for="rsr-clockSegments">{{localize "RSR.settings.clockSegments"}}</label>
-            <input type="number" id="rsr-clockSegments" name="clockSegments" min="1"
-                   value="{{settings.constants.clockSegments}}">
+            <span class="rsr-settings-controls">
+                <input type="number" id="rsr-clockSegments" name="clockSegments" min="1"
+                       value="{{settings.constants.clockSegments}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.clockSegmentsHint'}}"></i>
         </div>
 
         <div class="rsr-settings-row">
             <label for="rsr-stateMin">{{localize "RSR.settings.stateRange"}}</label>
-            <input type="number" id="rsr-stateMin" name="stateMin" value="{{settings.constants.stateMin}}">
-            <input type="number" name="stateMax" value="{{settings.constants.stateMax}}">
+            <span class="rsr-settings-controls">
+                <input type="number" id="rsr-stateMin" name="stateMin" value="{{settings.constants.stateMin}}">
+                <input type="number" name="stateMax" value="{{settings.constants.stateMax}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.stateRangeHint'}}"></i>
         </div>
-        <p class="hint">{{localize "RSR.settings.stateRangeHint"}}</p>
+    </section>
+
+    {{!-- The one value on this tab that is NOT a seed. Everything else here is
+          copied into the next row created and never reaches an existing one;
+          this renames a clock the whole board is already counting on, which is
+          why it stands apart from the sections that promise otherwise. --}}
+    <section class="rsr-settings-group">
+        <h4>{{localize "RSR.settings.cycleTitle"}}</h4>
+        <p class="rsr-settings-note">{{localize "RSR.settings.cycleNote"}}</p>
+
+        <div class="rsr-settings-row">
+            <label for="rsr-turnLabel">{{localize "RSR.settings.turnLabel"}}</label>
+            <span class="rsr-settings-controls">
+                <input type="text" id="rsr-turnLabel" name="turnLabel"
+                       value="{{settings.constants.turnLabel}}"
+                       placeholder="{{localize 'RSR.turn.globalLabel'}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.turnLabelHint'}}"></i>
+        </div>
     </section>
 
     <section class="rsr-settings-group">
-        <h4>{{localize "RSR.settings.tableTitle"}}</h4>
+        {{!-- One badge for the four rows, because they are four instances of one
+              question and the answer is the same three words each time. It is the
+              same hint the editors' Visibility field carries. --}}
+        <h4>
+            {{localize "RSR.settings.tableTitle"}}
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.editor.visibilityHint'}}"></i>
+        </h4>
 
         <p class="rsr-settings-note">{{localize "RSR.settings.defaultVisibility.hint"}}</p>
 
@@ -79,13 +139,15 @@
         {{#each settings.visibilityKinds}}
         <div class="rsr-settings-row">
             <label for="rsr-visibility-{{this.kind}}">{{localize this.label}}</label>
-            <select id="rsr-visibility-{{this.kind}}" name="visibility-{{this.kind}}">
-                {{#each this.options}}
-                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>
-                    {{localize this.label}}
-                </option>
-                {{/each}}
-            </select>
+            <span class="rsr-settings-controls">
+                <select id="rsr-visibility-{{this.kind}}" name="visibility-{{this.kind}}">
+                    {{#each this.options}}
+                    <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>
+                        {{localize this.label}}
+                    </option>
+                    {{/each}}
+                </select>
+            </span>
         </div>
         {{/each}}
     </section>

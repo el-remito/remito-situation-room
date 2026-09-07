@@ -13,17 +13,37 @@
             {{this.name}}
         </button>
 
-        {{#if this.phaseLabel}}
-        <span class="rsr-chip rsr-tone-{{this.phaseTone}}">{{this.phaseLabel}}</span>
-        {{/if}}
+        {{!-- Every chip on its own line under the name. They used to sit beside it
+              and each one took width off the title, so a card with three chips
+              wrapped its name to two lines and every card in that row read at a
+              different height from its neighbour. --}}
+        <div class="rsr-plot-tags">
+            {{#if this.phaseLabel}}
+            <span class="rsr-chip rsr-tone-{{this.phaseTone}}">{{this.phaseLabel}}</span>
+            {{/if}}
 
-        {{#unless this.isActive}}
-        <span class="rsr-chip rsr-chip-quiet">{{localize this.lifecycleLabel}}</span>
-        {{/unless}}
+            {{#unless this.isActive}}
+            <span class="rsr-chip rsr-chip-quiet">{{localize this.lifecycleLabel}}</span>
+            {{/unless}}
 
-        {{#if this.isExample}}
-        <span class="rsr-chip rsr-chip-example">{{localize "RSR.help.exampleTag"}}</span>
-        {{/if}}
+            {{!-- Which clock this Plot keeps, when it is not the world's. GM-only:
+                  the context simply has no such field for anyone else. --}}
+            {{#if this.onOwnClock}}
+            <span class="rsr-chip rsr-chip-clock" data-tooltip="{{localize 'RSR.turn.isolatedHint'}}">
+                <i class="fa-solid fa-hourglass-half" inert></i>
+                {{this.plotTurnLabel}} {{this.plotTurn}}
+            </span>
+            {{/if}}
+            {{#if this.offTheClock}}
+            <span class="rsr-chip rsr-chip-quiet" data-tooltip="{{localize 'RSR.turn.noneHint'}}">
+                {{localize "RSR.turn.offLabel"}}
+            </span>
+            {{/if}}
+
+            {{#if this.isExample}}
+            <span class="rsr-chip rsr-chip-example">{{localize "RSR.help.exampleTag"}}</span>
+            {{/if}}
+        </div>
     </header>
 
     {{#if this.showBar}}

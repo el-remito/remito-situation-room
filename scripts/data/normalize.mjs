@@ -14,7 +14,7 @@
 import {
     CONSTANT_DEFAULTS, ENTITY_DEFAULTS, LIFECYCLE, LOG_KIND, MODE, NODE_STATUS,
     VISIBILITY, VISIBILITY_KINDS, POLARITY, ASSET_MODIFIER, ASSET_CONDITION,
-    CONDITION_EFFECT, DEFAULT_CONDITIONS
+    CONDITION_EFFECT, DEFAULT_CONDITIONS, TURN_BEHAVIOUR
 } from '../constants.mjs';
 
 // ── primitives ───────────────────────────────────────────────────────────────
@@ -132,6 +132,16 @@ export function normalizePlot(raw = {}) {
         phases: arr(raw.phases).filter(isObj).map(normalizePhase)
             .sort((a, b) => a.threshold - b.threshold),
         defaultMode: oneOf(raw.defaultMode, MODE, MODE.FIAT),
+        // Which clock this Plot keeps, and where it has got to on it. Every Plot
+        // carries a count, not just an isolated one: a Plot that has been riding
+        // the world's cycle and is then set loose has to be somewhere sensible
+        // when it lands, and "the cycle it was last on" is the only such answer.
+        turnBehaviour: oneOf(raw.turnBehaviour, TURN_BEHAVIOUR, TURN_BEHAVIOUR.DEFAULT),
+        turnCount: int(raw.turnCount, 0),
+        // What this Plot calls its own clock, when it keeps one. Trimmed here so
+        // that a label of spaces is no label at all and falls back to the
+        // built-in word, rather than drawing a chip with a gap in it.
+        turnLabel: str(raw.turnLabel).trim(),
         forceIds: idList(raw.forceIds),
         forceGroups: forceGroups(raw.forceGroups, idList(raw.forceIds)),
         playerAssignable: bool(raw.playerAssignable),
@@ -312,6 +322,7 @@ export function normalizeConstants(raw = {}) {
         clockSegments: atLeast(raw?.clockSegments, 1, D.clockSegments),
         stateMin: int(raw?.stateMin, D.stateMin),
         stateMax: int(raw?.stateMax, D.stateMax),
+        turnLabel: str(raw?.turnLabel, D.turnLabel).trim(),
         defaultVisibility: defaultVisibility(raw?.defaultVisibility)
     };
 }

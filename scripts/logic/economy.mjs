@@ -18,9 +18,13 @@
  * standing on, so a side that is quietly gathering strength off-screen keeps
  * gathering it. Pausing is the deliberate act: a Force that has been broken,
  * bought off, or written out stops earning the moment the GM says so.
+ *
+ * A Plot may keep its own clock or none at all (TURN_BEHAVIOUR), which changes
+ * two things and deliberately not a third: its own count, and the condition
+ * timers of the Assets committed to it. Not income. See `assetsOnTheClock`.
  */
 
-import { LIFECYCLE } from '../constants.mjs';
+import { LIFECYCLE, TURN_BEHAVIOUR } from '../constants.mjs';
 import { isInPlay, isFinal } from './condition.mjs';
 
 /** Resources never go negative. A Force at zero is broke, not in debt. */
@@ -134,23 +138,94 @@ export function incomeRoster(forces) {
 /** Just the rows that move. The roster above is what gets shown. */
 export const incomePayments = (forces) => incomeRoster(forces).filter((r) => r.paid !== 0);
 
+// ── which clock a Plot keeps ─────────────────────────────────────────────────
+// A Plot either rides the world's cycle, keeps its own, or keeps none. See
+// TURN_BEHAVIOUR for why. These three are the only readers of the field, so a
+// row written before it existed reads as DEFAULT and behaves as it always did.
+
+export const behaviourOf = (plot) => plot?.turnBehaviour ?? TURN_BEHAVIOUR.DEFAULT;
+export const followsTurn = (plot) => behaviourOf(plot) === TURN_BEHAVIOUR.DEFAULT;
+export const hasOwnTurn = (plot) => behaviourOf(plot) === TURN_BEHAVIOUR.ISOLATED;
+
+/**
+ * The GM's own word for a clock, or '' when they have not chosen one.
+ *
+ * Pure, and deliberately incomplete: the FALLBACK is a localized string and this
+ * layer has no i18n, so what comes back is the custom word or nothing, and the
+ * caller supplies the built-in. That keeps the one Foundry-shaped part of this
+ * at the two call sites that already localize, instead of dragging game.i18n
+ * into a module that node imports.
+ *
+ * Reads the same field off a Plot and off the campaign constants, because a
+ * clock is a clock: the world keeps one and so does an isolated Plot.
+ */
+export const clockName = (row) =>
+    (typeof row?.turnLabel === 'string' ? row.turnLabel.trim() : '');
+
+/**
+ * The Plots the world's cycle will not move, and why.
+ *
+ * Named for the dialog that shows it. A GM pressing the world's cycle needs to
+ * be told which Plots are sitting it out at the moment they press, not to
+ * remember which ones they set loose in October.
+ */
+export const sittingOut = (plots) => (plots ?? [])
+    .filter((p) => !followsTurn(p))
+    .map((p) => ({ plotId: p.id, name: p.name, behaviour: behaviourOf(p) }));
+
+/**
+ * The Assets a given cycle moves the condition timers of.
+ *
+ * **Commitment is the join.** An Asset committed to a Plot keeps that Plot's
+ * clock; an Asset committed to nothing keeps the world's, because it is sitting
+ * in its owner's hand rather than in any one situation. Pass a plotId for a
+ * Plot's own cycle, or null for the world's.
+ *
+ * Worth knowing while reading this: with the six conditions the module ships,
+ * every timer runs on an Asset that is OUT of play — and setting an out-of-play
+ * condition releases the Asset in the same write. So out of the box a running
+ * timer belongs to no Plot and the world's cycle moves all of them. The scope
+ * starts to bite the moment a GM invents an in-play condition with a timer
+ * (*Rallying*, two Cycles, back to Ready), which the conditions table exists to
+ * let them do.
+ */
+export function assetsOnTheClock(assets, plots, plotId = null) {
+    if (plotId) return (assets ?? []).filter((a) => a.plotId === plotId);
+    const off = new Set((plots ?? []).filter((p) => !followsTurn(p)).map((p) => p.id));
+    return (assets ?? []).filter((a) => !a.plotId || !off.has(a.plotId));
+}
+
 /**
  * Everything one cycle advance changes, in one value the caller applies atomically.
  *
- * @returns {{forces: object[], turn: {count: number}, payments: object[], roster: object[]}}
+ * The Plots move too: every Plot on the world's clock takes the world's count, so
+ * a Plot set loose later starts from the cycle it was last on rather than from
+ * zero. The ones sitting out keep whatever count they had.
+ *
+ * @returns {{forces: object[], plots: object[], turn: {count: number},
+ *            payments: object[], roster: object[], skipped: object[]}}
  */
-export function advanceTurn({ forces, turn }) {
+export function advanceTurn({ forces, turn, plots = [] }) {
     const roster = incomeRoster(forces);
     const byId = new Map(roster.filter((r) => r.paid !== 0).map((r) => [r.forceId, r]));
+    const count = Math.max(0, int(turn?.count) + 1);
     return {
         forces: (forces ?? []).map((f) => (byId.has(f.id)
             ? { ...f, resources: byId.get(f.id).to }
             : f)),
-        turn: { count: Math.max(0, int(turn?.count) + 1) },
+        plots: (plots ?? []).map((p) => (followsTurn(p) ? { ...p, turnCount: count } : p)),
+        turn: { count },
         payments: [...byId.values()],
-        roster
+        roster,
+        skipped: sittingOut(plots)
     };
 }
+
+/**
+ * One Plot's own cycle. No purse moves: income is the world's business and stays
+ * there, so this returns the Plot and nothing else.
+ */
+export const advancePlotTurn = (plot) => ({ ...plot, turnCount: Math.max(0, int(plot?.turnCount) + 1) });
 
 // ── commitment ───────────────────────────────────────────────────────────────
 

@@ -25,7 +25,9 @@ import {
 } from '../data/state.mjs';
 import { resolvePhase, resolvePhaseForGM, statePercent } from '../logic/state-track.mjs';
 import { resolveMode, effectiveThreshold, isFull } from '../logic/progress.mjs';
-import { engagedForceIds, uncommittedAssets } from '../logic/economy.mjs';
+import {
+    engagedForceIds, uncommittedAssets, followsTurn, hasOwnTurn, clockName
+} from '../logic/economy.mjs';
 import * as Cond from '../logic/condition.mjs';
 import {
     visibleRows, projectIdentity, projectProgress, projectClock, projectForceChip,
@@ -124,6 +126,21 @@ const MASK_KEYS = {
 const maskLabel = (kind) =>
     game.i18n.localize(MASK_KEYS[kind] ?? 'RSR.visibility.maskedName');
 
+/**
+ * What each editor is editing, for the toast that says a save landed.
+ *
+ * "Saved." on its own is the least useful thing a confirmation can say. A GM who
+ * has been in and out of four editors wants to know WHICH row they just wrote,
+ * and a toast that names it is also the one that catches the mistake — pressing
+ * Save on the wrong screen looks identical to pressing it on the right one.
+ */
+const KIND_NOUNS = {
+    [EDIT_KIND.PLOT]: 'RSR.plot.singular',
+    [EDIT_KIND.NODE]: 'RSR.thread.singular',
+    [EDIT_KIND.FORCE]: 'RSR.force.singular',
+    [EDIT_KIND.ASSET]: 'RSR.asset.singular'
+};
+
 export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
     /**
@@ -174,6 +191,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             removeAsset: SituationRoom._onRemoveAsset,
             releaseAsset: SituationRoom._onReleaseAsset,
             advanceTurn: SituationRoom._onAdvanceTurn,
+            advancePlotTurn: SituationRoom._onAdvancePlotTurn,
             toggleForceActive: SituationRoom._onToggleForceActive,
             saveEdit: SituationRoom._onSaveEdit,
             revertEdit: SituationRoom._onRevertEdit,
@@ -387,6 +405,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 isPreview: this.#asPlayer,
                 isEditing: true,
                 turn: board.turn.count,
+                turnLabel: this.#worldClock(board),
                 editor: editorContext(this.#edit.kind, this.#edit, board)
             };
         }
@@ -407,6 +426,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             isCockpit: this.#view === VIEW.COCKPIT,
             isHelp: this.#view === VIEW.HELP,
             turn: board.turn.count,
+            turnLabel: this.#worldClock(board),
             hasExample: hasExample(board),
             helpSections: HELP_SECTIONS
                 .filter((section) => isGM || !section.gmOnly)
@@ -433,6 +453,23 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     // ── context builders ─────────────────────────────────────────────────────
+
+    /**
+     * What this world calls its clock, and what one Plot calls its own.
+     *
+     * `clockName` is pure and returns the GM's word or nothing; the built-in
+     * word is a localized string, so the two are joined here. A board can now
+     * hold more than one clock, and a chip counting 3 beside a badge counting 12
+     * invites exactly the wrong conclusion — that one of them is out of date —
+     * so each of them says which clock it is counting.
+     */
+    #worldClock(board) {
+        return clockName(board.constants) || game.i18n.localize('RSR.turn.globalLabel');
+    }
+
+    #plotClock(plot) {
+        return clockName(plot) || game.i18n.localize('RSR.turn.plotLabel');
+    }
 
     #buildPlotList(board, isGM) {
         return visibleRows(visiblePlots(board), isGM).map((plot) => ({
@@ -461,6 +498,18 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             lifecycle: plot.lifecycle,
             isActive: plot.lifecycle === LIFECYCLE.ACTIVE,
             lifecycleLabel: `RSR.plot.lifecycle.${plot.lifecycle}`,
+            // Which clock this Plot keeps, and the button for it. GM only, both
+            // of them: a Plot's cycle count is bookkeeping in the same way the
+            // Cycle badge in the header is, and the table is not being asked to
+            // track two calendars. `isGM` here is the projected viewer, so the
+            // preview loses these along with everything else the GM has.
+            ...(isGM ? {
+                turnBehaviour: plot.turnBehaviour,
+                onOwnClock: hasOwnTurn(plot),
+                offTheClock: !followsTurn(plot) && !hasOwnTurn(plot),
+                plotTurn: plot.turnCount,
+                plotTurnLabel: this.#plotClock(plot)
+            } : {}),
             // A masked plot surrenders its Phase along with its name.
             phaseLabel: identity.masked ? null : (phase?.label ?? null),
             // What this Phase looks like from the table. Authored per Phase and
@@ -566,6 +615,11 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         const nodeById = new Map(board.nodes.map((n) => [n.id, n]));
         const assetById = new Map(board.assets.map((a) => [a.id, a]));
 
+        // Every entry is stamped with the world's count, whatever moved: `record`
+        // reads one clock and there is only one it could read. So the stamp says
+        // which clock that is, now that the board holds more than one of them.
+        const stamp = this.#worldClock(board);
+
         return readLog(board, LOG_ROWS)
             .map((e) => {
                 const plot = e.plotId ? plotById(board, e.plotId) : null;
@@ -582,7 +636,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                     id: e.id,
                     kind: e.kind,
                     icon: LOG_ICONS[e.kind] ?? LOG_ICONS[LOG_KIND.PUSH],
-                    when: game.i18n.format('RSR.log.when', { turn: e.turn }),
+                    // Dropped on the one line that IS the world's clock moving,
+                    // where a stamp would repeat the sentence word for word. A
+                    // Plot's own cycle keeps it: "Global Cycle 2" beside "Days on
+                    // the Road 4 began" is two different facts.
+                    when: e.kind === LOG_KIND.CYCLE && !e.plotId
+                        ? ''
+                        : game.i18n.format('RSR.log.when', { label: stamp, turn: e.turn }),
                     note: e.note,
                     // What the table reads of this line, told to the GM alone.
                     // Absent when it is the same as what the GM reads.
@@ -686,7 +746,28 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                     )
                 });
             case LOG_KIND.CYCLE:
-                return F('RSR.log.cycle', { turn: e.turn });
+                // A cycle that belongs to one Plot names it and counts on that
+                // Plot's own clock, which is why the number comes off `amount`:
+                // `turn` is stamped with the world's count by `record`, and the
+                // world's count is exactly what did not move. Naming the Plot
+                // puts the line through the same rule as every other — a Plot
+                // the reader may not know exists takes its name back out, and a
+                // line left with nothing to say is dropped.
+                //
+                // The table gets the same line without the count. A Plot's own
+                // cycle number is bookkeeping in exactly the way the badge in
+                // the header is — nobody at the table is being asked to keep two
+                // calendars — but that time passed there is fiction, and theirs.
+                if (!where) {
+                    return F('RSR.log.cycle', {
+                        label: this.#worldClock(board), turn: e.turn
+                    });
+                }
+                return isGM
+                    ? F('RSR.log.cyclePlot', {
+                        label: this.#plotClock(plot), plot: where, turn: e.amount
+                    })
+                    : F('RSR.log.cyclePlotQuiet', { plot: where });
             default:
                 return '';
         }
@@ -1351,7 +1432,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
         edit.id = id;
         edit.snapshot = foundry.utils.deepClone(edit.draft);
-        ui.notifications?.info(game.i18n.localize('RSR.editor.saved'));
+        ui.notifications?.info(game.i18n.format('RSR.editor.saved', {
+            kind: game.i18n.localize(KIND_NOUNS[edit.kind]),
+            name: edit.draft.name.trim()
+        }));
         this.render();
     }
 
@@ -1382,7 +1466,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         const { setConditions } = await import('../data/state.mjs');
         await setConditions(rows, moves);
         edit.snapshot = foundry.utils.deepClone(edit.draft);
-        ui.notifications?.info(game.i18n.localize('RSR.editor.saved'));
+        ui.notifications?.info(game.i18n.localize('RSR.asset.conditionsSaved'));
         this.render();
     }
 
@@ -1511,6 +1595,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             clockSegments: int('clockSegments', CONSTANT_DEFAULTS.clockSegments),
             stateMin: int('stateMin', CONSTANT_DEFAULTS.stateMin),
             stateMax: int('stateMax', CONSTANT_DEFAULTS.stateMax),
+            // Left empty on purpose when the GM clears it: '' means "use the
+            // built-in word", and normalize trims, so a field of spaces is the
+            // same as an empty one.
+            turnLabel: form.elements.turnLabel?.value ?? CONSTANT_DEFAULTS.turnLabel,
             defaultVisibility
         });
 
@@ -1526,6 +1614,17 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     static async _onAdvanceTurn() {
         const { confirmAdvanceTurn } = await import('./editors.mjs');
         await confirmAdvanceTurn();
+    }
+
+    /**
+     * One Plot's own cycle. The id comes off the button rather than from
+     * `#plotId` because the button is drawn in the open Plot's header and the
+     * open Plot is what it names — reading it back from instance state would be
+     * the same answer arrived at less directly.
+     */
+    static async _onAdvancePlotTurn(event, target) {
+        const { confirmAdvancePlotTurn } = await import('./editors.mjs');
+        await confirmAdvancePlotTurn(target.dataset.plotId);
     }
 
     static async _onGenerateExample() {

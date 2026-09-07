@@ -280,11 +280,22 @@
     border-radius: 6px;
 }
 
-.rsr-plot-head { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+/* The name owns one line and the chips own the next. They used to share a row,
+   where every chip took width off the title: a card carrying three of them
+   wrapped its name onto a second line and stood taller than the card beside it,
+   so two cards in the same row disagreed about where their bars were. */
+.rsr-plot-head { display: flex; flex-direction: column; align-items: stretch; gap: 0.35rem; }
+
+.rsr-plot-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+
+/* A Plot with nothing to say about itself does not get an empty row of gap.
+   NOT `:empty`, which counts the whitespace a template leaves between its own
+   tags and so never matches here: the test has to be "holds no element". */
+.rsr-plot-tags:not(:has(> *)) { display: none; }
 
 .rsr-plot-name {
-    flex: 1;
-    width: auto;
+    flex: none;
+    width: 100%;
     height: auto;
     min-height: 0;
     padding: 0;
@@ -1012,8 +1023,20 @@
     color: var(--rsr-ink-muted);
 }
 
-/* The bill grew a fourth column for the reason. */
-.rsr-bill li { grid-template-columns: 1fr 3rem 5rem minmax(0, 8rem); }
+/* The bill grew a fourth column for the reason.
+
+   ONE template for every bill in the dialog, and the sections that do not fill
+   all four columns place themselves into it rather than declaring their own.
+   Three lists each sizing their own columns put the reason in three different
+   places down one dialog, which is what the M5.5 round 4 screenshot showed: the
+   Plots sitting out started their reason four rem left of the Forces above them.
+   Alignment by arithmetic holds only until a column changes width, so it is
+   structural here instead. */
+.rsr-bill li { grid-template-columns: minmax(0, 1fr) 4rem 6rem minmax(0, 10rem); }
+
+/* The reason is always the LAST column, whether its row filled the middle ones
+   or not — auto-placement would otherwise walk a two-cell row into column 2. */
+.rsr-bill-why { grid-column: 4; }
 
 /* ── the Asset tray, above the Threads it drops onto ── */
 
@@ -1084,15 +1107,14 @@
     border: none;
 }
 
-.rsr-settings-note,
-.rsr-settings .hint {
+.rsr-settings-note {
     margin: 0 0 0.5rem;
     font-size: var(--font-size-11, 11px);
     color: var(--rsr-ink-muted);
 }
 
-.rsr-settings .hint { margin: 0.15rem 0 0.6rem; }
-
+/* Label, controls, hint. The third column is `auto` and every row now fills it
+   with the same badge, so the fields line up down the tab whatever is in them. */
 .rsr-settings-row {
     display: grid;
     grid-template-columns: minmax(10rem, 16rem) 1fr auto;
@@ -1103,8 +1125,18 @@
 
 .rsr-settings-row label { font-size: var(--font-size-12, 12px); }
 
-.rsr-settings-row input,
-.rsr-settings-row select { min-width: 0; }
+/* One cell holding whatever the field takes — a number, two of them, or an input
+   and its live preview — so the badge stays in the third column and does not have
+   to know how many controls the row has. */
+.rsr-settings-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.rsr-settings-controls > input,
+.rsr-settings-controls > select { flex: 1 1 auto; min-width: 0; }
 
 /* A live look at whatever Font Awesome class was typed, so the GM can tell a
    working icon from a typo without saving first. */
@@ -1282,11 +1314,18 @@
     flex-direction: column;
     gap: 0.5rem;
     margin: 0;
-    padding: 0;
     list-style: none;
     /* Long enough to be a record, short enough that the Plots stay the subject. */
     max-height: 34rem;
     overflow-y: auto;
+
+    /* The scrollbar gets a lane of its own, and it is reserved whether or not
+       there is anything to scroll. Without the gutter the track lands flush
+       against the text and cuts across the rule under every entry; without
+       `stable` the whole column shifts sideways the moment the chronicle grows
+       past its own height, which is a jump the reader did not ask for. */
+    scrollbar-gutter: stable;
+    padding: 0 0.4rem 0 0;
 }
 
 /* Icon in the gutter, cycle above, sentence beneath: the same shape whether the
@@ -1992,3 +2031,115 @@
     min-height: 3.4rem;
     resize: vertical;
 }
+
+/* ── M5.5 — which clock a Plot keeps ─────────────────────────────────────── */
+
+/* A Plot on its own clock says so where its name is, with the count it has
+   reached — the one number that tells a GM at a glance how far this Plot has
+   drifted from the world's. Gold rather than violet: nothing is being withheld
+   here, and violet in this module means withheld. Both of these are drawn from
+   GM-only context fields, so a player's board has nothing to hide. */
+.rsr-chip-clock {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    line-height: 1.5;
+    color: var(--rsr-gold);
+    border-color: var(--rsr-gold-soft);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Font Awesome ships its glyphs with a line-height of their own, so the icon's
+   box was a different height from the text's and centring the two centred two
+   boxes that did not agree — the hourglass rode above the word beside it. Given
+   the same line box, the flex centring lines them up. */
+.rsr-chip-clock > i {
+    line-height: inherit;
+    font-size: 0.92em;
+}
+
+/* The chip and its button travel together, and sit at the far end of the header
+   rather than in the run of chips beside the title: it is a control, and a
+   control in a row of labels reads as a label until it is pressed by accident. */
+.rsr-plot-clock {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: auto;
+}
+
+/* The two other sections of the cycle bill. A timer says where its Asset is
+   standing, because an Asset name on its own is not findable on a board with two
+   Plots and four Forces — which is the board this feature exists for — and it
+   takes the two middle columns the income rows use for their numbers. The Plots
+   sitting out are a name and a reason and take neither. Both inherit the shared
+   template above, so the reason lines up down the whole dialog. */
+.rsr-bill-where { grid-column: 2 / 4; }
+
+/* Two facts stacked in one cell rather than two columns, because the second is
+   absent on an uncommitted Asset and an empty column reads as a missing value. */
+.rsr-bill-where {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-bill-owner { color: var(--rsr-ink); }
+.rsr-bill-place { font-style: italic; }
+
+/* A bill that answers three questions needs to say which one it is answering. */
+.rsr-bill-head {
+    margin: 0.7rem 0 0;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-12, 12px);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--rsr-ink-muted);
+}
+
+/* ── M5.5 round 2 — a hint is documentation, and gets its shape ──────────── */
+
+/* The ⓘ badges carry paragraphs, lists and bold nouns now, because a hint that
+   answers three questions in one block is a hint nobody finishes reading.
+   TooltipManager takes `data-tooltip` through cleanHTML and assigns it as
+   innerHTML, so the markup arrives intact; what it lacked was any rule to lay it
+   out, and a tooltip is centred by default.
+
+   The tooltip element is a child of <body>, OUTSIDE the .rsr root — none of this
+   module's tokens resolve here, so every value below is literal or a variable
+   core defines globally. Both selectors are needed: the same element is
+   `#tooltip` while it follows the cursor and `.locked-tooltip` when it is
+   pinned. */
+#tooltip.rsr-tip,
+.locked-tooltip.rsr-tip {
+    max-width: 30rem;
+    padding: 0.65rem 0.85rem;
+    text-align: left;
+    line-height: 1.45;
+}
+
+#tooltip.rsr-tip p,
+.locked-tooltip.rsr-tip p { margin: 0 0 0.6em; }
+
+#tooltip.rsr-tip p:last-child,
+.locked-tooltip.rsr-tip p:last-child { margin-bottom: 0; }
+
+#tooltip.rsr-tip ul,
+.locked-tooltip.rsr-tip ul {
+    margin: 0 0 0.6em;
+    padding-left: 1.1rem;
+    list-style: disc;
+}
+
+#tooltip.rsr-tip ul:last-child,
+.locked-tooltip.rsr-tip ul:last-child { margin-bottom: 0; }
+
+#tooltip.rsr-tip li,
+.locked-tooltip.rsr-tip li { margin: 0 0 0.25em; }
+
+/* The bold nouns are the scan path through a hint, so they are given the one
+   colour this module uses for ordinary emphasis. */
+#tooltip.rsr-tip strong,
+.locked-tooltip.rsr-tip strong { color: var(--golden, #f3c267); }

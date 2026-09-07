@@ -24,7 +24,7 @@
 
 import {
     ASSET_CONDITION, ASSET_MODIFIER, CONDITION_EFFECT, DEFAULT_CONDITIONS, EDIT_KIND,
-    LIFECYCLE, MODE, NODE_STATUS, POLARITY, VISIBILITY
+    LIFECYCLE, MODE, NODE_STATUS, POLARITY, TURN_BEHAVIOUR, VISIBILITY
 } from '../constants.mjs';
 
 // ── primitives ───────────────────────────────────────────────────────────────
@@ -58,6 +58,8 @@ export const FIELDS = {
         { name: 'stateMin', type: 'int' },
         { name: 'stateMax', type: 'int' },
         { name: 'lifecycle', type: 'text' },
+        { name: 'turnBehaviour', type: 'text' },
+        { name: 'turnLabel', type: 'text' },
         { name: 'defaultMode', type: 'text' },
         { name: 'visibility', type: 'text' },
         { name: 'hideValues', type: 'bool' },
@@ -148,6 +150,11 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
             stateMin: int(e.stateMin, K.stateMin ?? 0),
             stateMax: int(e.stateMax, K.stateMax ?? 100),
             lifecycle: str(e.lifecycle) || LIFECYCLE.ACTIVE,
+            // Which clock this Plot keeps. The count itself is not on the form:
+            // it is moved by pressing a cycle, not by typing a number, and a
+            // field the GM can edit is a field that can disagree with the world.
+            turnBehaviour: str(e.turnBehaviour) || TURN_BEHAVIOUR.DEFAULT,
+            turnLabel: str(e.turnLabel),
             defaultMode: str(e.defaultMode) || MODE.FIAT,
             phases: (e.phases ?? []).map(phaseDraft),
             forceIds,
@@ -330,6 +337,8 @@ export function patchFrom(kind, draft) {
             stateMin: draft.stateMin,
             stateMax: draft.stateMax,
             lifecycle: draft.lifecycle,
+            turnBehaviour: draft.turnBehaviour,
+            turnLabel: draft.turnLabel,
             defaultMode: draft.defaultMode,
             // A Phase with no label is a row the GM started and abandoned; it would
             // render as an unnamed chip on the State bar, so it is not saved.

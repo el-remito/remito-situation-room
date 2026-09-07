@@ -25,7 +25,7 @@
 
 import {
     ASSET_MODIFIER, CONDITION_EFFECT, CONSTANT_DEFAULTS, EDIT_KIND, LIFECYCLE, MODE,
-    NODE_STATUS, VISIBILITY
+    NODE_STATUS, TURN_BEHAVIOUR, VISIBILITY
 } from '../constants.mjs';
 import * as Edit from '../logic/editing.mjs';
 import * as Cond from '../logic/condition.mjs';
@@ -284,6 +284,7 @@ function plotContext(edit, board) {
             .sort(byName)
             .map((f) => ({ id: f.id, name: f.name })),
         lifecycles: optionsOf(LIFECYCLE, 'RSR.plot.lifecycle', draft.lifecycle),
+        behaviours: optionsOf(TURN_BEHAVIOUR, 'RSR.plot.turnBehaviour', draft.turnBehaviour),
         modes: optionsOf(MODE, 'RSR.thread.mode', draft.defaultMode)
     });
 }

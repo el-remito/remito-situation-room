@@ -145,5 +145,86 @@ eq('uncommitted assets are the ones still in hand',
 eq('another Force sees its own', E.uncommittedAssets(assets, GUARD).map((a) => a.id), ['a3']);
 eq('an unknown Force holds nothing', E.uncommittedAssets(assets, 'nope'), []);
 
+// ── which clock a Plot keeps ────────────────────────────────────────────────
+// A row written before the field existed reads as DEFAULT and behaves exactly
+// as it always did, which is the property that makes this safe to add to a
+// campaign already in progress.
+const onWorld = plot({ id: 'p-world' });
+const alone = plot({ id: 'p-alone', turnBehaviour: 'isolated' });
+const stopped = plot({ id: 'p-stopped', turnBehaviour: 'none' });
+const legacy = normalizePlot({ id: 'p-old', name: 'Written before this existed' });
+
+eq('an unset behaviour is the world clock', E.followsTurn(legacy), true);
+eq('an isolated Plot does not follow it', E.followsTurn(alone), false);
+eq('a Plot with no clock does not either', E.followsTurn(stopped), false);
+eq('only the isolated one has its own', [E.hasOwnTurn(alone), E.hasOwnTurn(stopped),
+    E.hasOwnTurn(onWorld)], [true, false, false]);
+eq('a garbage behaviour normalizes to the world clock',
+    E.followsTurn(normalizePlot({ id: 'p-junk', turnBehaviour: 'weekly' })), true);
+
+eq('the sitting-out list names both kinds and neither of the others',
+    E.sittingOut([onWorld, alone, stopped]).map((r) => [r.plotId, r.behaviour]),
+    [['p-alone', 'isolated'], ['p-stopped', 'none']]);
+eq('nothing sits out of a board that all follows', E.sittingOut([onWorld, legacy]), []);
+eq('no plots, nobody sitting out', E.sittingOut(undefined), []);
+
+// ── whose timers a cycle moves ──────────────────────────────────────────────
+// Commitment is the join. An Asset in its owner's hand is on the world's clock
+// because it is not in any one situation yet.
+const held = normalizeAsset({ id: 'a-held', forceId: LEGION, name: 'In hand' });
+const atSiege = normalizeAsset({ id: 'a-siege', forceId: LEGION, name: 'At the wall', plotId: 'p-world' });
+const onRoad = normalizeAsset({ id: 'a-road', forceId: GUARD, name: 'On the road', plotId: 'p-alone' });
+const frozen = normalizeAsset({ id: 'a-frozen', forceId: GUARD, name: 'Nowhere', plotId: 'p-stopped' });
+const shelf = [held, atSiege, onRoad, frozen];
+const board = [onWorld, alone, stopped];
+const ids = (rows) => rows.map((a) => a.id);
+
+eq('the world moves what is uncommitted and what is on its own Plots',
+    ids(E.assetsOnTheClock(shelf, board)), ['a-held', 'a-siege']);
+eq('a Plot with its own clock moves only what is committed to it',
+    ids(E.assetsOnTheClock(shelf, board, 'p-alone')), ['a-road']);
+eq('a Plot with no clock moves nothing when nothing presses it',
+    ids(E.assetsOnTheClock(shelf, board, 'p-stopped')), ['a-frozen']);
+eq('an isolated Plot does not reach into the hand',
+    E.assetsOnTheClock(shelf, board, 'p-alone').includes(held), false);
+eq('with no Plots at all, everything is on the world clock',
+    ids(E.assetsOnTheClock(shelf, [])), ['a-held', 'a-siege', 'a-road', 'a-frozen']);
+
+// ── what a cycle does to the Plots themselves ───────────────────────────────
+const moved = E.advanceTurn({ forces: [force(LEGION)], turn: { count: 10 }, plots: board });
+
+eq('the Plot on the world clock takes the world count',
+    moved.plots.find((p) => p.id === 'p-world').turnCount, 11);
+eq('the isolated one is left where it was',
+    moved.plots.find((p) => p.id === 'p-alone').turnCount, alone.turnCount);
+eq('and is handed back by reference, so nothing is written for it',
+    moved.plots.find((p) => p.id === 'p-alone') === alone, true);
+eq('the cycle reports what it did not move',
+    moved.skipped.map((r) => r.plotId), ['p-alone', 'p-stopped']);
+eq('a cycle with no plots at all still advances',
+    E.advanceTurn({ forces: [], turn: { count: 2 } }).turn.count, 3);
+
+eq('a Plot moves its own count by one', E.advancePlotTurn({ turnCount: 3 }).turnCount, 4);
+eq('and nothing else about it', Object.keys(E.advancePlotTurn(alone)).sort(),
+    Object.keys(alone).sort());
+eq('a Plot with no count starts at one', E.advancePlotTurn({}).turnCount, 1);
+eq('a nonsense count is not inherited', E.advancePlotTurn({ turnCount: 'soon' }).turnCount, 1);
+
+// ── what a clock is called ──────────────────────────────────────────────────
+// Pure and deliberately half an answer: the built-in word is a localized string,
+// so this returns the GM's word or nothing and the caller supplies the rest.
+// Everything below is about making sure "nothing" is the answer whenever there
+// is no real word, since '' is what the two callers test for.
+eq('a clock with no name has none', E.clockName({}), '');
+eq('a named clock keeps its name', E.clockName({ turnLabel: 'Moons' }), 'Moons');
+eq('a name is trimmed', E.clockName({ turnLabel: '  The Ride  ' }), 'The Ride');
+eq('whitespace is not a name', E.clockName({ turnLabel: '   ' }), '');
+eq('a non-string is not a name', E.clockName({ turnLabel: 7 }), '');
+eq('nothing at all is not a name', E.clockName(null), '');
+eq('a row written before the field existed has no name',
+    E.clockName(plot({ id: 'p-old' })), '');
+eq('the world constants are read the same way',
+    E.clockName({ turnLabel: 'Global Cycle' }), 'Global Cycle');
+
 console.log(`\n${fail === 0 ? '  all passed' : `  ${fail} FAILED`}\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -13,6 +13,7 @@ before its milestone has passed.
 | M3 | passed | `157d998` |
 | M4 | passed | `0d9f955` |
 | M5 | passed | `5ab911d` |
+| M5.5 | in progress | — |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)
@@ -183,6 +184,54 @@ written into the code — proof that it holds — plus whatever the sweep turns 
 - [x] The bar SHAPE goes with the chip: no pips, no contender column under a mask
 - [x] The fixture carries a masked contest, so the collapse is one click from Generate
 - [ ] Verified from a real player login
+
+## M5.5 — Cycle behaviour
+
+Unplanned, from verification: a GM had no way to take one Plot off the world's
+clock. Numbered between M5 and M6 because it is neither of them.
+
+- [x] `TURN_BEHAVIOUR` — Default / Isolated / None, on the Plot
+- [x] Every Plot carries its own count, seeded from the world's when it is created
+- [x] A cycle moves the count and the timers of the Assets committed there — never income
+- [x] `assetsOnTheClock` — commitment is the join; an uncommitted Asset is on the world's clock
+- [x] `plot.turn`, refused unless the Plot is actually isolated
+- [x] The world's Cycle skips the Plots sitting out, and says which and why before it runs
+- [x] The isolated dialog names its timers and says out loud that no purse moves
+- [x] A Plot's own cycle writes its own chronicle line; the table reads it without the count
+- [x] GM-only chip on the card and the header; the button only where it can be pressed
+- [x] `tools/check-economy.mjs` — scope, both advances, a row written before the field existed
+- [x] *The Long Road South* in the fixture, three cycles behind the world
+- [x] Round 2 — from verification:
+  - [x] The card header stops competing for width: name on one line, chips on the next
+  - [x] The hourglass sits on the line beside the count it belongs to
+  - [x] Two clocks, two names: **Global Cycle** and **Plot Cycle**, each renameable
+  - [x] `clockName` — pure; the built-in word is joined on at the two sites that localize
+  - [x] The world's timer bill names where each Asset is standing
+  - [x] Every — hint is markup now, laid out by `data-tooltip-class="rsr-tip"`
+  - [x] Two hints rewritten outright: they described the widgets M4 round 4 replaced
+  - [x] `field()` stopped escaping the badge in its own label
+  - [x] The save notice names the kind and the row
+  - [x] *has no Cycle configured*, in the world's bill
+- [x] Round 3 — from verification:
+  - [x] The chronicle stamps each line with the Global Cycle, by the GM's name for it
+  - [x] The line that opens a cycle carries no stamp, being the stamp
+  - [x] The timer bill names whose Asset it is and what it is committed to
+  - [x] *In hand* is gone: an uncommitted Asset is named by its owner
+  - [x] A Plot's own bill gains the column too, without the Plot it already named
+  - [x] Twelve Settings fields carry a ⓘ; four paragraphs became badges
+  - [x] Four Settings hints written from nothing, four rewritten as documentation
+- [x] Round 4 — from verification:
+  - [x] One grid for all three sections of the cycle bill; the reason has one left edge
+  - [x] A timer's where-cell spans the number columns instead of sizing its own
+  - [x] A cycle that moved says so: a toast naming the clock, the count and what moved
+  - [x] A Plot's own cycle toasts too, naming the Plot and saying no Resources moved
+  - [x] The global cycle button moves to the Situation tab, left of **New Plot**
+  - [x] It is named for the clock it moves: **Next Global Cycle**, or the GM’s own word
+  - [x] The Cockpit keeps the reading and loses the button
+- [x] Round 5 — from verification:
+  - [x] Every Help section starts closed, the first one included
+  - [x] The chronicle's scrollbar gets a reserved lane instead of the text's right edge
+- [x] Verified in a live world
 - [x] Decision: withheld data at rest stays in settings — the JournalEntry
       route was checked against the client and does not withhold anything
 

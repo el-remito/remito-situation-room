@@ -37,25 +37,36 @@ import {
     readBoard, plotById, nodeById, nodesForPlot, deletePlot, deleteNode,
     removeExample, concludeNode, forceById, plotsForForce, assetsForForce,
     deleteForce, upsertAsset, deleteAsset, adjustForceResources, advanceTurn,
-    turnPreview, readConstants, advanceNode, readConditions, setAssetCondition
+    turnPreview, turnTimers, turnSkips, advancePlotTurn, readConstants, advanceNode,
+    readConditions, setAssetCondition
 } from '../data/state.mjs';
 import { getDefaultVisibility } from '../settings.mjs';
 import {
     investmentOf, outcomeFor, stateAfterConclusion, effectiveThreshold, leader,
     resolveMode
 } from '../logic/progress.mjs';
-import { canAfford, pushCost } from '../logic/economy.mjs';
+import { canAfford, pushCost, hasOwnTurn, clockName } from '../logic/economy.mjs';
 import { rowFor, labelOf } from '../logic/condition.mjs';
 
 const { DialogV2 } = foundry.applications.api;
 const esc = (v) => foundry.utils.escapeHTML(String(v ?? ''));
 const L = (key) => game.i18n.localize(key);
 
+/**
+ * A clock by the GM's own name for it, falling back to the built-in word.
+ *
+ * `clockName` is pure and knows nothing about language files, so the join
+ * happens here and in the app's #worldClock, which are the two places that
+ * localize. A board can hold more than one clock now, and every line that
+ * mentions one has to say which.
+ */
+const clockLabel = (row, fallbackKey) => clockName(row) || L(fallbackKey);
+
 // ── markup helpers ───────────────────────────────────────────────────────────
 
 const field = (label, control, hint = '') => `
     <div class="form-group">
-        <label>${esc(label)}</label>
+        <label>${label}</label>
         <div class="form-fields">${control}</div>
         ${hint ? `<p class="hint">${esc(hint)}</p>` : ''}
     </div>`;
@@ -72,6 +83,13 @@ const number = (name, value) => `<input type="number" name="${name}" value="${es
  *
  * data-* is on the global attribute allow-list, so this survives cleanHTML.
  *
+ * The words are MARKUP, not a sentence. TooltipManager takes `data-tooltip`
+ * through cleanHTML and assigns it as innerHTML (tooltip-manager.mjs:264), so a
+ * hint written as paragraphs renders as paragraphs — and `data-tooltip-class`
+ * hands the tooltip element the rule that lays them out. Escaping here is still
+ * required and still correct: the attribute is written into HTML source, and the
+ * parser decodes it back to markup on the way into the dataset.
+ *
  * NOT `inert`, though it looks decorative and every other bare icon here is. An
  * inert node is skipped by hit testing, so `pointerenter` fires on its parent
  * instead — and TooltipManager reads `event.target.dataset` (tooltip-manager.mjs
@@ -80,7 +98,8 @@ const number = (name, value) => `<input type="number" name="${name}" value="${es
  * templates.
  */
 const info = (key) =>
-    `<i class="fa-regular fa-circle-question rsr-info" data-tooltip="${esc(L(key))}"></i>`;
+    `<i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+        data-tooltip="${esc(L(key))}"></i>`;
 
 /**
  * What the table reads of ONE development, offered by every dialog that writes
@@ -619,7 +638,8 @@ export async function promptAdjustResources(forceId) {
             <p>${game.i18n.format('RSR.force.adjustSummary', {
                 name: esc(force.name), resources: force.resources
             })}</p>
-            ${field(`${L('RSR.force.adjustBy')} ${info('RSR.force.adjustHint')}`, number('delta', 0))}`,
+            ${field(`${esc(L('RSR.force.adjustBy'))} ${info('RSR.force.adjustHint')}`,
+                number('delta', 0))}`,
         ok: {
             label: L('RSR.force.adjust'),
             callback: (event, button) => readInt(button.form, 'delta')
@@ -634,12 +654,72 @@ export async function promptAdjustResources(forceId) {
 }
 
 /**
+ * The timers a cycle is about to move, as a list, or '' when none are running.
+ *
+ * `turnTimers` runs the same pure function the cycle itself runs, so this is the
+ * operation rather than a description of it. A row that merely counts down says
+ * so; a row that ARRIVES somewhere names where, because those are the two
+ * different things a GM is looking at and only one of them is a development.
+ */
+function timerBill(rows, board, showPlot = false) {
+    if (!rows.length) return '';
+    const naming = (id) => L(labelOf(rowFor(board.conditions, id)));
+
+    // Whose Asset it is, and what it is standing on. An Asset name alone is not
+    // enough to find on a board with two Plots and four Forces on it: "The River
+    // Runners are on a timer" leaves the GM to go looking for the River Runners.
+    //
+    // The owner is named on every bill, because ownership is the one thing a
+    // committed Asset and an uncommitted one both have. The Plot is named only on
+    // the world's bill — a Plot's own bill has already named it in the sentence
+    // above — and the Thread on both, since a Plot holds several.
+    const owner = (asset) => forceById(board, asset.forceId)?.name ?? '';
+    const placeOf = (asset) => [
+        showPlot && asset.plotId ? plotById(board, asset.plotId)?.name : null,
+        asset.nodeId ? nodeById(board, asset.nodeId)?.name : null
+    ].filter(Boolean).map(esc).join(' &rsaquo; ');
+
+    const list = rows.map(({ asset, change }) => {
+        const arrives = change.condition !== undefined;
+        const place = placeOf(asset);
+        return `
+            <li class="${arrives ? '' : 'is-idle'}">
+                <span class="rsr-bill-name">${esc(asset.name)}</span>
+                <span class="rsr-bill-where">
+                    <span class="rsr-bill-owner">${esc(owner(asset))}</span>
+                    ${place ? `<span class="rsr-bill-place">${place}</span>` : ''}
+                </span>
+                <span class="rsr-bill-why">${esc(arrives
+                    ? game.i18n.format('RSR.turn.timerArrives', {
+                        from: naming(asset.condition), to: naming(change.condition)
+                    })
+                    : game.i18n.format('RSR.turn.timerCounts', {
+                        condition: naming(asset.condition), left: change.conditionCycles
+                    }))}</span>
+            </li>`;
+    }).join('');
+
+    return `<ul class="rsr-bill rsr-bill-timers">${list}</ul>`;
+}
+
+/** A heading for one section of a bill, so the two lists are told apart. */
+const billHead = (key) => `<p class="rsr-bill-head">${esc(L(key))}</p>`;
+
+/**
+ * How many of a bill's timers actually ARRIVE somewhere, which is the same
+ * test `turn.advance` uses to decide which of them is worth a line in the
+ * chronicle. A counter going down is not a development and is not counted.
+ */
+const arrivals = (rows) => rows.filter(({ change }) => change.condition !== undefined).length;
+
+/**
  * Advance Turn, with the bill shown first.
  *
- * The confirmation is not ceremony. Who gets paid depends on Plot lifecycle, which
- * is exactly the state a GM loses track of between sessions — seeing "the Guard is
- * not on this list" before pressing the button is how a Plot left Paused in
- * October gets noticed in November.
+ * The confirmation is not ceremony. What a cycle does depends on which Forces are
+ * paused and which Plots keep their own clock, and both are exactly the state a
+ * GM loses track of between sessions — seeing "the Guard is not on this list"
+ * before pressing the button is how a Force paused in October gets noticed in
+ * November, and the same goes for a Plot that has been sitting out since.
  */
 export async function confirmAdvanceTurn() {
     const board = readBoard();
@@ -665,17 +745,98 @@ export async function confirmAdvanceTurn() {
                 <span class="rsr-bill-why">${esc(reasonFor(row))}</span>
             </li>`).join('')}</ul>`;
 
+    // The Plots this press will not reach, named at the moment of pressing.
+    // Without this the button silently does less than it says, and the GM finds
+    // out weeks later by noticing a Plot that never moved.
+    const skips = turnSkips(board);
+    const sittingOut = skips.length === 0 ? '' : `
+        ${billHead('RSR.turn.sittingOut')}
+        <ul class="rsr-bill rsr-bill-plots">${skips.map((row) => `
+            <li class="is-idle">
+                <span class="rsr-bill-name">${esc(row.name)}</span>
+                <span class="rsr-bill-why">${esc(L(`RSR.turn.reason.${row.behaviour}`))}</span>
+            </li>`).join('')}</ul>`;
+
+    const timerRows = turnTimers(board);
+    const timers = timerBill(timerRows, board, true);
+
     const ok = await DialogV2.confirm({
-        window: { title: L('RSR.turn.advance') },
+        window: { title: game.i18n.format('RSR.turn.advanceNamed', {
+            label: clockLabel(board.constants, 'RSR.turn.globalLabel')
+        }) },
         classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
-        position: { width: 480 },
+        position: { width: 560 },
         content: `<p>${game.i18n.format('RSR.turn.advanceSummary', {
+            label: esc(clockLabel(board.constants, 'RSR.turn.globalLabel')),
             turn: board.turn.count, next: board.turn.count + 1
-        })}</p>${bill}`,
+        })}</p>
+        ${roster.length ? billHead('RSR.turn.incomeTitle') : ''}${bill}
+        ${timers ? billHead('RSR.turn.timersTitle') + timers : ''}
+        ${sittingOut}`,
         rejectClose: false
     });
     if (!ok) return false;
     await advanceTurn();
+
+    // A cycle is the one press on this board whose effects are all somewhere
+    // else: purses in the Cockpit, conditions on Assets that may not be on
+    // screen, a counter in the header. Nothing under the cursor changes, so
+    // without this the GM has pressed a button and watched nothing happen.
+    ui.notifications?.info(game.i18n.format('RSR.turn.advancedNotice', {
+        label: clockLabel(board.constants, 'RSR.turn.globalLabel'),
+        turn: board.turn.count + 1,
+        paid: roster.filter((row) => row.willBePaid).length,
+        arrived: arrivals(timerRows)
+    }));
+    return true;
+}
+
+/**
+ * One Plot's own cycle, with the same bill and one thing said out loud.
+ *
+ * The reminder is the point of the dialog. "Advance this Plot" reads like a
+ * smaller version of the button beside the Cockpit, and it is not: the world's
+ * count does not move and nobody is paid, because income belongs to the Force
+ * and the Force is standing on other Plots too. A GM who assumed otherwise would
+ * be quietly underpaying their own campaign, so the dialog says what it does
+ * and what it does not before it does anything.
+ */
+export async function confirmAdvancePlotTurn(plotId) {
+    const board = readBoard();
+    const plot = plotById(board, plotId);
+    if (!plot || !hasOwnTurn(plot)) return false;
+
+    const rows = turnTimers(board, plotId);
+    const timers = timerBill(rows, board);   // no Plot column: this dialog names one Plot
+
+    const ok = await DialogV2.confirm({
+        window: { title: L('RSR.turn.plotAdvance') },
+        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
+        position: { width: 520 },
+        content: `<p>${game.i18n.format('RSR.turn.plotSummary', {
+            plot: esc(plot.name), label: esc(clockLabel(plot, 'RSR.turn.plotLabel')),
+            turn: plot.turnCount, next: plot.turnCount + 1
+        })}</p>
+        ${billHead('RSR.turn.timersTitle')}
+        ${timers || `<p class="hint">${esc(L('RSR.turn.noTimers'))}</p>`}
+        <p class="hint">${esc(game.i18n.format('RSR.turn.plotNoIncome', {
+            label: clockLabel(board.constants, 'RSR.turn.globalLabel'),
+            turn: board.turn.count
+        }))}</p>`,
+        rejectClose: false
+    });
+    if (!ok) return false;
+    await advancePlotTurn(plotId);
+
+    // Named, because a board can hold several of these and the button that
+    // moved one of them sits inside the Plot it belongs to. The count is the
+    // Plot's own; no Force is mentioned because none was paid.
+    ui.notifications?.info(game.i18n.format('RSR.turn.plotAdvancedNotice', {
+        plot: plot.name,
+        label: clockLabel(plot, 'RSR.turn.plotLabel'),
+        turn: plot.turnCount + 1,
+        arrived: arrivals(rows)
+    }));
     return true;
 }
 

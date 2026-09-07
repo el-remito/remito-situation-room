@@ -64,7 +64,11 @@ export const assetsForForce = (board, forceId) =>
 export const assetsForNode = (board, nodeId) =>
     board.assets.filter((a) => a.nodeId === nodeId).sort(bySort);
 
-/** Only ACTIVE plots are paid by Advance Turn. Paused, resolved and archived sit it out. */
+/**
+ * The Plots that are live on the board. Not an economic distinction — income has
+ * been the Force's own business since M4, and which clock a Plot keeps is
+ * `turnBehaviour` rather than lifecycle.
+ */
 export const activePlots = (board) =>
     board.plots.filter((p) => p.lifecycle === LIFECYCLE.ACTIVE);
 
@@ -91,6 +95,20 @@ export const plotsForForce = (board, forceId) =>
  * "why did nobody pay the Guard?" is answered by the row the Guard is on.
  */
 export const turnPreview = (board = readBoard()) => Econ.incomeRoster(board.forces);
+
+/**
+ * The other half of the bill: the condition timers a cycle is about to move, and
+ * what each Asset arrives at when its timer runs out.
+ *
+ * `Cond.ticking` is pure and takes no side effects, so previewing a cycle is the
+ * same call the cycle itself makes — the GM is shown the operation rather than a
+ * description of it. Pass a plotId for one Plot's own cycle.
+ */
+export const turnTimers = (board = readBoard(), plotId = null) =>
+    Cond.ticking(board.conditions, Econ.assetsOnTheClock(board.assets, board.plots, plotId));
+
+/** The Plots the world's cycle will not move, with the reason each one sits out. */
+export const turnSkips = (board = readBoard()) => Econ.sittingOut(board.plots);
 
 /** The chronicle, newest first. Already normalized; the viewer is applied on render. */
 export const readLog = (board = readBoard(), count = 30) => Log.recent(board.log, count);
@@ -156,7 +174,15 @@ function namedBy({ plotId = null, nodeId = null, forceId = null, assetId = null 
 
 const operations = {
     async 'plot.upsert'({ patch }) {
-        await S.setPlots(upsertRow(S.getPlots(), patch));
+        const plots = S.getPlots();
+        // A Plot is born on the cycle the world is already on. Starting every new
+        // Plot at zero would read as a fresh calendar for something that began
+        // this evening, and would put a Plot set loose in its first session
+        // eleven cycles behind the board it is sitting on.
+        const seeded = plots.some((p) => p.id === patch.id)
+            ? patch
+            : { turnCount: S.getTurn().count, ...patch };
+        await S.setPlots(upsertRow(plots, seeded));
     },
 
     /** Deleting a plot takes its nodes with it and releases any asset committed to them. */
@@ -515,14 +541,22 @@ const operations = {
      * counted without being paid.
      */
     async 'turn.advance'() {
-        const result = Econ.advanceTurn({ forces: S.getForces(), turn: S.getTurn() });
+        const plots = S.getPlots();
+        const result = Econ.advanceTurn({ forces: S.getForces(), turn: S.getTurn(), plots });
         if (result.payments.length) await S.setForces(result.forces);
+        // Every Plot on the world's clock takes the world's count. The ones
+        // sitting it out keep theirs, which is the whole point of them —
+        // advanceTurn hands those back by reference, so this asks whether any
+        // row actually moved rather than rewriting the setting to say nothing.
+        if (result.plots.some((p, i) => p !== plots[i])) await S.setPlots(result.plots);
 
-        // Every running condition timer moves with the clock. Applied before the
-        // counter, so an Asset that finishes recovering has already finished by the
-        // time anyone reads the line about the cycle it finished in.
+        // Every running condition timer moves with the clock — every timer this
+        // cycle owns, that is. An Asset committed to a Plot that keeps its own
+        // clock is moved by that Plot's button and not by this one. Applied
+        // before the counter, so an Asset that finishes recovering has already
+        // finished by the time anyone reads the line about the cycle it finished in.
         const assets = S.getAssets();
-        const moved = Cond.ticking(S.getConditions(), assets);
+        const moved = Cond.ticking(S.getConditions(), Econ.assetsOnTheClock(assets, plots));
         if (moved.length) {
             const byId = new Map(moved.map((m) => [m.asset.id, m.change]));
             await S.setAssets(assets.map((a) => (byId.has(a.id) ? { ...a, ...byId.get(a.id) } : a)));
@@ -534,6 +568,58 @@ const operations = {
 
         // One line per Asset that actually arrived somewhere, not per Asset whose
         // counter merely went down. A countdown is not a development; arriving is.
+        for (const { asset, change } of moved) {
+            if (change.condition === undefined) continue;
+            await record({
+                kind: LOG_KIND.CONDITION,
+                plotId: asset.plotId, nodeId: asset.nodeId,
+                forceId: asset.forceId, assetId: asset.id,
+                condition: change.condition,
+                isExample: asset.isExample
+            });
+        }
+    },
+
+    /**
+     * One Plot's own cycle.
+     *
+     * Refused unless the Plot is actually on its own clock. The button is only
+     * drawn for an isolated Plot, but a render can be stale — a second GM may
+     * have set it back to the world's clock while this one was reading — and the
+     * same rule that refuses an unaffordable push applies here: the writer
+     * checks, because the writer is the only thing that cannot be looking at an
+     * old screen.
+     *
+     * No purse moves and none should. Income is the Force's, and a Force standing
+     * on two Plots with two clocks has no sensible answer to which of them pays it.
+     */
+    async 'plot.turn'({ plotId }) {
+        const plots = S.getPlots();
+        const plot = plots.find((p) => p.id === plotId) ?? null;
+        if (!plot || !Econ.hasOwnTurn(plot)) return;
+
+        const next = Econ.advancePlotTurn(plot);
+        await S.setPlots(plots.map((p) => (p.id === plotId ? next : p)));
+
+        // Only the timers this Plot owns: an Asset committed to it, or to one of
+        // its Threads. An Asset sitting uncommitted in its owner's hand is on the
+        // world's clock and is not this button's business.
+        const assets = S.getAssets();
+        const moved = Cond.ticking(S.getConditions(), Econ.assetsOnTheClock(assets, plots, plotId));
+        if (moved.length) {
+            const byId = new Map(moved.map((m) => [m.asset.id, m.change]));
+            await S.setAssets(assets.map((a) => (byId.has(a.id) ? { ...a, ...byId.get(a.id) } : a)));
+        }
+
+        // The Plot's own count, not the world's, which has not moved. `amount`
+        // carries it because the entry's `turn` is stamped with the world's.
+        await record({
+            kind: LOG_KIND.CYCLE,
+            plotId,
+            amount: next.turnCount,
+            isExample: plot.isExample
+        });
+
         for (const { asset, change } of moved) {
             if (change.condition === undefined) continue;
             await record({
@@ -626,6 +712,7 @@ export const commitAsset = (assetId, { nodeId = null, plotId = null } = {}) =>
     write('asset.commit', { assetId, nodeId, plotId });
 export const releaseAsset = (assetId) => write('asset.commit', { assetId });
 export const advanceTurn = () => write('turn.advance', {});
+export const advancePlotTurn = (plotId) => write('plot.turn', { plotId });
 export const setTurnCount = (count) => write('turn.set', { count });
 export const generateExample = () => write('example.generate', {});
 export const removeExample = () => write('example.remove', {});

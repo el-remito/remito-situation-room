@@ -54,7 +54,7 @@
                         <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
                         {{/each}}
                     </select>
-                    <i class="fa-regular fa-circle-question rsr-info"
+                    <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                        data-tooltip="{{localize 'RSR.editor.visibilityHint'}}"></i>
                 </span>
             </div>
@@ -62,7 +62,7 @@
                 <label for="rsr-f-hideValues">{{localize "RSR.visibility.hideValues"}}</label>
                 <span class="rsr-form-check">
                     <input type="checkbox" id="rsr-f-hideValues" name="hideValues"{{#if editor.hideValues}} checked{{/if}}>
-                    <i class="fa-regular fa-circle-question rsr-info"
+                    <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                        data-tooltip="{{localize 'RSR.editor.hideValuesHint'}}"></i>
                 </span>
             </div>
@@ -76,7 +76,7 @@
                     <input type="text" id="rsr-f-maskLabel" name="maskLabel"
                            value="{{editor.maskLabel}}"
                            placeholder="{{localize editor.maskDefault}}">
-                    <i class="fa-regular fa-circle-question rsr-info"
+                    <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                        data-tooltip="{{localize 'RSR.editor.maskLabelHint'}}"></i>
                 </span>
             </div>
@@ -86,7 +86,7 @@
             <div class="rsr-form-row is-stacked">
                 <label for="rsr-f-maskNote">{{localize "RSR.editor.maskNote"}}</label>
                 <span class="rsr-form-inline">
-                    <i class="fa-regular fa-circle-question rsr-info"
+                    <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                        data-tooltip="{{localize editor.maskNoteHint}}"></i>
                 </span>
                 <textarea id="rsr-f-maskNote" name="maskNote" rows="2"

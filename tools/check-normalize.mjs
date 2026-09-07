@@ -141,5 +141,33 @@ eq('an unset mask name is empty, not a default',
 eq('a non-string mask name is dropped', N.normalizeNode({ maskLabel: 7 }).maskLabel, '');
 eq('a non-string mask note is dropped', N.normalizeNode({ maskNote: {} }).maskNote, '');
 
+// ── which clock a Plot keeps ────────────────────────────────────────────────
+eq('an unset behaviour is the world clock', N.normalizePlot({}).turnBehaviour, 'default');
+eq('a known behaviour is kept',
+    N.normalizePlot({ turnBehaviour: 'isolated' }).turnBehaviour, 'isolated');
+eq('an invented one falls back rather than sticking',
+    N.normalizePlot({ turnBehaviour: 'weekly' }).turnBehaviour, 'default');
+eq('a Plot starts on cycle zero', N.normalizePlot({}).turnCount, 0);
+eq('a Plot keeps the cycle it was on', N.normalizePlot({ turnCount: 7 }).turnCount, 7);
+eq('a non-numeric count is zero', N.normalizePlot({ turnCount: 'later' }).turnCount, 0);
+eq('only a Plot keeps a clock', 'turnBehaviour' in N.normalizeNode({}), false);
+
+// ── what a Plot and a world call their clocks ───────────────────────────────
+eq('a Plot has no clock name by default', N.normalizePlot({}).turnLabel, '');
+eq('a Plot keeps the one it was given',
+    N.normalizePlot({ turnLabel: 'The Ride' }).turnLabel, 'The Ride');
+eq('a clock name is trimmed on the way in',
+    N.normalizePlot({ turnLabel: '  The Ride ' }).turnLabel, 'The Ride');
+eq('spaces are no name, so the built-in word stands',
+    N.normalizePlot({ turnLabel: '   ' }).turnLabel, '');
+eq('a non-string name is dropped',
+    N.normalizePlot({ turnLabel: 12 }).turnLabel, '');
+eq('the world has no clock name by default',
+    N.normalizeConstants({}).turnLabel, '');
+eq('the world keeps the one it was given',
+    N.normalizeConstants({ turnLabel: 'Moons' }).turnLabel, 'Moons');
+eq('only a Plot and the world keep a clock name',
+    'turnLabel' in N.normalizeNode({}), false);
+
 console.log(`\n${fail === 0 ? '  all passed' : `  ${fail} FAILED`}\n`);
 process.exit(fail === 0 ? 0 : 1);

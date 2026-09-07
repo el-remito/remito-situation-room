@@ -32,7 +32,11 @@
         {{#each log}}
         <li class="rsr-log-row{{#if this.masked}} is-veiled{{/if}}">
             <i class="rsr-log-icon {{this.icon}}" inert></i>
+            {{!-- Absent on a line that is itself the world's clock moving: the
+                  sentence there already says which cycle began. --}}
+            {{#if this.when}}
             <span class="rsr-log-when">{{this.when}}</span>
+            {{/if}}
             {{#if this.seen}}
             <span class="rsr-chip rsr-chip-veil rsr-log-seen"
                   data-tooltip="{{localize 'RSR.log.seenChipHint'}}">{{localize this.seen}}</span>

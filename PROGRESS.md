@@ -15,7 +15,8 @@ before its milestone has passed.
 | M5 | passed | `5ab911d` |
 | M5.5 | passed | `fbf8a2d` |
 | M6 | passed | `228b0df` |
-| M6.5 | in progress | — |
+| M6.5 | passed | `824ab99` |
+| M7 | in progress | — |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)

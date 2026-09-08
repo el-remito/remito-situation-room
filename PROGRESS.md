@@ -264,6 +264,123 @@ clock. Numbered between M5 and M6 because it is neither of them.
 - [x] Recorded for M7: the editors get the pass the ⓘ badges got
 - [x] Verified in a live world
 
+## M6.5 — A Thread that runs out
+- [x] `node.countdown` — a reading, not a fifth mode; nothing below the label moves
+- [x] `canDeplete` / `depletes` — every mode but Narrative; fiat has no number
+- [x] `projectProgress` and `projectClock` invert once, so no template branches
+- [x] `projectCountdown` — a masked Thread never drains, beside `projectMode`
+- [x] `hideValues` alone keeps the drain: it withholds arithmetic, not shape
+- [x] The **Depleting** chip on the row and in the push dialog, and its reading
+- [x] The checkbox in the Thread editor, with its scope in the label
+- [x] `countdown` through normalize, FIELDS, draft, harvest and patch
+- [x] The `countdown` / Depleting pair added to the naming rule
+- [x] CSS section M6.5; `RSR.thread.depleting`, `RSR.editor.countdown*`
+- [x] The fixture: **The Granary Stores**, a clock of eight reading 5 / 8
+- [x] Help: the mode list and the mask rule, GM and player
+
+### Round 2 — from verification
+- [x] A contest can deplete too: each side runs its own reserve down from the
+      shared threshold, which is how a war of attrition gets drawn
+- [x] `canDeplete` opens to every mode but Narrative; contested contenders take
+      `countdown` through the same funnel, so no template changed
+- [x] The sign flips: the typed number moves the reading, not the pool.
+      `pushSign` names the inversion once and `node.advance` applies it at the
+      write — storage in, storage out, display everywhere a human looks
+- [x] The charge is billed on the storage pair, so a −1 that depletes still
+      spends; the chronicle records the move the way it was typed
+- [x] The push dialog starts at −1 on a depleting Thread and reads a contest down
+- [x] The fixture: **Men Still Fit to Fight**, a contest of twelve apiece
+- [x] Keys and Help restated — the scope, and the direction you type
+
+### Round 3 — nine Threads is a different board
+- [x] The Thread bin moves off the row and into the Thread's own editor, at the
+      foot of the Save bar; the editor dismisses itself when the row goes
+- [x] **Find**, under the Threads header and under the Plots header. Filters in
+      the DOM against a haystack per row, so typing never re-renders and the
+      caret never jumps
+- [x] A Plot card is found by its own name, by any Thread on it, and by any
+      committed Asset — all of them PROJECTED, so a mask cannot be searched
+      through
+- [x] The Plot's name, chips and State line stay pinned while its Threads scroll
+- [x] A depleting Thread's push arrow points left, on the row, on each contender
+      and on the dialog's confirm
+- [x] `color` on every row, from a palette of nine ids resolved in CSS; an Asset
+      inherits its Force's, a masked row always wears the default
+- [x] The chronicle colours the names in each line by kind, so a Plot, a Thread,
+      a Force and an Asset in one sentence are told apart
+- [x] Player copy: a conclusion you can see is not every conclusion
+- [x] A new partial is preloaded, and a static pass now says so before Foundry does
+
+### Round 4 — the shelf, the fallout and a colour of one's own
+- [x] The pinned Plot head is built as a shelf: its own ground, run out to both
+      edges of the scroller, with a rule and a shadow saying what is above it
+- [x] `logic/removal.mjs` — what deleting a Thread takes with it, as rows
+- [x] `tools/check-removal.mjs` pins each consequence against a fixture
+- [x] The delete confirmation lists them by name: which Assets come loose and
+      whose, which Threads stop requiring it, which of those it OPENS, which
+      Phases lose it, and how many chronicle lines stay as written
+- [x] `logic/palette.mjs` — a colour is a palette id, a canonicalised hex, or
+      nothing; nothing typed is passed through, it is parsed and re-emitted
+- [x] `tools/check-palette.mjs`, including every near-colour that must come out empty
+- [x] Custom beside the nine: a native picker and a text box, either accepted,
+      both saved back canonicalised
+- [x] The chronicle carries a custom colour inline; a palette id stays a class
+
+### Round 5 — the way out, the loose Threads, and the clock governed
+- [x] "All Plots" moves onto the header line inside the shelf, as a breadcrumb
+      badge: outside it, it scrolled under the shelf and was cut in half
+- [x] `graph-layout.mjs` gives every row the CHAIN it belongs to — the weakly
+      connected component — and hands the loose Threads back as ids
+- [x] Requirements draws the loose Threads as cards under the diagram, under
+      *Waiting on nothing*, instead of counting them in a sentence
+- [x] Every card is a button: pressing one returns to the Thread list with that
+      Thread's name in the search box
+- [x] One search box across both readings of a Plot. On the diagram it hides
+      whole chains rather than single cards, collapses the emptied columns and
+      redraws the arrows against what is left
+- [x] `logic/cycle.mjs` — the count read as a run of Cycles, and the record one
+      advance writes so that it can be taken back
+- [x] `tools/check-cycle.mjs`: both Segment boundaries, count zero, and every
+      reason a revert is refused
+- [x] Two campaign constants (`chapterLabel`, `chapterLength`) and an undo
+      record beside the count, all three repaired on read
+- [x] Both cycles write an undo; `turn.revert` puts back purses, counts, timers
+      and the lines it wrote — and refuses once anything has been recorded since
+- [x] The badge, the Cockpit line, the chronicle stamp and both cycle dialogs
+      all read the count the way the campaign counts it (`ui/clock.mjs`)
+- [x] A Revert control beside each cycle button, drawn disabled with the reason
+      rather than vanishing, and a confirmation naming everything it puts back
+- [x] Settings gains *Segment name* and *Cycles per Segment*, with a live
+      reading beside the field
+- [x] `check.mjs` polices a third naming pair: chapter/Segment
+
+### Round 6 — Segments as long as they actually were
+Round 5 divided the count by a fixed length, which made every Segment the same
+size and gave none of them a name. Asked in verification why that limit existed,
+and it did not survive the question: a list of marks is no less a derivation than
+a modulo, and it is the one that matches how a campaign actually turns a page.
+
+- [x] `reading` reads the count against a LIST OF MARKS — where each run began,
+      one row per run — rather than dividing it by a length
+- [x] Runs are as long as they actually were, and each carries a name of its own
+      which REPLACES the ordinal: *The Siege · Global Cycle 3*
+- [x] The first run is implicit. Cycles before the earliest mark are Segment 1,
+      and a mark on Cycle 1 exists only to NAME that stretch
+- [x] `marks()` sorts, dedupes and drops anything that is not a Cycle, so the
+      order the Settings rows were typed in never reaches a reader
+- [x] The marks live on the CLOCK beside the count, not among the campaign
+      defaults: they are history rather than a seed. `chapterLength` is gone
+- [x] *Begin a Segment* beside the Cycle button, asking for the name while the
+      GM has one in mind — and writing no chronicle line, so it never costs the
+      Revert standing next to it
+- [x] A revert takes back a Segment opened on the Cycle it unmakes, and the
+      confirmation names it: a run cannot begin on a Cycle that did not happen
+- [x] Settings holds the list, added and removed in the DOM and harvested on
+      Save, so adding a second row cannot lose what was half-typed in the first
+- [x] `check-cycle.mjs` rewritten around irregular runs, named runs and the
+      implicit first one; `check-normalize.mjs` follows the marks onto the clock
+- [x] Verified in a live world
+
 ## M7 — Polish
 - [ ] Phase notes fire on entry
 - [ ] The five in-board editors get the pass the ⓘ badges got — grouping,

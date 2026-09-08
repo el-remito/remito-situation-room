@@ -30,6 +30,11 @@
     --rsr-ink-muted: light-dark(#55524a, rgba(239, 230, 216, 0.55));
     --rsr-panel: light-dark(#ffffff, var(--dark-blue, #18162e));
     --rsr-panel-deep: light-dark(#f5f2ed, var(--deep-black, #0e0d15));
+    /* One step off the panel, for the one surface that has to sit ON TOP of
+       the page rather than in it: the pinned head of an open Plot. Lighter in
+       the dark theme and darker in the light one, because both directions read
+       as "nearer". */
+    --rsr-shelf: light-dark(#f4f1ec, #211e3d);
     --rsr-panel-soft: light-dark(rgba(34, 34, 34, 0.04), rgba(239, 230, 216, 0.05));
     --rsr-border: light-dark(rgba(34, 34, 34, 0.25), rgba(239, 230, 216, 0.22));
     --rsr-strength: var(--green, #40a640);
@@ -2253,13 +2258,32 @@
     gap: 0.6rem;
 }
 
+/* A BUTTON now, so core's `a.button, button, kbd` rule has to be unwound: it
+   forces a fixed height, full width and centred text, none of which a card can
+   live with. Everything below the border-radius is putting that back. */
 .rsr-graph-card {
     position: relative;
+    display: block;
     width: 11rem;
+    height: auto;
+    min-height: 0;
+    margin: 0;
     padding: 0.4rem 0.5rem;
     background: var(--rsr-panel-deep);
     border: 1px solid var(--rsr-border);
     border-radius: 5px;
+    color: var(--rsr-ink);
+    text-align: left;
+    line-height: 1.35;
+    cursor: pointer;
+}
+
+/* It leads somewhere, and a card that looks identical whether or not it does is
+   a card nobody presses. Gold is this board's one colour for "your attention is
+   wanted here", which is exactly what a hovered card is asking for. */
+.rsr-graph-card:hover {
+    background: var(--rsr-panel-deep);
+    border-color: var(--rsr-gold);
 }
 
 /* The same three readings the Thread rows carry, so a Thread looks like itself
@@ -2290,13 +2314,33 @@
 
 .rsr-graph-unknown i { margin-right: 0.2rem; }
 
-/* The count of what was left out. Quiet: it is a reassurance, not a finding. */
-.rsr-graph-loose {
-    margin: 0.5rem 0 0;
-    font-size: var(--font-size-11, 11px);
-    font-style: italic;
-    color: var(--rsr-ink-muted);
+/* The Threads waiting on nobody. Drawn under the diagram rather than counted in
+   a sentence — they were always half of what this view is asked, and a count
+   answered it with an apology. Wrapping rows rather than a column, because they
+   have no order between them and a column would imply one. */
+.rsr-graph-free {
+    margin-top: 1rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--rsr-border);
 }
+
+.rsr-graph-free-title {
+    margin: 0 0 0.5rem;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-13, 13px);
+    color: var(--rsr-ink-muted);
+    border: none;
+}
+
+.rsr-graph-free-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+/* No arrows anywhere on this Plot. Said above the loose cards rather than
+   instead of them, so the reader gets the sentence AND the Threads. */
+.rsr-graph-nothing { margin-bottom: 0; }
 
 .rsr-graph-tangle {
     margin: 0.5rem 0 0;
@@ -2343,4 +2387,489 @@
 .rsr-tab.is-on {
     background: var(--rsr-gold-dim);
     color: var(--rsr-gold);
+}
+
+/* ── M6.5 — Depleting Threads ────────────────────────────────────────── */
+
+/* Beside the mode chip, and quieter than it: the mode is what this Thread IS
+   and the direction is how to read the bar under it. Muted rather than given a
+   hue of its own — depleting is not a warning, and the palette already spends
+   violet on withheld and red on trouble. */
+.rsr-chip-depleting {
+    color: var(--rsr-ink-muted);
+    border-color: var(--rsr-border);
+    gap: 0.3rem;
+}
+
+.rsr-chip-depleting i { font-size: 0.75em; opacity: 0.8; }
+
+/* ── M6.5 round 3 — the head that stays, the box that filters ─────────── */
+
+/* The Plot's identity, pinned to the top of the scroller while its Threads go
+   past. Nine Threads is more than a screenful and every one of them is about a
+   State the GM could no longer see.
+
+   Staying put was half the job. Sharing the page's ground with a hairline under
+   it, the rows sliding beneath it read as part of it, and a header you cannot
+   tell from its contents is not a header. So it is built as a shelf: a surface
+   one step off the page, run out to both edges of the scroller, with a rule and
+   a short shadow under it saying which side of the glass everything is on.
+
+   `top: 0` pins to the scrollport's PADDING edge, and .rsr-body has 1rem of it,
+   so something has to paint that gap or rows show through above the title. That
+   was a ::before, which the `overflow-y` here quietly clipped away; it is now
+   the first entry in the box-shadow list — not a shadow at all, a 1rem slab of
+   the shelf's own colour. An element's own box-shadow is not clipped by its own
+   overflow, so unlike the pseudo-element it survives.
+
+   The height cap is a backstop for a Plot with a long description: a sticky head
+   that fills the window is not a head. Past it the block scrolls itself, and
+   `overscroll-behavior` keeps that from turning into a scroll of the board. */
+.rsr-plot-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    max-height: 45vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Out through the scroller's side padding and back in again, so nothing
+       passes under the shelf at its edges. */
+    margin-inline: -1.25rem;
+    padding: 0.6rem 1.25rem 0.7rem;
+    background: var(--rsr-shelf);
+    border-bottom: 1px solid var(--rsr-border);
+    box-shadow:
+        0 -1rem 0 0 var(--rsr-shelf),
+        0 0.5rem 0.6rem -0.45rem light-dark(rgba(34, 34, 34, 0.3), rgba(0, 0, 0, 0.65));
+}
+
+/* Held to the shelf's width rather than the window's. Full width, the reading
+   ran the whole span of the board and the eye lost which number belonged to
+   which end of it. */
+.rsr-plot-sticky .rsr-state-bar-lg { max-width: 32rem; }
+
+/* The description is the one part of the head that can run long, and pinned it
+   is context rather than reading. Muted a shade further and set a step smaller
+   than the body: it is there to remind, not to be read again. */
+.rsr-plot-sticky .rsr-plot-desc {
+    font-size: var(--font-size-13, 13px);
+    line-height: 1.45;
+}
+
+/* ── the search box ── */
+
+.rsr-search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--rsr-border);
+    border-radius: 4px;
+    background: var(--rsr-panel-soft);
+}
+
+.rsr-search-icon { color: var(--rsr-ink-muted); font-size: 0.85em; }
+
+/* Restated against core, which pins inputs to its own height and border. */
+.rsr-search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: auto;
+    padding: 0.15rem 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--rsr-ink);
+    font-family: var(--rsr-body);
+    font-size: var(--font-size-13, 13px);
+}
+
+.rsr-search-input::placeholder { color: var(--rsr-ink-muted); font-style: italic; }
+
+/* Chrome draws its own clear affordance on type=search, which would sit beside
+   ours and do the same job with a different glyph. */
+.rsr-search-input::-webkit-search-cancel-button { display: none; }
+
+.rsr-search-count {
+    flex: 0 0 auto;
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-11, 11px);
+    font-variant-numeric: tabular-nums;
+}
+
+.rsr-search-clear { flex: 0 0 auto; }
+
+.rsr-search-empty { padding: 1.25rem 1rem; }
+
+/* ── the swatch row in every editor ── */
+
+.rsr-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+/* The radio itself is the state and the label is the whole control, so the
+   input is hidden rather than removed — a hidden input still gets focus, still
+   answers to the arrow keys, and is still what `harvest` reads by name. */
+.rsr-swatch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.rsr-swatch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+}
+
+.rsr-swatch-dot {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    /* currentColor is the swatch's own .rsr-tag-* colour, so one rule paints
+       every one of them and adding a colour is a palette entry and nothing else. */
+    background: currentColor;
+    box-shadow: 0 0 0 1px var(--rsr-border);
+}
+
+/* Default has no colour of its own to show, so it shows the absence of one. */
+.rsr-swatch.is-default .rsr-swatch-dot {
+    background: transparent;
+    border-color: var(--rsr-ink-muted);
+    border-style: dashed;
+}
+
+.rsr-swatch input:checked ~ .rsr-swatch-dot {
+    border-color: var(--rsr-gold);
+    box-shadow: 0 0 0 1px var(--rsr-gold-soft);
+}
+
+.rsr-swatch input:focus-visible ~ .rsr-swatch-dot { outline: 2px solid var(--rsr-gold); }
+
+/* The name rides along for the reader who cannot tell teal from moss, and only
+   for the one that is chosen — nine labels in a row is a paragraph, not a
+   control. The tooltip carries the rest. */
+.rsr-swatch-name {
+    display: none;
+    margin-left: 0.35rem;
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-11, 11px);
+}
+
+.rsr-swatch input:checked ~ .rsr-swatch-name { display: inline; }
+
+/* ── names inside a chronicle line ─────────────────────────────────────── */
+
+/* Four kinds of noun share one sentence — "The Iron Legion moved Bribing the
+   Watch by +1" — and until now only the wording told them apart. The colour is
+   identity, not judgement, which is why none of these are the four the rest of
+   the board has already spent: gold means attention, green a strength, red a
+   weakness, violet withheld. A name in running text is a different channel from
+   a chip, and it must not borrow a chip's meaning.
+
+   Both halves of every pair are stated. A single hex would go muddy on one of
+   the two grounds and the GM would have no way to fix it. */
+.rsr-tag { font-weight: 600; }
+
+/* The default per kind. This is what does the work with nothing configured, and
+   what a MASKED row falls back to however it was coloured. */
+.rsr-tag-kind-plot { color: var(--rsr-ink); }
+.rsr-tag-kind-node { color: light-dark(#1f7a72, #6fd0c8); }
+.rsr-tag-kind-force { color: light-dark(#2f5f9e, #8ab6e8); }
+.rsr-tag-kind-asset { color: light-dark(#6f6a63, #b6ada1); }
+
+/* The palette the GM may pin. Nine, which is enough to give every Force on a
+   busy board its own and few enough to still be told apart at 13px. */
+.rsr-tag-stone { color: light-dark(#6f6a63, #b6ada1); }
+.rsr-tag-steel { color: light-dark(#52606d, #a8b6c4); }
+.rsr-tag-blue { color: light-dark(#2f5f9e, #8ab6e8); }
+.rsr-tag-teal { color: light-dark(#1f7a72, #6fd0c8); }
+.rsr-tag-moss { color: light-dark(#4a7a3f, #a3cf8e); }
+.rsr-tag-amber { color: light-dark(#97701a, #e3bb63); }
+.rsr-tag-rust { color: light-dark(#a3552a, #e79a6e); }
+.rsr-tag-plum { color: light-dark(#7a3f8c, #cf9ae0); }
+.rsr-tag-rose { color: light-dark(#a83f5e, #f094ac); }
+
+/* A veiled line is a note and nothing else, so nothing in it is coloured — but
+   the rule is restated rather than relied upon, since a future line that keeps
+   one name would otherwise inherit a hue it has no right to. */
+.rsr-log-row.is-veiled .rsr-tag { color: inherit; font-weight: inherit; }
+
+/* Deleting, at the far end of the editor's Save bar. It needs no margin of its
+   own: .rsr-editor-status already takes the slack between it and Save. */
+.rsr-btn-danger { color: var(--rsr-weakness); }
+.rsr-btn-danger:hover { background: color-mix(in srgb, var(--rsr-weakness) 12%, transparent); }
+
+/* ── a colour of the GM's own ─────────────────────────────────── */
+
+/* The nine palette classes above are `light-dark()` pairs and adapt. This one
+   cannot: it prints exactly the hex the GM chose, on both grounds, which is the
+   trade the hint beside the field states out loud. The value arrives as an
+   inline --rsr-tag-ink, built in logic/palette.mjs from parsed integers. */
+.rsr-tag-custom { color: var(--rsr-tag-ink, var(--rsr-ink)); }
+
+/* The Custom swatch shows the colour it stands for as soon as there is one:
+   the label carries --rsr-tag-ink, set by the template from what was saved and
+   kept live by #wireColorPicker as the GM types. Until then the fallback inside
+   var() paints a colour wheel — a swatch with no colour yet should look like a
+   question, not like black. */
+.rsr-swatch.is-custom .rsr-swatch-dot {
+    background: var(--rsr-tag-ink, conic-gradient(
+        #d04747, #c8a52e, #40a640, #2e9c9c, #4a7ad0, #8a5cd0, #d04747));
+}
+
+.rsr-color-custom {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+/* Core styles inputs at a fixed height; a colour well at that height is a
+   button-sized slab, so it is cut back to the size of a swatch. */
+.rsr-color-pick {
+    width: 1.7rem;
+    height: 1.7rem;
+    padding: 0;
+    flex: 0 0 auto;
+    border: 1px solid var(--rsr-border);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.rsr-color-pick::-webkit-color-swatch-wrapper { padding: 2px; }
+.rsr-color-pick::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+.rsr-color-text {
+    width: 8.5rem;
+    flex: 0 0 auto;
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-12, 12px);
+}
+
+/* ── M6.5 round 4 — what a deletion takes with it ────────────────── */
+
+/* The fallout list in the delete confirmation. Set as a warning rather than as
+   information: it is read in the two seconds before an irreversible button, so
+   it wants an edge you cannot skim past, not a tidy grey panel. */
+.rsr-fallout-head {
+    margin: 0.9rem 0 0.35rem;
+    font-weight: 600;
+}
+
+.rsr-fallout {
+    margin: 0;
+    padding: 0.5rem 0.7rem;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    border-left: 3px solid var(--rsr-weakness);
+    background: var(--rsr-panel-soft);
+    /* A Thread with a dozen dependents must not push the buttons off screen. */
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.rsr-fallout li {
+    display: grid;
+    grid-template-columns: 1.1rem 1fr;
+    gap: 0.5rem;
+    align-items: baseline;
+    line-height: 1.4;
+}
+
+/* Per KIND, not per outcome, so the list reads down its left edge. */
+.rsr-fallout i {
+    color: var(--rsr-ink-muted);
+    font-size: 0.85em;
+    justify-self: center;
+}
+
+.rsr-fallout strong { color: var(--rsr-ink); }
+
+/* The other answer, and it is worth stating rather than leaving blank: a GM
+   who reads "nothing else points at it" can press without checking. */
+.rsr-fallout-none {
+    margin: 0.9rem 0 0;
+    padding: 0.5rem 0.7rem;
+    color: var(--rsr-ink-muted);
+    border-left: 3px solid var(--rsr-border);
+    background: var(--rsr-panel-soft);
+}
+
+/* DialogV2 sizes to its content and this one can carry a long list, so it is
+   given room to be read in rather than a column the width of a button. */
+.rsr-delete-dialog .window-content { min-width: 26rem; }
+
+/* ── M6.5 round 5 — the way out, as a badge ────────────────────────────────── */
+
+/* "All Plots" stood ABOVE the shelf, which meant it scrolled under the shelf
+   and was sliced in half by the slab covering the scroller's top padding — a
+   control in two states, present and half-drawn, neither of them reachable
+   once the reader was three Threads down. On the header line it moves with the
+   thing that pins itself, so there is no state in which it is cut; and a
+   breadcrumb standing before the name is what "All Plots" was always saying.
+
+   A pill rather than a bare link, because it sits beside an <h2> and inside a
+   shelf that already has a ground of its own: a borderless label there reads as
+   part of the title. */
+.rsr-crumb {
+    align-self: center;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: auto; height: auto; min-height: 0;
+    margin: 0;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    background: var(--rsr-panel);
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-12, 12px);
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.rsr-crumb:hover {
+    background: var(--rsr-panel);
+    border-color: var(--rsr-gold);
+    color: var(--rsr-gold);
+}
+
+.rsr-crumb i { font-size: 0.85em; }
+
+/* ── M6.5 round 5 — taking a Cycle back ────────────────────────────────────── */
+
+/* The one undo on this board, and it is drawn as the quiet half of a pair: the
+   button beside it advances, and this is the way back from having pressed it.
+   Deliberately NOT red — nothing is being destroyed, a press is being unmade,
+   and a warning colour here would read as the more dangerous of the two. */
+.rsr-btn-undo,
+.rsr-mini-undo { color: var(--rsr-ink-muted); }
+
+.rsr-btn-undo:hover,
+.rsr-mini-undo:hover { color: var(--rsr-gold); }
+
+/* Stale rather than absent, which is the whole point: a GM who pressed the
+   Cycle by accident comes looking for exactly this control, and finding it
+   greyed with a reason on it is an answer. Finding nothing is not. Pointer
+   events stay on so the tooltip can still be read off a disabled button. */
+.rsr-btn-undo:disabled,
+.rsr-mini-undo:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: auto;
+}
+
+.rsr-btn-undo:disabled:hover,
+.rsr-mini-undo:disabled:hover {
+    border-color: var(--rsr-border);
+    color: var(--rsr-ink-muted);
+}
+
+/* What the count reads as with what is currently saved, beside the field that
+   decides it — the same job the icon preview does two sections up. */
+.rsr-settings-said {
+    align-self: center;
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-12, 12px);
+    font-variant-numeric: tabular-nums;
+}
+
+/* == M6.5 round 6 - where a Segment begins ================================== */
+
+/* The quiet third control on the Plots header line. Not primary: turning the
+   Cycle is the press this board exists for, and marking where a run began is the
+   rarer decision that should not compete with it for the eye. Disabled with its
+   reason on it, for the same argument the undo beside it makes. */
+.rsr-btn-mark { color: var(--rsr-ink-muted); }
+
+.rsr-btn-mark:hover { color: var(--rsr-gold); }
+
+.rsr-btn-mark:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: auto;
+}
+
+.rsr-btn-mark:disabled:hover {
+    border-color: var(--rsr-border);
+    color: var(--rsr-ink-muted);
+}
+
+/* The one row on this tab holding a LIST rather than a field, so its label sits
+   at the top of the stack instead of centred against the middle of it. */
+.rsr-settings-row-list { align-items: start; }
+
+.rsr-settings-row-list > label { padding-top: 0.4rem; }
+
+.rsr-settings-stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+}
+
+.rsr-chapter-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+/* Cycle, name, and the way to take the row out. The number is narrow on purpose:
+   it is a Cycle this run opened on, not a quantity, and a wide box invites a
+   wide number.
+
+   The head shares the grid EXACTLY, third column included, so the two labels
+   stand over the two boxes they name. That is why the button column is a fixed
+   width rather than `auto`: `auto` resolves per grid container, so the head —
+   which has no button — would size that column to nothing and pull its second
+   label out of line with the box below it. */
+.rsr-chapter-row,
+.rsr-chapter-head {
+    display: grid;
+    grid-template-columns: 5rem 1fr 1.9rem;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Column labels, not field labels: quiet, and each carrying the badge that
+   answers what goes in the box under it. One badge per COLUMN rather than per
+   row, because the rows are many instances of the same two questions — the same
+   argument the four visibility rows make with their single badge. */
+.rsr-chapter-head {
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-11, 11px);
+}
+
+.rsr-chapter-row > .rsr-mini {
+    justify-content: center;
+    padding-inline: 0;
+}
+
+.rsr-chapter-row > input { min-width: 0; }
+
+/* The row every new one is cloned from. `display: grid` above would beat the
+   browser's own [hidden] rule, so the prototype has to be hidden here or it
+   draws as an empty row the GM can type into and lose on Save. */
+.rsr-chapter-row[hidden] { display: none; }
+
+.rsr-chapter-foot {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }

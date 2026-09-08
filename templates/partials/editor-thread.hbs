@@ -54,6 +54,22 @@
         </span>
     </div>
 
+    {{!-- Sits under the two numbers it is about: it decides which way they are
+          read, not what they are. The label carries its own scope because the
+          switch is stored on every Thread and only means something on the two
+          modes that have one shared reading — saying so in the label is cheaper
+          and steadier than a control that greys itself out a mode change too
+          late. --}}
+    <div class="rsr-form-row">
+        <label for="rsr-f-countdown">{{localize "RSR.editor.countdown"}}</label>
+        <span class="rsr-form-check">
+            <input type="checkbox" id="rsr-f-countdown" name="countdown"{{#if editor.draft.countdown}} checked{{/if}}>
+            <span class="rsr-form-note">{{localize "RSR.editor.countdownScope"}}</span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.editor.countdownHint'}}"></i>
+        </span>
+    </div>
+
     <div class="rsr-form-row">
         <label for="rsr-f-status">{{localize "RSR.editor.status"}}</label>
         <select id="rsr-f-status" name="status">

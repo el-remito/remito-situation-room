@@ -1,0 +1,26 @@
+{{!--
+    One search box, for one list.
+
+    Called twice with a different `scope` and placeholder — under the Threads
+    header inside a Plot, and under the Plots header on the main view. Nothing
+    here is a data-action: an action re-renders, and a re-render replaces the box
+    being typed into. The app wires this by hand in #wireSearch and filters the
+    rows in place against the haystack each of them carries.
+
+    The count is the honest part. A list that has quietly hidden six of its nine
+    rows has to say so, or the next question is why half the board is missing.
+--}}
+<div class="rsr-search" data-search-scope="{{scope}}">
+    <i class="fa-solid fa-magnifying-glass rsr-search-icon" inert></i>
+    <input type="search" class="rsr-search-input"
+           data-search-input="{{scope}}"
+           autocomplete="off" spellcheck="false"
+           placeholder="{{localize placeholder}}"
+           aria-label="{{localize placeholder}}">
+    <span class="rsr-search-count" data-search-count="{{scope}}" hidden></span>
+    <button type="button" class="rsr-icon-btn rsr-search-clear"
+            data-search-clear="{{scope}}" hidden
+            data-tooltip="{{localize 'RSR.search.clear'}}">
+        <i class="fa-solid fa-xmark" inert></i>
+    </button>
+</div>

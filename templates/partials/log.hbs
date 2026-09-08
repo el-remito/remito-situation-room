@@ -41,8 +41,14 @@
             <span class="rsr-chip rsr-chip-veil rsr-log-seen"
                   data-tooltip="{{localize 'RSR.log.seenChipHint'}}">{{localize this.seen}}</span>
             {{/if}}
+            {{!-- Triple-stashed, and the only place on this board that is.
+                  The sentence carries the tags that colour the names in it, and
+                  every value inside it was escaped by #logSentence on the way in
+                  — names, mask labels, condition labels, a GM's own word for a
+                  clock. The note below is NOT: it is a paragraph the GM typed and
+                  it has no markup in it to preserve. --}}
             {{#if this.text}}
-            <p class="rsr-log-text">{{this.text}}</p>
+            <p class="rsr-log-text">{{{this.text}}}</p>
             {{/if}}
             {{#if this.note}}
             <p class="rsr-log-note">{{this.note}}</p>

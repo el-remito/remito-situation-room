@@ -151,5 +151,66 @@ eq('a missing mode is null, never undefined', V.projectMode(open, PLAYER, undefi
 eq('no mode name survives a mask anywhere',
     JSON.stringify(V.projectMode(masked, PLAYER, 'invest') ?? ''), '""');
 
+// ── depleting ───────────────────────────────────────────────────────────
+// A bar that drains while its neighbours fill says the loudest thing a mode chip
+// could have said: this one is running out. So the direction goes with the chip
+// under a mask — and stays under hideValues, which withholds arithmetic and not
+// shape.
+
+eq('a masked Thread does not drain', V.projectCountdown(masked, PLAYER, true), false);
+eq('a visible one does', V.projectCountdown(open, PLAYER, true), true);
+eq('withheld numbers do not straighten the bar out',
+    V.projectCountdown(quiet, PLAYER, true), true);
+eq('the GM watches it drain through a mask', V.projectCountdown(masked, GM, true), true);
+eq('a Thread that does not deplete never starts',
+    V.projectCountdown(open, PLAYER, false), false);
+eq('and undefined is false, never undefined',
+    V.projectCountdown(open, PLAYER, undefined), false);
+
+eq('what is left is the total less what is spent', V.leftOf(3, 8), 5);
+eq('a full reading has nothing left', V.leftOf(8, 8), 0);
+// Pushing past a full clock is the ordinary way to say "and then some", and a
+// reading of minus two rations left is arithmetic showing through the fiction.
+eq('an overrun clamps at nothing left', V.leftOf(11, 8), 0);
+eq('a negative reading clamps at the top', V.leftOf(-3, 8), 8);
+eq('no total means nothing to have left', V.leftOf(3, 0), 0);
+
+const DOWN = { current: 3, total: 8, isGM: PLAYER, entity: open, countdown: true };
+eq('a depleting reading counts what is left', V.projectProgress(DOWN).current, 5);
+eq('against the same total it always had', V.projectProgress(DOWN).total, 8);
+eq('and its bar is what is left, not what is spent',
+    V.projectProgress(DOWN).percent, 63);
+eq('the same Thread read upwards is the other number',
+    V.projectProgress({ ...DOWN, countdown: false }).current, 3);
+
+// The key set is the leak check, and it must not have been widened: a withheld
+// reading carries a width and nothing else, depleting or not.
+eq('a withheld depleting reading still carries no count',
+    Object.keys(V.projectProgress({ ...DOWN, entity: quiet })).sort(),
+    ['percent', 'showValues']);
+
+const PIPS = V.projectClock({ current: 3, total: 8, isGM: PLAYER, entity: open, countdown: true });
+eq('a depleting clock lights what is left', PIPS.pips.filter((p) => p.filled).length, 5);
+eq('and empties from the right', PIPS.pips.map((p) => p.filled),
+    [true, true, true, true, true, false, false, false]);
+eq('the same clock read upwards lights three',
+    V.projectClock({ current: 3, total: 8, isGM: PLAYER, entity: open }).pips
+        .filter((p) => p.filled).length, 3);
+eq('a withheld depleting clock has no pips to count',
+    V.projectClock({ current: 3, total: 8, isGM: PLAYER, entity: quiet, countdown: true }).pips,
+    null);
+
+// A contest of attrition, drawn one side at a time. Each contender is its own
+// call through the same funnel against the SAME total, which is the whole of
+// what makes "left of what, for whom?" answerable: left of the shared
+// threshold, for that side.
+const side = (spent) => V.projectProgress(
+    { current: spent, total: 12, isGM: PLAYER, entity: open, countdown: true });
+eq('a side that has spent five has seven left', side(5).current, 7);
+eq('a side that has spent eight has four', side(8).current, 4);
+eq('and both are measured against the same threshold', side(8).total, 12);
+eq('a spent-out side reads nothing left', side(12).current, 0);
+eq('and its bar is empty rather than full', side(12).percent, 0);
+
 console.log(`\n${fail === 0 ? '  all passed' : `  ${fail} FAILED`}\n`);
 process.exit(fail === 0 ? 0 : 1);

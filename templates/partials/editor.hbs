@@ -40,6 +40,62 @@
         {{> "modules/remito-situation-room/templates/partials/editor-conditions.hbs"}}
         {{/if}}
 
+        {{!-- What colour this row's name is printed in wherever the board sets it
+              in a sentence — which today means the chronicle, where four kinds of
+              noun share one paragraph and nothing but the wording told them
+              apart. Radios rather than a select: the swatch IS the label, and
+              :checked does the whole of the feedback with no script.
+
+              Default leads and is the answer for almost every row. An Asset left
+              on Default wears its Force's colour, which is the point of putting
+              the same control on a Force. --}}
+        {{#if editor.isEntity}}
+        <section class="rsr-form-section">
+            <h3>{{localize "RSR.editor.appearance"}}</h3>
+            <div class="rsr-form-row">
+                <label>{{localize "RSR.editor.color"}}</label>
+                <span class="rsr-form-inline">
+                    <span class="rsr-swatches">
+                        {{#each editor.colors}}
+                        <label class="rsr-swatch{{#if this.isDefault}} is-default{{else}}{{#if this.isCustom}} is-custom{{else}} rsr-tag-{{this.value}}{{/if}}{{/if}}"
+                               {{#if this.isCustom}}{{#if @root.editor.colorCustomHex}}style="--rsr-tag-ink: {{@root.editor.colorCustomHex}}"{{/if}}{{/if}}
+                               data-tooltip="{{localize this.label}}">
+                            <input type="radio" name="color" value="{{this.value}}"{{#if this.selected}} checked{{/if}}>
+                            <span class="rsr-swatch-dot" aria-hidden="true"></span>
+                            <span class="rsr-swatch-name">{{localize this.label}}</span>
+                        </label>
+                        {{/each}}
+                    </span>
+
+                    {{!-- The GM's own. Two controls for one stored value: the
+                          native picker for choosing, and the text box for a hex
+                          or an rgb() pasted from somewhere else. Typing in
+                          either selects Custom above; picking a swatch above
+                          empties them. That sync is the only script on this
+                          form, and it is worth it — without it the row would
+                          show one colour selected while the board printed
+                          another.
+
+                          The box reads back CANONICALISED after a save, so a GM
+                          who typed rgb(138 144 153) sees #8a9099 and knows what
+                          was actually kept. --}}
+                    <span class="rsr-color-custom" data-color-custom>
+                        <input type="color" class="rsr-color-pick" data-color-pick
+                               value="{{#if editor.colorCustomHex}}{{editor.colorCustomHex}}{{else}}#888888{{/if}}"
+                               aria-label="{{localize 'RSR.editor.colorPick'}}"
+                               data-tooltip="{{localize 'RSR.editor.colorPick'}}">
+                        <input type="text" class="rsr-color-text" name="colorCustom"
+                               value="{{editor.colorCustom}}" placeholder="#8a9099"
+                               spellcheck="false" autocomplete="off"
+                               aria-label="{{localize 'RSR.editor.colorCustom'}}">
+                    </span>
+                    <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                       data-tooltip="{{localize 'RSR.editor.colorHint'}}"></i>
+                </span>
+            </div>
+        </section>
+        {{/if}}
+
         {{!-- What the table sees. Last, and on every editor of a ROW, because it is
               the question a GM answers about a row rather than a property of it.
               The world's condition table is not a row and has no audience. --}}
@@ -100,6 +156,21 @@
     {{!-- The Save bar. A count rather than a dot: "3 unsaved changes" answers
           whether you touched more than you meant to. --}}
     <footer class="rsr-editor-bar{{#if editor.isDirty}} is-dirty{{/if}}">
+        {{!-- Deleting lives here, at the far end of the bar from Save and only
+              once the row actually exists. It was on the Thread row itself,
+              which put a bin beside every Thread on a screen a GM spends their
+              time reading rather than editing. One level in, next to the other
+              things you can do to this one row, is where it belongs — and the
+              confirm still asks. --}}
+        {{#if editor.canDelete}}
+        <button type="button" class="rsr-btn rsr-btn-danger" data-action="{{editor.deleteAction}}"
+                data-thread-id="{{editor.id}}"
+                data-tooltip="{{localize editor.deleteHint}}">
+            <i class="fa-solid fa-trash" inert></i>
+            <span>{{localize editor.deleteLabel}}</span>
+        </button>
+        {{/if}}
+
         {{#if editor.isDirty}}
         <span class="rsr-editor-status">
             <i class="fa-solid fa-circle" inert></i>

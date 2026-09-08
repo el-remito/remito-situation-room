@@ -38,29 +38,24 @@ import {
     removeExample, concludeNode, forceById, plotsForForce, assetsForForce,
     deleteForce, upsertAsset, deleteAsset, adjustForceResources, advanceTurn,
     turnPreview, turnTimers, turnSkips, advancePlotTurn, readConstants, advanceNode,
-    readConditions, setAssetCondition
+    readConditions, setAssetCondition, revertTurn, beginChapter
 } from '../data/state.mjs';
 import { getDefaultVisibility } from '../settings.mjs';
 import {
     investmentOf, outcomeFor, stateAfterConclusion, effectiveThreshold, leader,
-    resolveMode
+    resolveMode, depletes, pushSign
 } from '../logic/progress.mjs';
-import { canAfford, pushCost, hasOwnTurn, clockName } from '../logic/economy.mjs';
+import { canAfford, pushCost, hasOwnTurn } from '../logic/economy.mjs';
+import { worldClock, plotClock, cycleReading, runLabelAt, runMarks } from '../ui/clock.mjs';
+import { threadRemoval } from '../logic/removal.mjs';
+import {
+    refusal as revertRefusal, summary as revertSummary, nextMark, hasMark
+} from '../logic/cycle.mjs';
 import { rowFor, labelOf } from '../logic/condition.mjs';
 
 const { DialogV2 } = foundry.applications.api;
 const esc = (v) => foundry.utils.escapeHTML(String(v ?? ''));
 const L = (key) => game.i18n.localize(key);
-
-/**
- * A clock by the GM's own name for it, falling back to the built-in word.
- *
- * `clockName` is pure and knows nothing about language files, so the join
- * happens here and in the app's #worldClock, which are the two places that
- * localize. A board can hold more than one clock now, and every line that
- * mentions one has to say which.
- */
-const clockLabel = (row, fallbackKey) => clockName(row) || L(fallbackKey);
 
 // ── markup helpers ───────────────────────────────────────────────────────────
 
@@ -125,18 +120,28 @@ const readInt = (form, name, fallback = 0) => {
 
 // ── moving the needle ───────────────────────────────────────────────────────
 
-/** What the Thread currently reads, in whatever shape its mode keeps score in. */
-function readingOf(node, mode, threshold, forces) {
+/**
+ * What the Thread currently reads, in whatever shape its mode keeps score in.
+ *
+ * A depleting Thread reads DOWN here as it does on the board, or the dialog and
+ * the row it was opened from would disagree about the same number. A depleting
+ * CONTEST reads each side down separately, against the one threshold they share
+ * — which is the whole shape: two reserves, and whichever empties first.
+ */
+function readingOf(node, mode, threshold, forces, draining = false) {
+    const left = (spent, total) => (draining ? Math.max(0, total - spent) : spent);
     if (mode === MODE.CLOCK) {
         const filled = Math.min(node.segments, Math.max(0, node.progress.pool));
-        return `${filled} / ${node.segments}`;
+        return `${left(filled, node.segments)} / ${node.segments}`;
     }
     if (mode === MODE.CONTESTED) {
         return forces.length
-            ? forces.map((f) => `${f.name} ${node.progress.byForce[f.id] ?? 0}`).join('  ·  ')
+            ? forces
+                .map((f) => `${f.name} ${left(node.progress.byForce[f.id] ?? 0, threshold)}`)
+                .join('  ·  ')
             : '—';
     }
-    return `${node.progress.pool} / ${threshold}`;
+    return `${left(Math.min(threshold, Math.max(0, node.progress.pool)), threshold)} / ${threshold}`;
 }
 
 /**
@@ -160,6 +165,13 @@ export async function promptPush(threadId, { forceId = null } = {}) {
     if (!node) return false;
     const plot = plotById(board, node.plotId);
     const mode = resolveMode(node, plot);
+    // The GM is never in preview here — the dialog does not open for a player —
+    // so this is the stored answer rather than a projected one.
+    const draining = depletes(node, plot);
+    // What one press of the forward direction looks like in the box. −1 on a
+    // depleting Thread, because the field is filled in the direction the reading
+    // moves — see `pushSign`. state.mjs turns it back around at the write.
+    const sign = pushSign(node, plot);
     const assets = board.assets.filter((a) => a.nodeId === node.id);
     const threshold = effectiveThreshold(node, assets);
     const forces = (plot?.forceIds ?? []).map((id) => forceById(board, id)).filter(Boolean);
@@ -200,13 +212,14 @@ export async function promptPush(threadId, { forceId = null } = {}) {
         <header class="rsr-push-head">
             <strong class="rsr-push-name">${esc(node.name)}</strong>
             <span class="rsr-chip rsr-chip-mode">${esc(L(`RSR.thread.mode.${mode}`))}</span>
+            ${draining ? `<span class="rsr-chip rsr-chip-depleting">${esc(L('RSR.thread.depleting'))}</span>` : ''}
         </header>
-        <p class="rsr-push-reading">${esc(readingOf(node, mode, threshold, forces))}</p>
+        <p class="rsr-push-reading">${esc(readingOf(node, mode, threshold, forces, draining))}</p>
 
         <div class="rsr-push-grid">
             <label for="rsr-push-amount">${esc(L('RSR.editor.pushAmount'))}${info('RSR.editor.pushAmountHint')}</label>
             <span class="rsr-push-field">
-                <input type="number" id="rsr-push-amount" name="amount" value="1">
+                <input type="number" id="rsr-push-amount" name="amount" value="${sign}">
                 <button type="button" class="rsr-quick" data-quick="-1">&minus;1</button>
                 <button type="button" class="rsr-quick" data-quick="1">+1</button>
             </span>
@@ -282,7 +295,10 @@ export async function promptPush(threadId, { forceId = null } = {}) {
                 // The suggestion is the module's own rule, not a second copy of
                 // it: one Resource per point moved, negated because spending is
                 // a negative delta on the purse.
-                const n = Math.trunc(Number(amount.value) || 0);
+                // Costed on what the push BUYS, not on what is typed: on a
+                // depleting Thread the two have opposite signs and only one of
+                // them is a spend.
+                const n = Math.trunc(Number(amount.value) || 0) * sign;
                 cost.value = String(who.value === NOBODY ? 0 : -pushCost(n));
             };
             amount.addEventListener('input', sync);
@@ -290,7 +306,9 @@ export async function promptPush(threadId, { forceId = null } = {}) {
         },
         ok: {
             label: L('RSR.editor.pushConfirm'),
-            icon: 'fa-solid fa-arrow-right-long',
+            // Pointing the way the reading will move, like the button that
+            // opened this dialog.
+            icon: draining ? 'fa-solid fa-arrow-left-long' : 'fa-solid fa-arrow-right-long',
             // The return value IS the dialog result — see the header note.
             callback: (event, button) => {
                 const form = button.form;
@@ -770,13 +788,13 @@ export async function confirmAdvanceTurn() {
 
     const ok = await DialogV2.confirm({
         window: { title: game.i18n.format('RSR.turn.advanceNamed', {
-            label: clockLabel(board.constants, 'RSR.turn.globalLabel')
+            label: worldClock(board)
         }) },
         classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
         position: { width: 560 },
         content: `<p>${game.i18n.format('RSR.turn.advanceSummary', {
-            label: esc(clockLabel(board.constants, 'RSR.turn.globalLabel')),
-            turn: board.turn.count, next: board.turn.count + 1
+            from: esc(cycleReading(board, board.turn.count)),
+            to: esc(cycleReading(board, board.turn.count + 1))
         })}</p>
         ${roster.length ? billHead('RSR.turn.incomeTitle') : ''}${bill}
         ${timers ? billHead('RSR.turn.timersTitle') + timers : ''}
@@ -791,8 +809,7 @@ export async function confirmAdvanceTurn() {
     // screen, a counter in the header. Nothing under the cursor changes, so
     // without this the GM has pressed a button and watched nothing happen.
     ui.notifications?.info(game.i18n.format('RSR.turn.advancedNotice', {
-        label: clockLabel(board.constants, 'RSR.turn.globalLabel'),
-        turn: board.turn.count + 1,
+        reading: cycleReading(board, board.turn.count + 1),
         paid: roster.filter((row) => row.willBePaid).length,
         arrived: arrivals(timerRows)
     }));
@@ -822,14 +839,13 @@ export async function confirmAdvancePlotTurn(plotId) {
         classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
         position: { width: 520 },
         content: `<p>${game.i18n.format('RSR.turn.plotSummary', {
-            plot: esc(plot.name), label: esc(clockLabel(plot, 'RSR.turn.plotLabel')),
+            plot: esc(plot.name), label: esc(plotClock(plot)),
             turn: plot.turnCount, next: plot.turnCount + 1
         })}</p>
         ${billHead('RSR.turn.timersTitle')}
         ${timers || `<p class="hint">${esc(L('RSR.turn.noTimers'))}</p>`}
         <p class="hint">${esc(game.i18n.format('RSR.turn.plotNoIncome', {
-            label: clockLabel(board.constants, 'RSR.turn.globalLabel'),
-            turn: board.turn.count
+            reading: cycleReading(board)
         }))}</p>`,
         rejectClose: false
     });
@@ -841,9 +857,187 @@ export async function confirmAdvancePlotTurn(plotId) {
     // Plot's own; no Force is mentioned because none was paid.
     ui.notifications?.info(game.i18n.format('RSR.turn.plotAdvancedNotice', {
         plot: plot.name,
-        label: clockLabel(plot, 'RSR.turn.plotLabel'),
+        label: plotClock(plot),
         turn: plot.turnCount + 1,
         arrived: arrivals(rows)
+    }));
+    return true;
+}
+
+/**
+ * Take back the last cycle, having said exactly what that puts back.
+ *
+ * The only UNDO on this board, and narrow on purpose: it replays a record the
+ * advance itself wrote, and it is refused the moment anything else has been
+ * recorded since. logic/cycle.mjs holds both halves of that and says why.
+ *
+ * THE LIST IS THE DIALOG. Everything a cycle does is somewhere the GM is not
+ * looking — purses in the Cockpit, counts on Plots they are not inside, timers
+ * on Assets that may not be on screen at all — so an undo that only asked "are
+ * you sure" would be asking them to confirm something they cannot see. Every
+ * purse, count and timer is named by the row it belongs to, with both numbers.
+ *
+ * `plotId` is passed in only so the wrong button cannot be wired to the right
+ * record by accident; the record on the board is what decides.
+ */
+export async function confirmRevertTurn(plotId = null) {
+    const board = readBoard();
+    const undo = board.turn.undo;
+
+    // Checked here as well as on the button, and said out loud rather than
+    // silently doing nothing: a disabled control the GM pressed anyway, or a
+    // render that went stale while they read it, both land here.
+    const why = revertRefusal(undo, board.log);
+    if (why) {
+        ui.notifications?.warn(L(`RSR.turn.revertReason.${why}`));
+        return false;
+    }
+    if ((undo.plotId ?? null) !== (plotId ?? null)) {
+        ui.notifications?.warn(L('RSR.turn.revertReason.since'));
+        return false;
+    }
+
+    // `chapters` is on the clock rather than on the board's top level, so it is
+    // handed in by name: a Segment opened on the cycle being taken back stops
+    // existing with it, and the GM ought to read that before pressing.
+    const said = revertSummary(undo, { ...board, chapters: runMarks(board) });
+    const plot = undo.plotId ? plotById(board, undo.plotId) : null;
+    const clock = said.clocks.find((c) => c.id === undo.plotId) ?? null;
+    const conditions = readConditions();
+
+    // A Plot's own cycle says which Plot and which count in the question itself,
+    // so its clock is not repeated in the list underneath it.
+    const head = plot && clock
+        ? game.i18n.format('RSR.turn.revertSummaryPlot', {
+            plot: esc(plot.name), label: esc(plotClock(plot)),
+            from: clock.from, to: clock.to
+        })
+        : game.i18n.format('RSR.turn.revertSummary', {
+            from: esc(cycleReading(board)),
+            to: esc(cycleReading(board, said.count))
+        });
+
+    const rows = [];
+    const line = (icon, key, data) => rows.push(
+        `<li><i class="${icon}" inert></i><span>${game.i18n.format(key, data)}</span></li>`
+    );
+
+    for (const purse of said.purses) {
+        line('fa-solid fa-coins', 'RSR.turn.revertPurse', {
+            name: `<strong>${esc(purse.name)}</strong>`, from: purse.from, to: purse.to
+        });
+    }
+    for (const row of said.clocks) {
+        if (clock && row.id === clock.id) continue;
+        line('fa-solid fa-hourglass-half', 'RSR.turn.revertClock', {
+            name: `<strong>${esc(row.name)}</strong>`, turn: row.to
+        });
+    }
+    for (const timer of said.timers) {
+        line('fa-solid fa-heart-crack',
+            timer.recommitted ? 'RSR.turn.revertTimerHeld' : 'RSR.turn.revertTimer', {
+                name: `<strong>${esc(timer.name)}</strong>`,
+                condition: esc(L(labelOf(rowFor(conditions, timer.condition)))),
+                cycles: timer.cycles
+            });
+    }
+    // The only thing on this list the GM did by hand rather than by pressing the
+    // cycle, which is exactly why it is worth its own line: everything else here
+    // is the press being undone, and this is a decision being undone with it.
+    for (const mark of said.marks) {
+        line('fa-solid fa-bookmark', 'RSR.turn.revertMark', {
+            name: `<strong>${esc(mark.name || runLabelAt(board, mark.at))}</strong>`
+        });
+    }
+    // Always said, even at zero: the chronicle is the one thing the table can
+    // see, and a GM ought to know before pressing that a line they watched
+    // appear is about to stop being there.
+    line('fa-solid fa-scroll', 'RSR.turn.revertLines', { count: said.lines });
+
+    const ok = await DialogV2.confirm({
+        window: { title: L('RSR.turn.revertTitle') },
+        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor', 'rsr-delete-dialog'],
+        content: `<p>${head}</p>`
+            + `<p class="rsr-fallout-head">${L('RSR.turn.revertHead')}</p>`
+            + `<ul class="rsr-fallout">${rows.join('')}</ul>`,
+        rejectClose: false
+    });
+    if (!ok) return false;
+    await revertTurn();
+
+    ui.notifications?.info(L('RSR.turn.revertedNotice'));
+    return true;
+}
+
+/**
+ * Open a Segment on the cycle the board is standing on.
+ *
+ * The name is optional and the dialog says what the run will be called without
+ * one, because most of them never get a name and a required field for a thing a
+ * GM does not have a word for yet is a field that stops them marking at all. A
+ * name given here is not a second copy of anything — it REPLACES the ordinal in
+ * the reading, so "The Siege · Global Cycle 3" is what the header and every
+ * stamp inside that run say.
+ *
+ * A confirmation and not a bare press, because unlike a cycle this cannot be
+ * undone by a control standing beside it: taking a mark back is a row removed in
+ * Settings, one screen away.
+ */
+export async function confirmBeginChapter() {
+    const board = readBoard();
+    const at = nextMark(board.turn.count);
+
+    // Checked here as well as on the button. The control is drawn disabled when
+    // the cycle is already marked, but a second GM may have marked it while this
+    // one was reading, and the writer refuses it again regardless.
+    if (hasMark(runMarks(board), at)) {
+        ui.notifications?.warn(L('RSR.turn.segmentAlready'));
+        return false;
+    }
+
+    // What it will be called if nothing is typed: the reading of that same cycle
+    // once the mark is on the board, which is the only honest preview of it.
+    const numbered = runLabelAt({ ...board, turn: {
+        ...board.turn, chapters: [...runMarks(board), { at, name: '' }]
+    } }, at);
+
+    const content = `
+        <p class="rsr-push-reading">${esc(game.i18n.format('RSR.turn.segmentIntro', {
+            segment: numbered, reading: cycleReading(board, at)
+        }))}</p>
+
+        <div class="rsr-push-grid">
+            <label for="rsr-segment-name">
+                ${esc(L('RSR.turn.segmentName'))}${info('RSR.turn.segmentNameHint')}
+            </label>
+            <span class="rsr-push-field">
+                <input type="text" id="rsr-segment-name" name="name"
+                       placeholder="${esc(numbered)}">
+            </span>
+        </div>
+
+        <p class="rsr-form-note">${esc(L('RSR.turn.segmentNote'))}</p>`;
+
+    const name = await DialogV2.prompt({
+        window: { title: L('RSR.turn.segmentTitle') },
+        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
+        position: { width: 440 },
+        content,
+        ok: {
+            label: L('RSR.turn.segmentConfirm'),
+            icon: 'fa-solid fa-bookmark',
+            // A string, and the empty one is a real answer — the callback's
+            // return IS the result, and only nullish falls through to the
+            // action name (see the file header).
+            callback: (event, button) => String(button.form.elements.name?.value ?? '')
+        },
+        rejectClose: false
+    });
+    if (name == null) return false;
+
+    await beginChapter(name);
+    ui.notifications?.info(game.i18n.format('RSR.turn.segmentBegunNotice', {
+        segment: name.trim() || numbered
     }));
     return true;
 }
@@ -939,14 +1133,79 @@ export async function confirmDeletePlot(plotId) {
     return true;
 }
 
+/**
+ * The fallout list, as markup.
+ *
+ * One line per consequence, each naming the row it is about and what happens to
+ * it — because "are you sure" is not a question a GM can answer without knowing
+ * that the Ram comes loose and the Second Assault opens. The report is built in
+ * logic/removal.mjs; everything here is presentation.
+ *
+ * The icons are per KIND, not per outcome, so the list can be read down its left
+ * edge: a cube is an Asset, a broken link is a requirement, a ladder is a Phase,
+ * a scroll is the chronicle. Every name goes through esc() on the way in — these
+ * are GM-authored strings landing in a raw-HTML dialog.
+ */
+function falloutMarkup(report) {
+    const lines = [];
+    const line = (icon, key, data) => lines.push(
+        `<li><i class="${icon}" inert></i><span>${game.i18n.format(key, data)}</span></li>`
+    );
+
+    for (const asset of report.assets) {
+        line('fa-solid fa-cubes-stacked', 'RSR.editor.falloutAsset', {
+            name: `<strong>${esc(asset.name)}</strong>`, force: esc(asset.forceName)
+        });
+    }
+
+    for (const dep of report.dependents) {
+        const key = dep.concluded ? 'RSR.editor.falloutConcluded'
+            : dep.frees ? 'RSR.editor.falloutFrees'
+                : 'RSR.editor.falloutRequires';
+        line('fa-solid fa-link-slash', key, { name: `<strong>${esc(dep.name)}</strong>` });
+    }
+
+    // A Phase can both reveal and lock the same Thread — a GM authoring "shut
+    // here, open there" across two rungs — so the two are asked separately
+    // rather than as an either/or.
+    for (const phase of report.phases) {
+        const data = {
+            plot: esc(phase.plotName), phase: `<strong>${esc(phase.phaseLabel)}</strong>`
+        };
+        if (phase.reveals) line('fa-solid fa-layer-group', 'RSR.editor.falloutReveal', data);
+        if (phase.locks) line('fa-solid fa-layer-group', 'RSR.editor.falloutLock', data);
+    }
+
+    if (report.logCount > 0) {
+        line('fa-solid fa-scroll', 'RSR.editor.falloutLog', { count: report.logCount });
+    }
+
+    if (lines.length === 0) return `<p class="rsr-fallout-none">${L('RSR.editor.falloutNone')}</p>`;
+    return `<p class="rsr-fallout-head">${L('RSR.editor.falloutHead')}</p>`
+        + `<ul class="rsr-fallout">${lines.join('')}</ul>`;
+}
+
+/**
+ * Deleting a Thread, and saying what that costs.
+ *
+ * The dialog used to ask about the Thread alone, which is the only part of the
+ * delete that is on screen when the button is pressed. Three other things move —
+ * committed Assets come loose, Threads that required this one stop requiring it,
+ * and Phases lose it from their reveal and lock lists — and every one of them is
+ * somewhere the GM is not looking. So the report is read first and the answer is
+ * printed above the button.
+ */
 export async function confirmDeleteThread(threadId) {
-    const node = nodeById(readBoard(), threadId);
+    const board = readBoard();
+    const node = nodeById(board, threadId);
     if (!node) return false;
+    const report = threadRemoval(threadId, board);
 
     const ok = await DialogV2.confirm({
         window: { title: L('RSR.editor.deleteThread') },
-        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
-        content: `<p>${game.i18n.format('RSR.editor.deleteThreadWarning', { name: esc(node.name) })}</p>`,
+        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor', 'rsr-delete-dialog'],
+        content: `<p>${game.i18n.format('RSR.editor.deleteThreadWarning', { name: esc(node.name) })}</p>`
+            + falloutMarkup(report),
         rejectClose: false
     });
     if (!ok) return false;

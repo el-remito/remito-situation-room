@@ -26,6 +26,27 @@ import {
     ASSET_CONDITION, ASSET_MODIFIER, CONDITION_EFFECT, DEFAULT_CONDITIONS, EDIT_KIND,
     LIFECYCLE, MODE, NODE_STATUS, POLARITY, TURN_BEHAVIOUR, VISIBILITY
 } from '../constants.mjs';
+import { CUSTOM, isPaletteColor, parseCustomColor } from './palette.mjs';
+
+/**
+ * A stored colour is ONE value; the form is TWO controls. The swatch row and
+ * the text box beside it cannot both be `color` — a stored `#8a9099` matches no
+ * radio, so the group would harvest as empty and the colour would be lost by
+ * the act of opening the editor and saving it back unchanged.
+ *
+ * So the draft splits it and `patchFrom` puts it back together. The radio holds
+ * the sentinel CUSTOM when the GM's own colour is the live one, which is also
+ * what makes the swatch row show a selection at all in that case.
+ */
+const colorDraft = (stored) => {
+    const custom = isPaletteColor(stored) ? '' : parseCustomColor(stored);
+    return { color: custom ? CUSTOM : str(stored), colorCustom: custom };
+};
+
+/** The two controls, back to the one value. An unparseable box means none. */
+const colorPatch = (draft) => (draft.color === CUSTOM
+    ? parseCustomColor(draft.colorCustom)
+    : draft.color);
 
 // ── primitives ───────────────────────────────────────────────────────────────
 
@@ -61,6 +82,8 @@ export const FIELDS = {
         { name: 'turnBehaviour', type: 'text' },
         { name: 'turnLabel', type: 'text' },
         { name: 'defaultMode', type: 'text' },
+        { name: 'color', type: 'text' },
+        { name: 'colorCustom', type: 'text' },
         { name: 'visibility', type: 'text' },
         { name: 'hideValues', type: 'bool' },
         { name: 'maskLabel', type: 'text' },
@@ -72,7 +95,10 @@ export const FIELDS = {
         { name: 'mode', type: 'nullable' },
         { name: 'threshold', type: 'int' },
         { name: 'segments', type: 'int' },
+        { name: 'countdown', type: 'bool' },
         { name: 'status', type: 'text' },
+        { name: 'color', type: 'text' },
+        { name: 'colorCustom', type: 'text' },
         { name: 'visibility', type: 'text' },
         { name: 'hideValues', type: 'bool' },
         { name: 'maskLabel', type: 'text' },
@@ -85,6 +111,8 @@ export const FIELDS = {
         { name: 'resources', type: 'int' },
         { name: 'income', type: 'int' },
         { name: 'isActive', type: 'bool' },
+        { name: 'color', type: 'text' },
+        { name: 'colorCustom', type: 'text' },
         { name: 'visibility', type: 'text' },
         { name: 'hideValues', type: 'bool' },
         { name: 'maskLabel', type: 'text' }
@@ -95,6 +123,8 @@ export const FIELDS = {
         { name: 'forceId', type: 'text' },
         { name: 'modifierKind', type: 'text' },
         { name: 'modifierValue', type: 'int' },
+        { name: 'color', type: 'text' },
+        { name: 'colorCustom', type: 'text' },
         { name: 'visibility', type: 'text' },
         { name: 'hideValues', type: 'bool' },
         { name: 'maskLabel', type: 'text' }
@@ -156,6 +186,8 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
             turnBehaviour: str(e.turnBehaviour) || TURN_BEHAVIOUR.DEFAULT,
             turnLabel: str(e.turnLabel),
             defaultMode: str(e.defaultMode) || MODE.FIAT,
+            // Two fields out of the one stored value — see colorDraft.
+            ...colorDraft(e.color),
             phases: (e.phases ?? []).map(phaseDraft),
             forceIds,
             forceGroups,
@@ -180,7 +212,9 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
             mode: e.mode ?? null,
             threshold: int(e.threshold, K.threadThreshold ?? 9),
             segments: int(e.segments, K.clockSegments ?? 6),
+            countdown: bool(e.countdown),
             status: str(e.status) || NODE_STATUS.ACTIVE,
+            ...colorDraft(e.color),
             outcomes: (e.outcomes ?? []).map((o) => ({
                 forceId: str(o.forceId), delta: int(o.delta), note: str(o.note)
             })),
@@ -202,6 +236,7 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
             income: int(e.income, K.forceIncome ?? 0),
             // A Force draws income unless paused, so a new one is active.
             isActive: entity ? e.isActive !== false : true,
+            ...colorDraft(e.color),
             tags: (e.tags ?? []).map((t) => ({ text: str(t.text), polarity: t.polarity })),
             visibility: str(e.visibility) || defaultVisibilityFor(K, 'force'),
             hideValues: bool(e.hideValues),
@@ -224,6 +259,7 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
         tags: (e.tags ?? []).map((t) => ({ text: str(t.text), polarity: t.polarity })),
         modifierKind: str(e.modifier?.kind) || ASSET_MODIFIER.NONE,
         modifierValue: int(e.modifier?.value, 0),
+        ...colorDraft(e.color),
         visibility: str(e.visibility) || defaultVisibilityFor(K, 'asset'),
         hideValues: bool(e.hideValues),
         maskLabel: str(e.maskLabel)
@@ -340,6 +376,7 @@ export function patchFrom(kind, draft) {
             turnBehaviour: draft.turnBehaviour,
             turnLabel: draft.turnLabel,
             defaultMode: draft.defaultMode,
+            color: colorPatch(draft),
             // A Phase with no label is a row the GM started and abandoned; it would
             // render as an unnamed chip on the State bar, so it is not saved.
             phases: draft.phases
@@ -374,7 +411,9 @@ export function patchFrom(kind, draft) {
             mode: draft.mode,
             threshold: draft.threshold,
             segments: draft.segments,
+            countdown: draft.countdown,
             status: draft.status,
+            color: colorPatch(draft),
             // An outcome of nothing said and nothing moved is not an outcome.
             outcomes: draft.outcomes.filter((o) => o.delta !== 0 || o.note.trim().length > 0),
             prereqNodeIds: [...draft.prereqNodeIds],
@@ -393,6 +432,7 @@ export function patchFrom(kind, draft) {
             resources: draft.resources,
             income: draft.income,
             isActive: draft.isActive,
+            color: colorPatch(draft),
             tags: draft.tags.filter((t) => t.text.trim().length > 0),
             visibility: draft.visibility,
             hideValues: draft.hideValues,
@@ -407,6 +447,7 @@ export function patchFrom(kind, draft) {
         uuid: draft.uuid,
         tags: draft.tags.filter((t) => t.text.trim().length > 0),
         modifier: { kind: draft.modifierKind, value: draft.modifierValue },
+        color: colorPatch(draft),
         visibility: draft.visibility,
         hideValues: draft.hideValues,
         maskLabel: draft.maskLabel.trim()

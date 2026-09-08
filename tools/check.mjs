@@ -10,9 +10,11 @@
  *   1. imports      — every relative import specifier resolves to a real file
  *   2. i18n         — every RSR.* key used exists, and every key defined is used
  *   3. data-action  — every data-action in a template has a registered handler
- *   4. naming       — UI words live only in lang/en.json (Thread/node, Cycle/turn)
+ *   4. naming       — UI words live only in lang/en.json (Thread/node, Cycle/turn,
+ *                     Depleting/countdown, Segment/chapter)
  *   5. funnels      — game.settings only in settings.mjs, game.socket only in relay.mjs
  *   6. i18n shape   — no key is a prefix of another (Foundry expands the flat file)
+ *   7. partials     — every TEMPLATES entry exists and is preloaded for {{> }}
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -99,7 +101,8 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
     const DYNAMIC_PREFIXES = ['RSR.help.', 'RSR.thread.mode.', 'RSR.thread.status.',
         'RSR.plot.lifecycle.', 'RSR.asset.modifier.', 'RSR.visibility.',
         'RSR.settings.visibility.', 'RSR.editor.tone.', 'RSR.asset.condition.',
-        'RSR.asset.effectScale.', 'RSR.plot.turnBehaviour.', 'RSR.turn.reason.'];
+        'RSR.asset.effectScale.', 'RSR.plot.turnBehaviour.', 'RSR.turn.reason.',
+        'RSR.turn.revertReason.', 'RSR.color.'];
 
     for (const file of [...sources, ...templates]) {
         for (const m of read(file).matchAll(/['"](RSR\.[A-Za-z0-9_.]+)['"]/g)) used.add(m[1]);
@@ -162,17 +165,24 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
         // how the rule gets explained, so only quoted strings count.
         //
         //   node  -> "Thread"      turn -> "Cycle"
+        //   countdown -> "Depleting"    chapter -> "Segment"
         //
         // Both directions are checked. A UI word appearing in code means a string was
         // built where it should have been localized; a code word reaching a user means
         // the split was forgotten in the other direction.
         const UI_WORDS = [
             { word: 'Thread', pattern: /['"]([^'"\n]*\bThreads?\b[^'"\n]*)['"]/g },
-            { word: 'Cycle', pattern: /['"]([^'"\n]*\bCycles?\b[^'"\n]*)['"]/g }
+            { word: 'Cycle', pattern: /['"]([^'"\n]*\bCycles?\b[^'"\n]*)['"]/g },
+            { word: 'Depleting', pattern: /['"]([^'"\n]*\bDepleting\b[^'"\n]*)['"]/g },
+            { word: 'Segment', pattern: /['"]([^'"\n]*\bSegments?\b[^'"\n]*)['"]/g }
         ];
         const CODE_WORDS = [
             { word: 'Node', ui: 'Thread', pattern: /['"]([^'"\n]*\bNodes?\b[^'"\n]*)['"]/g },
-            { word: 'Turn', ui: 'Cycle', pattern: /['"]([^'"\n]*\bTurns?\b[^'"\n]*)['"]/g }
+            { word: 'Turn', ui: 'Cycle', pattern: /['"]([^'"\n]*\bTurns?\b[^'"\n]*)['"]/g },
+            { word: 'Countdown', ui: 'Depleting',
+              pattern: /['"]([^'"\n]*\bCountdowns?\b[^'"\n]*)['"]/g },
+            { word: 'Chapter', ui: 'Segment',
+              pattern: /['"]([^'"\n]*\bChapters?\b[^'"\n]*)['"]/g }
         ];
 
         for (const { word, pattern } of UI_WORDS) {
@@ -241,6 +251,58 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
         }
     }
     report(`i18n keys nest cleanly (${keys.length} keys)`, problems);
+}
+
+// ── 7. every partial is preloaded ────────────────────────────────────────────
+{
+    /**
+     * A partial only reaches Handlebars through loadTemplates(). Writing the file
+     * and giving it a TEMPLATES entry looks complete — and every other pass here
+     * stays green — but the board dies at render with "the partial ... could not
+     * be found". That crash is why this pass exists.
+     *
+     * Checked in three directions, because each catches a different half-finished
+     * edit: an entry pointing at a file that is not there, an entry that is never
+     * preloaded, and a {{> "..."}} reference to a path no entry names.
+     */
+    const constants = read(join(ROOT, 'scripts', 'constants.mjs'));
+    const moduleId = constants.match(/export const MODULE_ID = '(.*?)'/)?.[1] ?? '';
+    const entry = read(join(ROOT, 'situation-room.mjs'));
+
+    const preloaded = new Set(
+        [...entry.matchAll(/loadTemplates\(\[([\s\S]*?)\]\)/g)].flatMap(
+            (block) => [...block[1].matchAll(/TEMPLATES\.([A-Z0-9_]+)/g)].map((m) => m[1])
+        )
+    );
+
+    const declared = new Map();
+    const block = constants.match(/export const TEMPLATES = \{([\s\S]*?)\n\};/);
+    for (const m of (block?.[1] ?? '').matchAll(/([A-Z0-9_]+):\s*`modules\/\$\{MODULE_ID\}\/(.*?)`/g)) {
+        declared.set(m[1], m[2]);
+    }
+
+    const problems = [];
+    if (declared.size === 0) problems.push('scripts/constants.mjs: could not read the TEMPLATES map');
+    for (const [name, path] of declared) {
+        if (!existsSync(join(ROOT, path))) {
+            problems.push(`TEMPLATES.${name} names ${path}, which is not on disk`);
+        }
+        if (!preloaded.has(name)) {
+            problems.push(`TEMPLATES.${name} never reaches loadTemplates() — a {{> }} to it fails at render`);
+        }
+    }
+    for (const name of preloaded) {
+        if (!declared.has(name)) problems.push(`situation-room.mjs preloads TEMPLATES.${name}, which is not declared`);
+    }
+
+    const known = new Set(declared.values());
+    const reference = new RegExp(`\\{\\{>\\s*"modules/${moduleId}/(.*?)"`, 'g');
+    for (const file of templates) {
+        for (const m of read(file).matchAll(reference)) {
+            if (!known.has(m[1])) problems.push(`${rel(file)}: {{> ${m[1]} }} has no TEMPLATES entry`);
+        }
+    }
+    report(`partials preloaded (${declared.size} templates)`, problems);
 }
 
 // ── summary ──────────────────────────────────────────────────────────────────

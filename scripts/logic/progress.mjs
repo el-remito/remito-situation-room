@@ -101,6 +101,65 @@ export function isFull(node, plot, assets) {
 /** Whether the GM may be offered a Conclude button at all. */
 export const canConclude = (node) => node?.status !== NODE_STATUS.CONCLUDED;
 
+// ── depleting ──────────────────────────────────────
+
+/**
+ * Which modes have a reading that can be run backwards.
+ *
+ * Every mode that keeps a number, which is every mode but `fiat`. Fiat tracks
+ * nothing at all, so it has nothing to say in either direction.
+ *
+ * Contested was excluded in the first build, on the grounds that "what is left"
+ * has no answer when two sides fill separate piles toward the same line. It
+ * does have one: each side's own. Two Forces spending down their own stores,
+ * each waiting for the other to run dry, is a shape tables actually play, and
+ * it is exactly the shape the exclusion was refusing to draw. Every pile counts
+ * down from the same threshold, and a side at nothing is a side that cannot go
+ * on. Contested still never auto-concludes, so reaching zero is something the
+ * GM reads rather than something that fires.
+ */
+export const canDeplete = (mode) => mode !== MODE.FIAT;
+
+/**
+ * Whether this Thread's reading counts down.
+ *
+ * DEPLETING IS A READING, NOT A MODE. Nothing about the arithmetic changes: the
+ * pool still climbs, the threshold is still the line it climbs to, and
+ * `isFull`, `chargeFor`, `advance` and every conclusion behave identically. What
+ * changes is the direction the number is SAID in — 8 of 8 rations down to 0 is
+ * the same Thread as 0 of 8 breaches up to 8, and a GM should be able to write
+ * whichever one the table is living in.
+ *
+ * Three more modes would have been the other build, and they would have been
+ * three copies: invest-down, clock-down and contested-down duplicating their
+ * neighbours in every branch that asks what a Thread is, for no difference
+ * below the label.
+ */
+export const depletes = (node, plot) =>
+    !!node?.countdown && canDeplete(resolveMode(node, plot));
+
+/**
+ * The multiplier between the number a GM TYPES and the way the pool moves.
+ *
+ * −1 on a depleting Thread, 1 everywhere else, and this is the only place that
+ * fact is named.
+ *
+ * The first build had the typed number travel in STORAGE direction — positive
+ * always moved a Thread toward its conclusion, on whichever kind of Thread —
+ * so that a delta in the chronicle would mean one thing everywhere. It bought
+ * that consistency at the worst possible price: a GM typed +1 into a dialog
+ * reading 5 / 8 and watched the row fall to 4. A control has to move the number
+ * it is pointed at, and no amount of consistency underneath survives a board
+ * that argues with the hand on it.
+ *
+ * So the typed number is in the direction the Thread is READ, and the inversion
+ * happens once, at the write. What comes back out — the realised move that goes
+ * into the chronicle — is turned the same way, so every figure a human ever
+ * sees on a depleting Thread counts down. The pool underneath still only
+ * climbs, and nothing else in this file needs to know.
+ */
+export const pushSign = (node, plot) => (depletes(node, plot) ? -1 : 1);
+
 // ── transforms (pure: return the new progress, write nothing) ────────────────
 
 /**

@@ -34,6 +34,8 @@ const ID = {
     gate: 'rsr-ex-node-gate',
     ledger: 'rsr-ex-node-ledger',
     quarter: 'rsr-ex-node-quarter',
+    stores: 'rsr-ex-node-stores',
+    fit: 'rsr-ex-node-fit',
     envoy: 'rsr-ex-node-envoy',
     ford: 'rsr-ex-node-ford',
     court: 'rsr-ex-node-court',
@@ -55,6 +57,12 @@ export function buildExample() {
             resources: 12, income: 4, isPlayerForce: false, sort: 0,
             // Coin, and paid every cycle: the Legion is a going concern.
             icon: 'fa-solid fa-coins', isActive: true,
+            // The colour the chronicle prints this Force's name in, AND the one
+            // its Assets fall back to — so the battalion and the dragon read
+            // Legion-grey without either of them being told. The example asked
+            // for by name: "make sure the Iron Legion always colours their
+            // Assets greyish."
+            color: 'stone',
             visibility: VISIBILITY.VISIBLE, hideValues: false,
             tags: [
                 { text: 'Siegecraft', polarity: POLARITY.STRENGTH },
@@ -67,6 +75,9 @@ export function buildExample() {
             resources: 7, income: 3, isPlayerForce: false, sort: 1,
             // A different Force counts a different thing. The Guard is fed, not paid.
             icon: 'fa-solid fa-wheat-awn', isActive: true,
+            // And the other side gets one, so the two are told apart in a
+            // chronicle line that names both.
+            color: 'moss',
             visibility: VISIBILITY.VISIBLE, hideValues: false,
             tags: [
                 { text: 'Knows every stone of the wall', polarity: POLARITY.STRENGTH },
@@ -174,9 +185,10 @@ export function buildExample() {
         sort: 1
     }];
 
-    // One thread per advancement mode, plus one concluded, one gated, and three
-    // masked in different ways, so every way a row can render is on screen at
-    // once — and the three masks are deliberately alike from the table's side.
+    // One thread per advancement mode, plus one concluded, one gated, three
+    // masked in different ways and two that run down, so every way a row can
+    // render is on screen at once — and the three masks are deliberately alike
+    // from the table's side.
     const nodes = [
         {
             ...example, id: ID.siege, plotId: ID.plot, sort: 0,
@@ -284,6 +296,54 @@ export function buildExample() {
             // because "Contested" would have told them somebody is being
             // opposed, and two named contenders would have told them who.
             visibility: VISIBILITY.MASKED, hideValues: false, playerAssignable: false
+        },
+        {
+            ...example, id: ID.stores, plotId: ID.plot, sort: 7,
+            name: 'The Granary Stores',
+            description: 'What the city has left to eat, counted in weeks.',
+            mode: MODE.CLOCK,
+            threshold: 9, segments: 8,
+            progress: { pool: 3, byForce: {} },
+            outcomes: [
+                { forceId: ID.legion, delta: 20,
+                  note: 'The gates open because there is nothing left inside them.' },
+                { forceId: ID.guard, delta: -8,
+                  note: 'A convoy gets through, and the counting starts again.' }
+            ],
+            status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
+            // The depleting Thread. Three of eight weeks are gone, so it reads
+            // 5 / 8 with five pips lit rather than three — the SAME stored
+            // progress as every other clock on this board, said the other way
+            // round. Type −1 into its push dialog and the reading falls to 4,
+            // because the box is filled in the direction the row is read.
+            countdown: true,
+            // Visible with its numbers on, deliberately: the point of this row
+            // is the direction, and a mask would take that with it.
+            visibility: VISIBILITY.VISIBLE, hideValues: false, playerAssignable: false
+        },
+        {
+            ...example, id: ID.fit, plotId: ID.plot, sort: 8,
+            name: 'Men Still Fit to Fight',
+            description: 'Camp fever below the wall, thin rations above it. Both sides are '
+                + 'counting who can still stand a watch.',
+            mode: MODE.CONTESTED,
+            threshold: 12, segments: 6,
+            progress: { pool: 0, byForce: { [ID.legion]: 5, [ID.guard]: 8 } },
+            outcomes: [
+                { forceId: ID.legion, delta: 12,
+                  note: 'The wall is manned by too few, and everyone below can see it.' },
+                { forceId: ID.guard, delta: -12,
+                  note: 'Camp fever wins. The Legion pulls back to winter quarters.' }
+            ],
+            status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
+            // The contest that runs DOWN, and the row that answers "left of what,
+            // for whom?" — each side's own, against the same twelve. The GM reads
+            // Legion 7 and Guard 4 and can see which wall gives first, which is
+            // the whole reason a contest of attrition wants to be drawn this way
+            // round. It still does not conclude itself: contested never does, so
+            // a side reaching nothing is something the GM reads and calls.
+            countdown: true,
+            visibility: VISIBILITY.VISIBLE, hideValues: false, playerAssignable: false
         },
         {
             // The head of the Long Road's chain, and the reason that Plot has a

@@ -17,11 +17,12 @@ import * as S from '../settings.mjs';
 import { registerOperations, requestWrite } from './relay.mjs';
 import { buildExample } from './example-plot.mjs';
 import {
-    resolveMode, addToPool, tickClock, addForForce, concludeThread, reopenThread
+    resolveMode, pushSign, addToPool, tickClock, addForForce, concludeThread, reopenThread
 } from '../logic/progress.mjs';
 import * as Econ from '../logic/economy.mjs';
 import * as Gate from '../logic/gating.mjs';
 import * as Log from '../logic/log.mjs';
+import * as Cycle from '../logic/cycle.mjs';
 import { MODE } from '../constants.mjs';
 
 // ── reads ────────────────────────────────────────────────────────────────────
@@ -157,6 +158,10 @@ function mergeById(rows, incoming) {
  * by the same write that made it, so the log cannot disagree with the board. What
  * is stored is references and a kind — the sentence is built at render time, when
  * the viewer is known. See logic/log.mjs.
+ *
+ * Returns the id it wrote. A cycle keeps the ids of its own lines, because those
+ * lines still standing at the top of the chronicle is the proof that nothing has
+ * happened since — which is what makes the cycle safe to take back.
  */
 async function record(patch) {
     const row = Log.entry({
@@ -168,7 +173,9 @@ async function record(patch) {
         // only place that has to know what was public when it was.
         sealed: Log.sealOf(namedBy(patch))
     });
-    await S.setLog(Log.append(S.getLog(), { id: foundry.utils.randomID(), ...row }));
+    const id = foundry.utils.randomID();
+    await S.setLog(Log.append(S.getLog(), { id, ...row }));
+    return id;
 }
 
 /** The rows a line names, looked up so `sealOf` can ask what they were then. */
@@ -371,9 +378,6 @@ const operations = {
     /**
      * Push a Thread along. The mode decides which pile the amount lands in, and
      * logic/progress.mjs does the arithmetic — this only reads, routes and writes.
-     */
-    /**
-     * Push a Thread along.
      *
      * Both halves of a push are explicit. `amount` is how far the needle moves;
      * `resourceDelta` is what it does to the Force's purse, and it is a separate
@@ -382,6 +386,13 @@ const operations = {
      * gains by pushing. Passing null for resourceDelta falls back to the automatic
      * charge — the intent capped by what actually moved — which is the figure the
      * push dialog offers as its starting point.
+     *
+     * `amount` ARRIVES IN THE DIRECTION THE THREAD IS READ. On a depleting Thread
+     * that is the opposite of the direction its pool moves, and this function is
+     * the one place the two are reconciled: `applied` goes into the arithmetic,
+     * and what the arithmetic gives back is turned around again before it is
+     * charged for or written down. See `pushSign` for why the typed number is the
+     * one that got to keep its meaning.
      */
     async 'node.advance'({
         nodeId, forceId = null, amount = 1, resourceDelta = null, note = '',
@@ -393,6 +404,10 @@ const operations = {
         const plot = S.getPlots().find((p) => p.id === node.plotId) ?? null;
         const assets = S.getAssets().filter((a) => a.nodeId === nodeId);
         const mode = resolveMode(node, plot);
+        // Display direction in, storage direction out. 1 on an ordinary Thread,
+        // so this is a no-op everywhere it is not needed.
+        const sign = pushSign(node, plot);
+        const applied = Math.trunc(Number(amount) || 0) * sign;
 
         // A shut gate refuses the write outright, for the same reason an
         // unaffordable push does: the render that offered the control can be a
@@ -409,11 +424,11 @@ const operations = {
         if (spender && asked !== null && asked < 0 && !Econ.canAfford(spender, -asked)) return;
 
         let progress;
-        if (mode === MODE.CLOCK) progress = tickClock(node, amount, assets);
+        if (mode === MODE.CLOCK) progress = tickClock(node, applied, assets);
         else if (mode === MODE.CONTESTED) {
             if (!forceId) return;               // contested progress must name a side
-            progress = addForForce(node, forceId, amount, assets);
-        } else progress = addToPool(node, amount, assets);
+            progress = addForForce(node, forceId, applied, assets);
+        } else progress = addToPool(node, applied, assets);
 
         await S.setNodes(nodes.map((n) => (n.id === nodeId ? { ...n, progress } : n)));
 
@@ -425,9 +440,13 @@ const operations = {
 
         // A negative delta is a spend, a positive one a windfall. With nothing
         // passed, the Force pays for what it moved, exactly as it always did.
+        // Billed on the STORAGE pair, both figures pointing the same way. What a
+        // push costs is what it bought in progress toward the conclusion, and
+        // that is the same purchase whichever direction the Thread prints it in
+        // — charging on the typed number would refund a Force for depleting.
         const delta = asked !== null
             ? asked
-            : (spender ? -Econ.chargeFor(amount, realized) : 0);
+            : (spender ? -Econ.chargeFor(applied, realized) : 0);
 
         if (spender && delta !== 0) {
             await S.setForces(forces.map((f) => (f.id === spender.id
@@ -441,7 +460,10 @@ const operations = {
         await record({
             kind: LOG_KIND.PUSH,
             plotId: node.plotId, nodeId, forceId,
-            amount: realized, cost: delta, note, visibility,
+            // Written down the way it was read out. The chronicle prints this
+            // beside the Thread's own name, so a line saying +1 under a row that
+            // just fell from 5 to 4 would be the same lie the dialog told.
+            amount: realized * sign, cost: delta, note, visibility,
             isExample: node.isExample
         });
     },
@@ -566,13 +588,15 @@ const operations = {
      */
     async 'turn.advance'() {
         const plots = S.getPlots();
-        const result = Econ.advanceTurn({ forces: S.getForces(), turn: S.getTurn(), plots });
+        const was = S.getTurn();
+        const result = Econ.advanceTurn({ forces: S.getForces(), turn: was, plots });
         if (result.payments.length) await S.setForces(result.forces);
         // Every Plot on the world's clock takes the world's count. The ones
         // sitting it out keep theirs, which is the whole point of them —
         // advanceTurn hands those back by reference, so this asks whether any
         // row actually moved rather than rewriting the setting to say nothing.
-        if (result.plots.some((p, i) => p !== plots[i])) await S.setPlots(result.plots);
+        const wound = plots.filter((p, i) => p !== result.plots[i]);
+        if (wound.length) await S.setPlots(result.plots);
 
         // Every running condition timer moves with the clock — every timer this
         // cycle owns, that is. An Asset committed to a Plot that keeps its own
@@ -586,22 +610,45 @@ const operations = {
             await S.setAssets(assets.map((a) => (byId.has(a.id) ? { ...a, ...byId.get(a.id) } : a)));
         }
 
-        await S.setTurn(result.turn);
+        await S.setTurn({ count: result.turn.count, chapters: was.chapters });
         // Recorded after the counter moves, so the entry names the cycle it opened.
-        await record({ kind: LOG_KIND.CYCLE, amount: result.payments.length });
+        const lines = [await record({ kind: LOG_KIND.CYCLE, amount: result.payments.length })];
 
         // One line per Asset that actually arrived somewhere, not per Asset whose
         // counter merely went down. A countdown is not a development; arriving is.
         for (const { asset, change } of moved) {
             if (change.condition === undefined) continue;
-            await record({
+            lines.push(await record({
                 kind: LOG_KIND.CONDITION,
                 plotId: asset.plotId, nodeId: asset.nodeId,
                 forceId: asset.forceId, assetId: asset.id,
                 condition: change.condition,
                 isExample: asset.isExample
-            });
+            }));
         }
+
+        // What all of that was, written down so it can be taken back. Last, and
+        // deliberately a SECOND write of the same setting: the counter has to
+        // move before the lines above are stamped with it, and the undo must not
+        // exist until everything it claims to reverse has actually happened.
+        //
+        // The values are the ones from BEFORE — `payments` carries each purse as
+        // it stood, and `moved` carries each Asset as it stood — because a purse
+        // that stopped at its floor is not recoverable by subtracting the income
+        // it was nominally paid.
+        await S.setTurn({
+            count: result.turn.count,
+            // Carried through untouched. A cycle turning is not a page turning,
+            // and every write of this setting rebuilds the whole shape.
+            chapters: was.chapters,
+            undo: Cycle.record({
+                count: was.count,
+                forces: result.payments.map((p) => ({ id: p.forceId, resources: p.from })),
+                plots: wound,
+                assets: moved.map(({ asset }) => asset),
+                logIds: lines
+            })
+        });
     },
 
     /**
@@ -637,23 +684,84 @@ const operations = {
 
         // The Plot's own count, not the world's, which has not moved. `amount`
         // carries it because the entry's `turn` is stamped with the world's.
-        await record({
+        const lines = [await record({
             kind: LOG_KIND.CYCLE,
             plotId,
             amount: next.turnCount,
             isExample: plot.isExample
-        });
+        })];
 
         for (const { asset, change } of moved) {
             if (change.condition === undefined) continue;
-            await record({
+            lines.push(await record({
                 kind: LOG_KIND.CONDITION,
                 plotId: asset.plotId, nodeId: asset.nodeId,
                 forceId: asset.forceId, assetId: asset.id,
                 condition: change.condition,
                 isExample: asset.isExample
-            });
+            }));
         }
+
+        // One undo record for the whole board, whichever clock wrote it — see
+        // logic/cycle.mjs. `count` is the world's count UNCHANGED, so reverting
+        // this writes it back as it is and the world's clock never moves.
+        const turn = S.getTurn();
+        await S.setTurn({
+            count: turn.count,
+            chapters: turn.chapters,
+            undo: Cycle.record({
+                plotId,
+                count: turn.count,
+                plots: [plot],
+                assets: moved.map(({ asset }) => asset),
+                logIds: lines
+            })
+        });
+    },
+
+    /**
+     * Take back the last cycle, whichever clock turned it.
+     *
+     * The one destructive operation on this board that is an UNDO rather than an
+     * edit, and it is narrow on purpose. It replays a record written by the
+     * advance itself — purses, counts, timers and the lines it wrote — and it
+     * refuses outright once anything else has been recorded since.
+     *
+     * The refusal is checked HERE and not only on the button. A second GM may
+     * have pushed a Thread while this one was reading a stale screen, and the
+     * writer is the only thing in this module that cannot be looking at an old
+     * render. Same rule as the unaffordable push and the shut gate.
+     */
+    async 'turn.revert'() {
+        const turn = S.getTurn();
+        const log = S.getLog();
+        if (!Cycle.canRevert(turn.undo, log)) return;
+
+        const forces = S.getForces();
+        const plots = S.getPlots();
+        const assets = S.getAssets();
+        const back = Cycle.reverse(turn.undo, {
+            forces, plots, assets, log, chapters: turn.chapters
+        });
+
+        // Rows the record does not name come back by reference, so each of these
+        // asks whether anything actually moved rather than rewriting a setting —
+        // and a world-clock revert therefore touches no Assets at all when
+        // nothing was on a timer.
+        if (back.forces.some((f, i) => f !== forces[i])) await S.setForces(back.forces);
+        if (back.plots.some((p, i) => p !== plots[i])) await S.setPlots(back.plots);
+        if (back.assets.some((a, i) => a !== assets[i])) await S.setAssets(back.assets);
+
+        // The cycle did not happen, so the chronicle stops saying it did. A line
+        // saying it began followed by a line saying it was undone is the GM's
+        // bookkeeping in a record the table reads.
+        await S.setLog(back.log);
+
+        // Last, and it clears the record: an undo that could be pressed twice
+        // would pay the same purse back twice. `back.chapters` has already lost
+        // any mark standing above the restored count — a Segment cannot open on
+        // a cycle that is being taken back.
+        await S.setTurn({ count: back.count, chapters: back.chapters, undo: null });
     },
 
     /** Wipe the chronicle. The board is untouched — this only forgets. */
@@ -662,7 +770,36 @@ const operations = {
     },
 
     async 'turn.set'({ count }) {
-        await S.setTurn({ count });
+        // The marks stay. This writes the count by hand and says nothing about
+        // where the campaign's pages turned; a revert is the operation that
+        // unmakes a cycle, and only that one takes a mark with it.
+        await S.setTurn({ count, chapters: S.getTurn().chapters });
+    },
+
+    /**
+     * Open a Segment on the cycle the board is standing on.
+     *
+     * NOT a development, and deliberately writes no chronicle line. A mark
+     * records nothing that happened — it changes how the running count is READ,
+     * exactly as renaming the clock does — and a line here would refuse the very
+     * revert a GM reaches for next, because the undo survives only while the
+     * cycle's own lines are still the top of the chronicle.
+     *
+     * A cycle already marked is left alone rather than marked twice. The button
+     * is drawn disabled in that case, but a render can be stale — a second GM
+     * may have marked it — and the writer is the one thing in this module that
+     * cannot be looking at an old screen.
+     */
+    async 'chapter.begin'({ name = '' } = {}) {
+        const turn = S.getTurn();
+        const at = Cycle.nextMark(turn.count);
+        if (Cycle.hasMark(turn.chapters, at)) return;
+        await S.setTurn({ ...turn, chapters: [...turn.chapters, { at, name }] });
+    },
+
+    /** The whole list, as the Settings tab edited it. Normalize does the sorting. */
+    async 'chapter.set'({ chapters }) {
+        await S.setTurn({ ...S.getTurn(), chapters });
     },
 
     /**
@@ -737,7 +874,13 @@ export const commitAsset = (assetId, { nodeId = null, plotId = null } = {}) =>
 export const releaseAsset = (assetId) => write('asset.commit', { assetId });
 export const advanceTurn = () => write('turn.advance', {});
 export const advancePlotTurn = (plotId) => write('plot.turn', { plotId });
+export const revertTurn = () => write('turn.revert', {});
+/** Sets the count by hand, and drops the undo with it: nothing is being taken back. */
 export const setTurnCount = (count) => write('turn.set', { count });
+
+export const beginChapter = (name = '') => write('chapter.begin', { name });
+
+export const setChapters = (chapters) => write('chapter.set', { chapters });
 export const generateExample = () => write('example.generate', {});
 export const removeExample = () => write('example.remove', {});
 export const clearLog = () => write('log.clear', {});

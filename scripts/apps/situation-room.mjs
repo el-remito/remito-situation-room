@@ -24,15 +24,20 @@ import {
     plotsForForce, turnPreview, readLog, gateFor
 } from '../data/state.mjs';
 import { resolvePhase, resolvePhaseForGM, statePercent } from '../logic/state-track.mjs';
-import { resolveMode, effectiveThreshold, isFull } from '../logic/progress.mjs';
+import { resolveMode, effectiveThreshold, isFull, depletes } from '../logic/progress.mjs';
 import { layout } from '../logic/graph-layout.mjs';
+import { parseCustomColor, tagStyle } from '../logic/palette.mjs';
+import { refusal, nextMark, hasMark } from '../logic/cycle.mjs';
 import {
-    engagedForceIds, uncommittedAssets, followsTurn, hasOwnTurn, clockName
+    worldClock, plotClock, cycleReading, runLabelAt, runName
+} from '../ui/clock.mjs';
+import {
+    engagedForceIds, uncommittedAssets, followsTurn, hasOwnTurn
 } from '../logic/economy.mjs';
 import * as Cond from '../logic/condition.mjs';
 import {
     visibleRows, projectIdentity, projectProgress, projectClock, projectForceChip,
-    projectTone, projectMode, maskNoteOf, showValues, isHidden, isMasked
+    projectTone, projectMode, projectCountdown, maskNoteOf, showValues, isHidden, isMasked
 } from '../logic/visibility.mjs';
 import * as Edit from '../logic/editing.mjs';
 import { harvest, readField, clearField, editorContext } from './board-editor.mjs';
@@ -144,6 +149,40 @@ const KIND_NOUNS = {
     [EDIT_KIND.ASSET]: 'RSR.asset.singular'
 };
 
+/**
+ * One row's searchable text, lowercased and joined.
+ *
+ * Every caller passes strings that have ALREADY been projected for the viewer.
+ * That is not a convention this function can enforce, so it is stated at both
+ * ends: see #searchText and the line that builds a Thread row's own.
+ */
+const haystack = (...parts) => parts.filter(Boolean).join(' ').toLowerCase();
+
+/**
+ * Which stored query a search box shows, by the scope in its markup.
+ *
+ * Threads and Requirements are two readings of ONE list, so they read and write
+ * one query: a name typed on either tab is still typed on the other, and
+ * pressing a card on the diagram — which fills the box — leaves the list
+ * filtered to the Thread that was pressed rather than filtered to nothing.
+ *
+ * The SCOPES stay separate because the two boxes hide different things. The list
+ * hides rows that do not match; the diagram hides every chain that contains no
+ * match, whole, because half a chain is a lie about what is blocking what.
+ */
+const SEARCH_QUERY = { plots: 'plots', threads: 'threads', graph: 'threads' };
+
+/**
+ * Everything that goes into a chronicle sentence, made safe to put there.
+ *
+ * The sentence is the one string this window hands to the template UNESCAPED,
+ * because it carries the tags that colour the names in it. That is only sound
+ * if every value substituted into it has been through here first — names,
+ * mask labels, condition labels and a GM's own word for a clock are all typed
+ * by somebody.
+ */
+const esc = (v) => foundry.utils.escapeHTML(String(v ?? ''));
+
 export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
     /**
@@ -174,6 +213,11 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             openPlot: SituationRoom._onOpenPlot,
             closePlot: SituationRoom._onClosePlot,
             setPlotTab: SituationRoom._onSetPlotTab,
+            findThread: SituationRoom._onFindThread,
+            revertTurn: SituationRoom._onRevertTurn,
+            beginChapter: SituationRoom._onBeginChapter,
+            addChapter: SituationRoom._onAddChapter,
+            removeChapter: SituationRoom._onRemoveChapter,
             createPlot: SituationRoom._onCreatePlot,
             editPlot: SituationRoom._onEditPlot,
             removePlot: SituationRoom._onRemovePlot,
@@ -253,6 +297,18 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      * different Plot in Requirements would hide the Threads somebody came for.
      */
     #plotTab = 'threads';
+
+    /**
+     * What is typed into each search box, by scope.
+     *
+     * Instance state like #view, and deliberately NOT part of the render
+     * context: filtering happens in the DOM against the haystack each row
+     * carries, so typing never re-renders and the caret never jumps. What this
+     * field is for is surviving a render that happens for some OTHER reason —
+     * a push landing, a cycle turning — which would otherwise silently unfilter
+     * a list the GM is still reading.
+     */
+    #search = { threads: '', plots: '' };
 
     /**
      * Whether the GM is looking at the board as the table sees it.
@@ -420,11 +476,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 canPreview: game.user.isGM,
                 isPreview: this.#asPlayer,
                 isEditing: true,
-                turn: board.turn.count,
-                turnLabel: this.#worldClock(board),
+                turnReading: cycleReading(board),
+                turnLabel: worldClock(board),
                 editor: editorContext(this.#edit.kind, this.#edit, board)
             };
         }
+
+        const plots = this.#buildPlotList(board, isGM);
 
         // A plot the GM hid out from under a player who had it open.
         const open = this.#plotId ? plotById(board, this.#plotId) : null;
@@ -441,8 +499,14 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             isSituation: this.#view === VIEW.SITUATION,
             isCockpit: this.#view === VIEW.COCKPIT,
             isHelp: this.#view === VIEW.HELP,
-            turn: board.turn.count,
-            turnLabel: this.#worldClock(board),
+            // One string, built here, because how a count is READ is a campaign
+            // setting and the template cannot ask two questions about it.
+            turnReading: cycleReading(board),
+            turnLabel: worldClock(board),
+            // Only ever the world's clock: a Plot keeping its own carries its own
+            // control, inside the Plot where it was pressed.
+            turnRevert: isGM ? this.#buildRevert(board) : null,
+            turnMark: isGM ? this.#buildMark(board) : null,
             hasExample: hasExample(board),
             helpSections: HELP_SECTIONS
                 .filter((section) => isGM || !section.gmOnly)
@@ -453,7 +517,12 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                     body: gmOnly ? `RSR.help.${key}.body.gm`
                         : `RSR.help.${key}.body.${isGM ? 'gm' : 'player'}`
                 })),
-            plots: this.#buildPlotList(board, isGM),
+            plots,
+            // Whether the Plot list is worth a search box. Decided here with
+            // every other branch, rather than as `(gt plots.length 1)` in the
+            // markup: the rule in this file is that the template asks no
+            // questions it cannot answer from one field.
+            hasManyPlots: plots.length > 1,
             openPlot: openVisible ? this.#buildPlotDetail(board, openVisible, isGM) : null,
             // The chronicle stands beside the Plot list, so it is built only when
             // that list is what is on screen.
@@ -471,27 +540,88 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     // ── context builders ─────────────────────────────────────────────────────
 
     /**
-     * What this world calls its clock, and what one Plot calls its own.
+     * Whether the last cycle can still be taken back, for the button that would.
      *
-     * `clockName` is pure and returns the GM's word or nothing; the built-in
-     * word is a localized string, so the two are joined here. A board can now
-     * hold more than one clock, and a chip counting 3 beside a badge counting 12
-     * invites exactly the wrong conclusion — that one of them is out of date —
-     * so each of them says which clock it is counting.
+     * Null when there is no record, and null when the record belongs to ANOTHER
+     * clock: the control beside the world's button must never offer to undo a
+     * Plot's cycle, or the other way round. The two presses do different things,
+     * and a GM reaching for one of them means that one.
+     *
+     * A record that has gone stale still returns something, and the button is
+     * drawn disabled with the reason on it. A control that has quietly vanished
+     * is worse than one that will not work: this is exactly what a GM who
+     * pressed the cycle by accident goes looking for, and it owes them the
+     * reason rather than an absence.
      */
-    #worldClock(board) {
-        return clockName(board.constants) || game.i18n.localize('RSR.turn.globalLabel');
+    #buildRevert(board, plotId = null) {
+        const undo = board.turn.undo;
+        if (!undo || (undo.plotId ?? null) !== plotId) return null;
+        const why = refusal(undo, board.log);
+        return {
+            can: why === '',
+            hint: why ? `RSR.turn.revertReason.${why}` : 'RSR.turn.revertHint'
+        };
     }
 
-    #plotClock(plot) {
-        return clockName(plot) || game.i18n.localize('RSR.turn.plotLabel');
+    /**
+     * Where the next Segment would open, for the button that would open it.
+     *
+     * Always something, never null, because unlike the revert this control is
+     * not conditional on anything having happened — a campaign can be marked on
+     * its first cycle. It is drawn disabled with the reason when the cycle the
+     * board is standing on is already marked, which is the same courtesy the
+     * revert gets and for the same reason: a GM who came looking for the control
+     * is owed the reason rather than an absence.
+     */
+    #buildMark(board) {
+        const at = nextMark(board.turn.count);
+        const taken = hasMark(board.turn.chapters, at);
+        return {
+            at,
+            can: !taken,
+            // The GM's own word for a run, so the button reads "Begin a Season"
+            // in a campaign that counts in seasons.
+            word: runName(board),
+            hint: taken ? 'RSR.turn.segmentAlready' : 'RSR.turn.segmentHint'
+        };
     }
 
     #buildPlotList(board, isGM) {
-        return visibleRows(visiblePlots(board), isGM).map((plot) => ({
-            ...this.#plotHeader(board, plot, isGM),
-            threadCount: visibleRows(nodesForPlot(board, plot.id), isGM).length
-        }));
+        return visibleRows(visiblePlots(board), isGM).map((plot) => {
+            const header = this.#plotHeader(board, plot, isGM);
+            const nodes = visibleRows(nodesForPlot(board, plot.id), isGM);
+            return {
+                ...header,
+                threadCount: nodes.length,
+                search: this.#searchText(board, plot, header, nodes, isGM)
+            };
+        });
+    }
+
+    /**
+     * What a Plot card can be found by.
+     *
+     * Its own name and description, every Thread on it that this viewer may see,
+     * and every Asset committed to it. The Threads are the point: a GM looking
+     * for the Granary should not have to remember which siege it is in, and the
+     * card is the only thing on this screen that can answer.
+     *
+     * BUILT FROM PROJECTED NAMES, WHICH IS THE WHOLE RULE HERE. A search index
+     * is a side channel: a haystack assembled from `node.name` would let a
+     * player type a masked Thread's real name and watch a card light up, which
+     * is the mask leaking through a feature that never renders it. So every
+     * string in here has been through `projectIdentity` and `visibleRows`
+     * first, and a masked row is findable by its mask and by nothing else.
+     */
+    #searchText(board, plot, header, nodes, isGM) {
+        const threads = nodes.map((node) => {
+            const id = projectIdentity(node, isGM, maskLabel(EDIT_KIND.NODE));
+            return `${id.name} ${id.description}`;
+        });
+        const committed = visibleRows(
+            board.assets.filter((a) => a.plotId === plot.id), isGM
+        ).map((a) => projectIdentity(a, isGM, maskLabel(EDIT_KIND.ASSET)).name);
+        return haystack(header.name, header.description, ...threads, ...committed);
     }
 
     /**
@@ -524,7 +654,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 onOwnClock: hasOwnTurn(plot),
                 offTheClock: !followsTurn(plot) && !hasOwnTurn(plot),
                 plotTurn: plot.turnCount,
-                plotTurnLabel: this.#plotClock(plot)
+                plotTurnLabel: plotClock(plot)
             } : {}),
             // A masked plot surrenders its Phase along with its name.
             phaseLabel: identity.masked ? null : (phase?.label ?? null),
@@ -558,9 +688,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             groups: this.#buildGroups(board, plot, isGM),
             threads,
             threadCount: nodes.length,
+            hasManyThreads: threads.length > 1,
             tray: this.#buildTray(board, plot, isGM),
             showThreads: this.#plotTab !== 'graph',
             showGraph: this.#plotTab === 'graph',
+            // Null unless the last cycle turned on THIS Plot's clock. GM-only by
+            // way of the caller, like every other control in this head.
+            revert: isGM ? this.#buildRevert(board, plot.id) : null,
             graph: this.#buildGraph(nodes, threads)
         };
     }
@@ -586,13 +720,25 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             const row = rows.get(id);
             const requires = (nodes.find((n) => n.id === id)?.prereqNodeIds ?? [])
                 .filter((prereqId) => drawn.has(prereqId));
+            const name = row?.name ?? '';
             return {
                 id,
-                name: row?.name ?? '',
+                name,
                 masked: !!row?.masked,
                 isConcluded: !!row?.isConcluded,
                 isLocked: !!row?.isLocked,
                 hasUnknown: unknown.has(id),
+                // Which piece of work this card belongs to. The search on this
+                // view hides whole CHAINS rather than cards — half a chain is a
+                // lie about what is blocking what — so this is the one value it
+                // compares, and a loose Thread is a chain of one.
+                chain: shape.chains[id] ?? id,
+                // What the box matches on: the projected name, and nothing else.
+                // A Thread row in the list matches on far more than its name,
+                // but a card shows one line of text, and hiding a whole chain
+                // over a word the reader cannot see on it would be a filter
+                // nobody could explain to themselves.
+                search: name.toLowerCase(),
                 // Space-joined for the attribute the edge drawing reads. The
                 // alternative was serialising the edge list into the markup as
                 // JSON, which is one escaping bug away from a broken board;
@@ -604,11 +750,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         return {
             hasEdges: shape.hasEdges,
             layers: shape.layers.map((ids) => ({ cards: ids.map(card) })),
-            // A count, not a list. The Threads with nothing to require and
-            // nothing requiring them are already on the other tab in full; what
-            // this view owes the reader is the assurance that they were left out
-            // on purpose rather than lost.
-            orphans: shape.orphans.length,
+            // Cards now, drawn under the diagram rather than counted in a
+            // sentence. Keeping them out of the COLUMNS is still right — five
+            // cards with no arrow on them bury the one relationship somebody
+            // opened this view for — but that was never a reason to leave them
+            // off the screen, and "these are waiting on nobody" is one of the
+            // two answers this view exists to give.
+            loose: shape.orphans.map(card),
             // Threads in a ring, or waiting behind one. They can never open, so
             // they are named outright rather than drawn in a column that would
             // imply an order they do not have.
@@ -688,8 +836,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
         // Every entry is stamped with the world's count, whatever moved: `record`
         // reads one clock and there is only one it could read. So the stamp says
-        // which clock that is, now that the board holds more than one of them.
-        const stamp = this.#worldClock(board);
+        // which clock that is, now that the board holds more than one of them —
+        // and reads it the way the campaign counts, which for a segmented one
+        // means a line from cycle 4 says which run cycle 4 fell in.
+        const stamp = (count) => cycleReading(board, count);
 
         return readLog(board, LOG_ROWS)
             .map((e) => {
@@ -711,9 +861,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                     // where a stamp would repeat the sentence word for word. A
                     // Plot's own cycle keeps it: "Global Cycle 2" beside "Days on
                     // the Road 4 began" is two different facts.
-                    when: e.kind === LOG_KIND.CYCLE && !e.plotId
-                        ? ''
-                        : game.i18n.format('RSR.log.when', { label: stamp, turn: e.turn }),
+                    when: e.kind === LOG_KIND.CYCLE && !e.plotId ? '' : stamp(e.turn),
                     note: e.note,
                     // What the table reads of this line, told to the GM alone.
                     // Absent when it is the same as what the GM reads.
@@ -758,19 +906,69 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     /**
+     * Which colour a name is printed in, and the one rule that is not obvious.
+     *
+     * Own colour, then — for an Asset alone — the colour of the Force that owns
+     * it, then the default for the kind. The Force step is the reason the
+     * feature exists: a GM says "the Iron Legion is grey" once and every
+     * battalion, bought magistrate and dragon they own reads grey without being
+     * told individually.
+     *
+     * A MASKED ROW WEARS THE DEFAULT, and so does an Asset whose Force is
+     * masked. Colour is identity, and identity is exactly what a mask is
+     * withholding: four grey names in a chronicle full of teal ones would group
+     * the Legion's work for a table that has not been told the Legion is in it.
+     * Same rule as the mode chip, the drain and the contested standings.
+     *
+     * Returns a class AND a style, because a colour is resolved in one of two
+     * places: a palette id is a class the stylesheet owns, with a light half and
+     * a dark half; a GM's own colour is a hex that has to be carried inline. The
+     * style string is built in logic/palette.mjs out of parsed integers and is
+     * never the text the GM typed — which is what makes it safe to put in an
+     * attribute at all.
+     */
+    #tagAttrs(kind, entity, board, isGM) {
+        const none = { cls: `rsr-tag-kind-${kind}`, style: '' };
+        if (!entity || isMasked(entity, isGM)) return none;
+        if (entity.color) return tagStyle(entity.color, kind);
+        if (kind !== 'asset') return none;
+        const owner = entity.forceId ? forceById(board, entity.forceId) : null;
+        if (!owner || isMasked(owner, isGM) || !owner.color) return none;
+        return tagStyle(owner.color, kind);
+    }
+
+    /**
      * One entry as a sentence, built here rather than stored, because the names in
      * it depend on who is reading and on what is secret at the moment of reading —
      * neither of which was known when the entry was written.
+     *
+     * Every name in it is WRAPPED and COLOURED. A chronicle line is four kinds of
+     * noun in one sentence — "The Iron Legion moved Bribing the Watch by +1" —
+     * and until now the only thing telling a Force from a Thread from an Asset
+     * was the wording around them. The colour is a default per kind, so it works
+     * with nothing configured, and a GM's own choice where they made one.
+     *
+     * The string this returns is HTML and the template prints it unescaped, so
+     * everything substituted into it goes through `esc` on the way in. The
+     * colour is the one thing that does not, and does not need to: a palette id
+     * is one of nine known strings, and a custom colour was rebuilt from parsed
+     * integers in logic/palette.mjs rather than passed through. Neither can
+     * carry a character the GM typed.
      */
     #logSentence(e, { board, plot, node, force, asset, isGM, mask }) {
         const F = (key, data) => game.i18n.format(key, data);
         // One line can name a Plot, a Thread, a Force and an Asset, and each is
         // masked as its own kind of thing.
         const name = (entity, kind) => projectIdentity(entity, isGM, mask[kind]).name;
+        const tag = (entity, kind) => {
+            const { cls, style } = this.#tagAttrs(kind, entity, board, isGM);
+            return `<span class="rsr-tag ${cls}"${style ? ` style="${style}"` : ''}>`
+                + `${esc(name(entity, kind))}</span>`;
+        };
 
-        const thread = node ? name(node, 'node') : '';
-        const who = force ? name(force, 'force') : '';
-        const where = plot ? name(plot, 'plot') : '';
+        const thread = node ? tag(node, 'node') : '';
+        const who = force ? tag(force, 'force') : '';
+        const where = plot ? tag(plot, 'plot') : '';
 
         switch (e.kind) {
             case LOG_KIND.PUSH: {
@@ -781,7 +979,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 const values = node
                     ? e.amount !== 0 && showValues(node, isGM) && !isMasked(node, isGM)
                     : false;
-                const amount = e.amount > 0 ? `+${e.amount}` : String(e.amount);
+                const amount = esc(e.amount > 0 ? `+${e.amount}` : String(e.amount));
                 if (who) {
                     return values
                         ? F('RSR.log.push', { force: who, thread, amount })
@@ -799,10 +997,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 return F('RSR.log.reopen', { thread });
             case LOG_KIND.COMMIT:
                 return thread
-                    ? F('RSR.log.commit', { force: who, asset: name(asset, 'asset'), thread })
-                    : F('RSR.log.commitPlot', { force: who, asset: name(asset, 'asset'), plot: where });
+                    ? F('RSR.log.commit', { force: who, asset: tag(asset, 'asset'), thread })
+                    : F('RSR.log.commitPlot', { force: who, asset: tag(asset, 'asset'), plot: where });
             case LOG_KIND.RELEASE:
-                return F('RSR.log.release', { force: who, asset: name(asset, 'asset') });
+                return F('RSR.log.release', { force: who, asset: tag(asset, 'asset') });
             case LOG_KIND.CONDITION:
                 // The condition is stored as its id and named here, like every
                 // other name in this file, so the line reads in the reader's
@@ -811,10 +1009,12 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 // rendering a raw id at the table.
                 return F('RSR.log.condition', {
                     force: who,
-                    asset: name(asset, 'asset'),
-                    condition: game.i18n.localize(
+                    asset: tag(asset, 'asset'),
+                    // A condition label can be one the GM typed into the
+                    // conditions table, so it is escaped like every other name.
+                    condition: esc(game.i18n.localize(
                         Cond.labelOf(Cond.rowFor(board.conditions, e.condition))
-                    )
+                    ))
                 });
             case LOG_KIND.CYCLE:
                 // A cycle that belongs to one Plot names it and counts on that
@@ -830,13 +1030,11 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 // the header is — nobody at the table is being asked to keep two
                 // calendars — but that time passed there is fiction, and theirs.
                 if (!where) {
-                    return F('RSR.log.cycle', {
-                        label: this.#worldClock(board), turn: e.turn
-                    });
+                    return F('RSR.log.cycle', { reading: esc(cycleReading(board, e.turn)) });
                 }
                 return isGM
                     ? F('RSR.log.cyclePlot', {
-                        label: this.#plotClock(plot), plot: where, turn: e.amount
+                        label: esc(plotClock(plot)), plot: where, turn: e.amount
                     })
                     : F('RSR.log.cyclePlotQuiet', { plot: where });
             default:
@@ -886,6 +1084,10 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         // a clock counts its segments however little the table is told — while
         // `shown` decides both the chip and the shape, and is null under a mask.
         const shown = projectMode(node, isGM, mode);
+        // Which way this Thread is READ. Withheld with the mode and for the same
+        // reason: a bar draining while its neighbours fill is the loudest thing
+        // a chip could have said about a row the table is told nothing about.
+        const draining = projectCountdown(node, isGM, depletes(node, plot));
         const concluded = node.status === NODE_STATUS.CONCLUDED;
         // Not the stored status: that is only ONE of the three things that shut a
         // Thread, and a row drawn from it alone would sit open with a
@@ -914,6 +1116,14 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             isContested: false,
             isClock: false,
             isPool: false,
+            isDepleting: draining,
+            // Which way the one control on this row points. A depleting Thread
+            // is pushed by typing a NEGATIVE number, and an arrow aimed right
+            // while the reading falls is the same argument the sign convention
+            // just lost. Said twice on purpose: the chip is the word for it and
+            // this is the shape, and a GM working down a list of nine reads the
+            // shape first.
+            pushIcon: draining ? 'fa-solid fa-arrow-left-long' : 'fa-solid fa-arrow-right-long',
             // A shut gate takes the controls with it. This used to read "a locked
             // Thread is still advanceable, because locking is about what the
             // fiction allows and the GM decides that" — which was true while the
@@ -943,6 +1153,14 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 ...(masked ? { isReady: true } : this.#conditionOf(asset))
             };
         });
+
+        // What this row can be found by: itself, and what is standing on it.
+        // Assembled from the row that was just built rather than from the stored
+        // Thread, so it inherits every projection above for free — a masked
+        // Thread is searchable by its mask and not by its name.
+        row.search = haystack(
+            row.name, row.description, ...row.committedAssets.map((a) => a.name)
+        );
 
         // What is still OWED, and only while it is owed. The row used to list
         // every prerequisite whether or not it had concluded, which reads as
@@ -1004,9 +1222,15 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                         // here: the dialog names it beside the Force, which is
                         // where the number is actually about to be spent.
                         canPush: row.canPush && !!chip.id,
+                        // Each side against the SAME threshold, so a depleting
+                        // contest is two reserves running down beside each
+                        // other and the first to nothing is the side that has
+                        // nothing left to spend. It still does not conclude
+                        // itself; contested never does.
                         ...projectProgress({
                             current: node.progress.byForce[force.id] ?? 0,
-                            total: threshold, isGM, entity: node
+                            total: threshold, isGM, entity: node,
+                            countdown: draining
                         })
                     };
                 })
@@ -1020,7 +1244,8 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             // it: projectClock returns them only when the numbers are readable,
             // and the row falls back to a plain bar when they are not.
             row.clock = projectClock({
-                current: node.progress.pool, total: node.segments, isGM, entity: node
+                current: node.progress.pool, total: node.segments, isGM, entity: node,
+                countdown: draining
             });
             row.pips = row.clock.pips;
             return row;
@@ -1040,7 +1265,11 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 ? Math.max(0, ...Object.values(node.progress.byForce ?? {}))
                 : node.progress.pool,
             total: mode === MODE.CLOCK ? node.segments : threshold,
-            isGM, entity: node
+            isGM, entity: node,
+            // False for a masked row and for fiat, the only mode with no
+            // number to run down — so the fallback bar fills, like every other
+            // fallback bar on the board.
+            countdown: draining
         });
         return row;
     }
@@ -1060,8 +1289,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         const byId = new Map(roster.map((row) => [row.forceId, row]));
 
         return {
-            turn: board.turn.count,
-            nextTurn: board.turn.count + 1,
+            reading: cycleReading(board),
             payingCount: roster.filter((row) => row.willBePaid).length,
             // The footnote. Every Force and what the next cycle does to it —
             // INCLUDING the ones it does nothing to, which are the rows a GM is
@@ -1122,6 +1350,17 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         return {
             constants: K,
             defaults: CONSTANT_DEFAULTS,
+            // What the count reads as with what is currently saved, shown beside
+            // the list that decides it — the same idea as the icon preview.
+            reading: cycleReading(board),
+            // Where each run begins. Read off the CLOCK and not off `constants`:
+            // a mark is a fact about the past, not a default for a new row, which
+            // is why it is the one thing on this tab that is neither.
+            chapters: board.turn.chapters.map((m) => ({
+                at: m.at,
+                name: m.name,
+                label: runLabelAt(board, m.at)
+            })),
             // One default per KIND of row. A single setting for all four was a
             // false economy: a GM wants the sides named from the start and the
             // Threads they are running kept quiet, and having to correct every
@@ -1225,6 +1464,15 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         // arrows on it.
         this.#drawGraph();
 
+        // Also everyone's: a player with eleven Threads in front of them has the
+        // same problem the GM does, and the box filters what is already on their
+        // screen rather than asking the world anything.
+        this.#wireSearch();
+
+        // Only present while an editor is open, and it exits quietly when it is
+        // not — cheaper than asking twice.
+        this.#wireColorPicker();
+
         // v1 keeps the player write path closed, so only a GM moves Assets around
         // — and a GM previewing the table's board is not one of them, or the
         // preview would be a screenshot with live controls behind it.
@@ -1252,6 +1500,196 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 }
             }).bind(this.element);
         }
+    }
+
+    /**
+     * Hook up every search box on screen, and re-apply what was already typed.
+     *
+     * Listeners are attached per render because the elements are new each time;
+     * the QUERY is not, which is the point of #search. Re-applying at the end
+     * means a list that was filtered before a push landed is still filtered
+     * after it, without the box having to be touched again.
+     */
+    #wireSearch() {
+        for (const box of this.element?.querySelectorAll('[data-search-scope]') ?? []) {
+            const scope = box.dataset.searchScope;
+            const query = SEARCH_QUERY[scope];
+            const input = box.querySelector('[data-search-input]');
+            if (!query || !input) continue;
+
+            input.value = this.#search[query] ?? '';
+            input.addEventListener('input', () => {
+                this.#search[query] = input.value;
+                this.#applySearch(scope);
+            });
+            box.querySelector('[data-search-clear]')?.addEventListener('click', () => {
+                this.#search[query] = '';
+                input.value = '';
+                this.#applySearch(scope);
+                input.focus();
+            });
+
+            this.#applySearch(scope);
+        }
+    }
+
+    /**
+     * Keep the swatch row and the custom colour box telling the same story.
+     *
+     * The form harvests ONE value: the radio decides, and the box is read only
+     * when the radio says Custom (see logic/editing.mjs `colorPatch`). Left
+     * alone, a GM could type a hex with Moss still selected and save moss — the
+     * form would have shown them two answers and kept the one they were not
+     * looking at. So touching either box checks Custom, and picking a swatch
+     * empties both.
+     *
+     * No re-render anywhere in here, for the same reason the search box does
+     * not: this runs while the GM is typing into one of these fields.
+     */
+    #wireColorPicker() {
+        const form = this.#form();
+        const wrap = form?.querySelector('[data-color-custom]');
+        if (!form || !wrap) return;
+
+        const text = wrap.querySelector('.rsr-color-text');
+        const pick = wrap.querySelector('[data-color-pick]');
+        const custom = form.querySelector('input[name="color"][value="custom"]');
+        const swatch = custom?.closest('.rsr-swatch');
+        if (!text || !custom) return;
+
+        // The swatch dot shows the colour it stands for. Only ever set from a
+        // PARSED value, never from the raw text: half of "#8a90" is not a colour
+        // and would paint the dot black on the way to being one.
+        const show = (parsed) => {
+            if (!swatch) return;
+            if (parsed) swatch.style.setProperty('--rsr-tag-ink', parsed);
+            else swatch.style.removeProperty('--rsr-tag-ink');
+        };
+
+        const chooseCustom = () => { custom.checked = true; };
+
+        text.addEventListener('input', () => {
+            chooseCustom();
+            const parsed = parseCustomColor(text.value);
+            if (parsed && pick) pick.value = parsed;
+            show(parsed);
+        });
+
+        pick?.addEventListener('input', () => {
+            text.value = pick.value;
+            chooseCustom();
+            show(pick.value);
+        });
+
+        for (const radio of form.querySelectorAll('input[name="color"]')) {
+            if (radio === custom) continue;
+            radio.addEventListener('change', () => { text.value = ''; show(''); });
+        }
+    }
+
+    /**
+     * Show the rows that match and hide the rest.
+     *
+     * NO RE-RENDER. Rebuilding the context on every keystroke was the other
+     * build and it fails in the most annoying way available: ApplicationV2
+     * replaces the DOM, the input it replaces is the one being typed into, and
+     * the caret lands back at the start of the box. So each row carries its own
+     * haystack in an attribute and this walks them — which is also why a
+     * player's board can be searched at all, since the attribute was built
+     * against what that player may see.
+     *
+     * Every term must hit, so two words narrow rather than widen. `hidden` is
+     * the switch because `.rsr [hidden]` already wins over everything.
+     */
+    #applySearch(scope) {
+        const root = this.element;
+        const list = root?.querySelector(`[data-search-list="${scope}"]`);
+        if (!list) return;
+
+        const terms = (this.#search[SEARCH_QUERY[scope]] ?? '').toLowerCase()
+            .split(/\s+/).filter(Boolean);
+
+        // Two filters, one set of chrome. The count, the clear button and the
+        // "nothing matches" line say the same thing on both tabs and are worked
+        // out the same way from whatever the filter reports back.
+        const { shown, total } = scope === 'graph'
+            ? this.#filterChains(list, terms)
+            : this.#filterRows(list, terms);
+
+        const box = root.querySelector(`[data-search-scope="${scope}"]`);
+        const count = box?.querySelector('[data-search-count]');
+        if (count) {
+            count.hidden = terms.length === 0;
+            count.textContent = game.i18n.format('RSR.search.count', { shown, total });
+        }
+        const clear = box?.querySelector('[data-search-clear]');
+        if (clear) clear.hidden = terms.length === 0;
+
+        // A list that has filtered itself down to nothing reads as a bug
+        // otherwise — the rows are all still there, and none of them are drawn.
+        const empty = root.querySelector(`[data-search-empty="${scope}"]`);
+        if (empty) empty.hidden = !(terms.length > 0 && shown === 0);
+    }
+
+    /** Rows in a list: each one carries its own haystack, and hides on its own. */
+    #filterRows(list, terms) {
+        const rows = list.querySelectorAll('[data-search]');
+        let shown = 0;
+        for (const row of rows) {
+            const hit = terms.every((term) => (row.dataset.search ?? '').includes(term));
+            row.hidden = !hit;
+            if (hit) shown += 1;
+        }
+        return { shown, total: rows.length };
+    }
+
+    /**
+     * Cards on the Requirements view: the CHAIN hides, not the card.
+     *
+     * A card matches on its own name, and then brings its whole chain with it.
+     * Hiding the cards that did not match would leave a diagram of stumps —
+     * arrows pointing at nothing, a Thread shown as free that is in fact waiting
+     * on something the filter took away — and this view exists to say what is
+     * blocking what. Every card carries its chain in an attribute, worked out in
+     * logic/graph-layout.mjs, so this is one comparison per card and a loose
+     * Thread is a chain of one with no special case anywhere.
+     *
+     * A column emptied by the filter is hidden too. Left in place it is a gap
+     * between two columns that still have cards, which reads as a step of the
+     * chain that has gone missing rather than as one that was never shown.
+     */
+    #filterChains(graph, terms) {
+        const cards = [...graph.querySelectorAll('.rsr-graph-card[data-chain]')];
+
+        const keep = terms.length === 0 ? null : new Set(
+            cards
+                .filter((card) => terms.every((t) => (card.dataset.search ?? '').includes(t)))
+                .map((card) => card.dataset.chain)
+        );
+
+        let shown = 0;
+        for (const card of cards) {
+            const hit = !keep || keep.has(card.dataset.chain);
+            card.hidden = !hit;
+            if (hit) shown += 1;
+        }
+
+        const holds = (el) => [...el.querySelectorAll('.rsr-graph-card')].some((c) => !c.hidden);
+        for (const layer of graph.querySelectorAll('.rsr-graph-layer')) layer.hidden = !holds(layer);
+        for (const free of graph.querySelectorAll('.rsr-graph-free')) free.hidden = !holds(free);
+
+        // Two sentences that are about the whole Plot rather than about any card,
+        // so neither can answer a search: the ring warning names Threads that are
+        // not on the diagram at all, and "nothing waits on anything here" stops
+        // being true of what is left the moment something is filtered out.
+        for (const said of graph.querySelectorAll('.rsr-graph-tangle, .rsr-graph-nothing')) {
+            said.hidden = terms.length > 0;
+        }
+
+        // The curves were measured against where the cards were standing. Hiding
+        // a column moves everything to its right, so they are taken again.
+        this.#drawGraph();
+        return { shown, total: cards.length };
     }
 
     /**
@@ -1289,10 +1727,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
         const parts = [];
         for (const card of graph.querySelectorAll('.rsr-graph-card[data-requires]')) {
+            // Filtered out by the search. A hidden card has no box worth
+            // measuring, and an arrow drawn to it lands at the top-left corner.
+            if (card.hidden) continue;
             const to = box(card);
             for (const id of card.dataset.requires.split(' ').filter(Boolean)) {
                 const source = graph.querySelector(`.rsr-graph-card[data-node-id="${CSS.escape(id)}"]`);
-                if (!source) continue;
+                if (!source || source.hidden) continue;
                 const from = box(source);
 
                 // Out of the right edge of the requirement, into the left edge of
@@ -1414,12 +1855,44 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!await this.#leaveEditor()) return;
         this.#plotId = target.dataset.plotId ?? null;
         this.#plotTab = 'threads';
+        // A query belongs to the list it was typed at. Carried into the next
+        // Plot it would hide most of what you just opened, and the box that
+        // explains why is above the fold you have not scrolled to yet.
+        this.#search.threads = '';
         this.render();
     }
 
-    /** Threads or Requirements. A way of looking; it writes nothing. */
+    /**
+     * Threads or Requirements. A way of looking; it writes nothing.
+     *
+     * The search box is deliberately NOT cleared. The two tabs share a query, so
+     * a reader who has narrowed the diagram to one chain and then switches to
+     * the list finds the same Threads waiting for them, with the box above
+     * saying why. Clearing it here would make the two tabs disagree about what
+     * the reader had asked for.
+     */
     static _onSetPlotTab(event, target) {
         this.#plotTab = target.dataset.tab === 'graph' ? 'graph' : 'threads';
+        this.render();
+    }
+
+    /**
+     * A card on the Requirements view, pressed.
+     *
+     * That view answers one question — what waits on what — and cannot answer
+     * any other: there is no bar on a card, no mode, no way to push it. So every
+     * follow-up is a question about the row, and reaching the row meant changing
+     * tab and finding it by eye among nine. This changes the tab and puts the
+     * card's name in the search box, so the list opens on that Thread with the
+     * box above it saying why the list is short.
+     *
+     * The NAME, not the id: the box matches text a reader can see, so what goes
+     * into it has to be something they could have typed themselves — which for a
+     * masked Thread means its mask, and that is right too.
+     */
+    static _onFindThread(event, target) {
+        this.#plotTab = 'threads';
+        this.#search.threads = target.dataset.threadName ?? '';
         this.render();
     }
 
@@ -1452,9 +1925,23 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#openEditor(EDIT_KIND.NODE, target.dataset.threadId);
     }
 
+    /**
+     * Delete a Thread, from the foot of its own editor.
+     *
+     * The editor has to be dismissed on the way out, or the GM is left looking
+     * at a form for a row that no longer exists — and Save would then write it
+     * back. Dismissed WITHOUT the dirty guard on purpose: the confirm they just
+     * answered supersedes it, and asking a second time whether they want to keep
+     * changes to the thing they have just deleted is nonsense.
+     */
     static async _onRemoveThread(event, target) {
+        const threadId = target.dataset.threadId;
         const { confirmDeleteThread } = await import('./editors.mjs');
-        await confirmDeleteThread(target.dataset.threadId);
+        const removed = await confirmDeleteThread(threadId);
+        if (removed && this.#edit?.id === threadId) {
+            this.#edit = null;
+            this.render();
+        }
     }
 
     /**
@@ -1790,7 +2277,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 ?? CONSTANT_DEFAULTS.defaultVisibility[kind];
         }
 
-        const { setConstants } = await import('../data/state.mjs');
+        const { setConstants, setChapters } = await import('../data/state.mjs');
         await setConstants({
             forceResources: int('forceResources', CONSTANT_DEFAULTS.forceResources),
             forceIncome: int('forceIncome', CONSTANT_DEFAULTS.forceIncome),
@@ -1804,8 +2291,20 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             // built-in word", and normalize trims, so a field of spaces is the
             // same as an empty one.
             turnLabel: form.elements.turnLabel?.value ?? CONSTANT_DEFAULTS.turnLabel,
+            chapterLabel: form.elements.chapterLabel?.value ?? CONSTANT_DEFAULTS.chapterLabel,
             defaultVisibility
         });
+
+        // A second write, and a different setting: the marks live on the clock,
+        // not among the defaults. Rows are read one at a time out of the list
+        // rather than through form.elements, because every row carries the same
+        // two names and a repeated name is a RadioNodeList, not a value.
+        await setChapters([...form.querySelectorAll('.rsr-chapter-row')]
+            .filter((row) => !row.hasAttribute('data-chapter-proto'))
+            .map((row) => ({
+                at: Number(row.querySelector('[name="chapterAt"]')?.value),
+                name: row.querySelector('[name="chapterName"]')?.value ?? ''
+            })));
 
         ui.notifications?.info(game.i18n.localize('RSR.settings.saved'));
     }
@@ -1819,6 +2318,51 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     static async _onAdvanceTurn() {
         const { confirmAdvanceTurn } = await import('./editors.mjs');
         await confirmAdvanceTurn();
+    }
+
+    /**
+     * Take back the last cycle.
+     *
+     * ONE action for both clocks. The record on the board already says which
+     * clock it belongs to, and the control offering it is only ever drawn beside
+     * that clock — so `data-plot-id` is here to let the dialog NAME the Plot,
+     * not to decide anything. The writer checks the record again regardless: a
+     * render can be stale, and this is the press that must not act on one.
+     */
+    static async _onRevertTurn(event, target) {
+        const { confirmRevertTurn } = await import('./editors.mjs');
+        await confirmRevertTurn(target.dataset.plotId ?? null);
+    }
+
+    /** Open a Segment on the cycle the board is standing on. */
+    static async _onBeginChapter() {
+        const { confirmBeginChapter } = await import('./editors.mjs');
+        await confirmBeginChapter();
+    }
+
+    /**
+     * Add and remove rows in the Settings list, IN THE DOM and without a render.
+     *
+     * A render replaces the form, so anything half-typed in another row would be
+     * lost the moment the GM added a second one — the same reason the search box
+     * filters in place. The rows are harvested on Save, and until then this tab
+     * is a form like any other: nothing is written by adding a row, and nothing
+     * is lost by closing the tab without saving.
+     */
+    static _onAddChapter(event, target) {
+        const list = target.closest('.rsr-settings-row')?.querySelector('.rsr-chapter-list');
+        const proto = list?.querySelector('[data-chapter-proto]');
+        if (!proto) return;
+
+        const row = proto.cloneNode(true);
+        row.removeAttribute('data-chapter-proto');
+        row.hidden = false;
+        list.insertBefore(row, proto);
+        row.querySelector('[name="chapterAt"]')?.focus();
+    }
+
+    static _onRemoveChapter(event, target) {
+        target.closest('.rsr-chapter-row')?.remove();
     }
 
     /**

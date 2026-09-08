@@ -16,6 +16,8 @@ import {
     VISIBILITY, VISIBILITY_KINDS, POLARITY, ASSET_MODIFIER, ASSET_CONDITION,
     CONDITION_EFFECT, DEFAULT_CONDITIONS, TURN_BEHAVIOUR
 } from '../constants.mjs';
+import { normalizeColor } from '../logic/palette.mjs';
+import { record as cycleRecord, marks as cycleMarks } from '../logic/cycle.mjs';
 
 // ── primitives ───────────────────────────────────────────────────────────────
 
@@ -62,6 +64,17 @@ const entityBase = (raw) => ({
     // free string with no fallback baked in: the fallback is a localized thing
     // and this file is not allowed to know about those.
     maskLabel: str(raw?.maskLabel),
+    // Which colour this row's name is printed in wherever the board prints a
+    // name inside a sentence. One of the nine palette ids, or the GM's own
+    // colour canonicalised to #rrggbb, or '' — which is the ordinary case and
+    // means the default for the kind.
+    //
+    // A palette id lands in a class attribute and a custom one lands in a
+    // style attribute, which is why nothing typed is passed through: see
+    // logic/palette.mjs, where the value is parsed to numbers and a new
+    // string is built. A world file edited by hand is exactly where a stray
+    // value would come from.
+    color: normalizeColor(raw?.color),
     isExample: bool(raw?.isExample, ENTITY_DEFAULTS.isExample)
 });
 
@@ -171,6 +184,10 @@ export function normalizeNode(raw = {}) {
         mode: Object.values(MODE).includes(raw.mode) ? raw.mode : null,
         threshold: atLeast(raw.threshold, 1, 9),
         segments: atLeast(raw.segments, 1, 6),
+        // Which way the reading is SAID, not which way it moves: progress still
+        // climbs underneath. Stored on every Thread and read only where it means
+        // something — see logic/progress.mjs `depletes`.
+        countdown: bool(raw.countdown),
         progress: { pool: int(progress.pool, 0), byForce },
         outcomes: arr(raw.outcomes).filter(isObj).map((o) => ({
             forceId: str(o.forceId),
@@ -305,7 +322,37 @@ export function normalizeConditions(raw) {
 }
 
 export function normalizeTurn(raw = {}) {
-    return { count: Math.max(0, int(raw?.count, 0)) };
+    return {
+        count: Math.max(0, int(raw?.count, 0)),
+        /**
+         * Where each run of Cycles began, as marks on this one count.
+         *
+         * History, not a default, which is why it sits here beside the count and
+         * not in `constants` with the word it is read under. Nothing is stored
+         * twice: a mark says only that a page turned on that cycle, and the
+         * Segment and the Cycle within it are worked out from the count against
+         * this list at read time.
+         *
+         * `cycleMarks` sorts, dedupes and drops anything that is not a cycle, so
+         * the order the Settings rows were typed in never reaches a reader.
+         */
+        chapters: cycleMarks(raw?.chapters),
+        /**
+         * What the last cycle did, so that it can be taken back. Null when there
+         * is nothing to take back, which is how a fresh world opens and what a
+         * revert leaves behind.
+         *
+         * ONE RECORD FOR THE WHOLE BOARD, whichever clock wrote it. A revert is
+         * refused the moment anything else has been recorded, so a second cycle
+         * of any kind is precisely what makes the first one unusable — keeping a
+         * record per clock would only be keeping records that can never be used.
+         *
+         * `cycleRecord` is the same builder the advance uses, doing double duty
+         * as the repair: it rebuilds the whole shape from known keys, so a
+         * setting hand-edited in the console cannot smuggle a field through.
+         */
+        undo: isObj(raw?.undo) ? cycleRecord(raw.undo) : null
+    };
 }
 
 /** World-wide defaults. Every key falls back independently, so a partial save opens. */
@@ -323,6 +370,8 @@ export function normalizeConstants(raw = {}) {
         stateMin: int(raw?.stateMin, D.stateMin),
         stateMax: int(raw?.stateMax, D.stateMax),
         turnLabel: str(raw?.turnLabel, D.turnLabel).trim(),
+        // The word only. Where the runs begin is on the clock, not here.
+        chapterLabel: str(raw?.chapterLabel, D.chapterLabel).trim(),
         defaultVisibility: defaultVisibility(raw?.defaultVisibility)
     };
 }

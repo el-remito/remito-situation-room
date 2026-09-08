@@ -92,12 +92,41 @@ export function maskNoteOf(entity, isGM) {
  * When values are withheld the bar still renders — the shape of the situation is
  * public even when its arithmetic is not — but current and total are dropped from
  * the context rather than sent and left unprinted.
+ *
+ * A DEPLETING Thread is inverted HERE and nowhere else. The stored progress
+ * still climbs; what this hands back is what is LEFT, and the bar drains from
+ * the right the way any reserve does. Doing it at the one funnel every reading
+ * already passes through is what keeps it out of the templates: `node-row.hbs`
+ * prints `current / total` over a bar of `percent` either way, and a second
+ * markup branch for a depleting Thread would be a second thing to keep in step
+ * with the first.
  */
-export function projectProgress({ current, total, isGM, entity }) {
-    if (!showValues(entity, isGM)) {
-        return { showValues: false, percent: percentOf(current, total) };
-    }
-    return { showValues: true, current, total, percent: percentOf(current, total) };
+export function projectProgress({ current, total, isGM, entity, countdown = false }) {
+    // Measured off what is LEFT rather than as 100 minus what is spent, so the
+    // width and the printed number are rounded from the same figure — and so a
+    // total of zero comes back as an empty bar rather than a full one.
+    const percent = countdown
+        ? percentOf(leftOf(current, total), total)
+        : percentOf(current, total);
+    // The flag itself is NOT passed on. It has already done its work here, and
+    // check-visibility asserts the exact key set of a withheld reading — which
+    // is how a `current` sneaking back in gets caught. A field nothing renders
+    // is not worth blunting that assertion for.
+    if (!showValues(entity, isGM)) return { showValues: false, percent };
+    return { showValues: true, current: countdown ? leftOf(current, total) : current, total, percent };
+}
+
+/**
+ * What is left of `total` once `current` has been spent against it.
+ *
+ * Clamped both ways for the same reason `percentOf` clamps: a push past a full
+ * clock is the ordinary way to say "and then some", and a reading of -2 rations
+ * left is arithmetic showing through the fiction.
+ */
+export function leftOf(current, total) {
+    const t = Math.max(0, Math.trunc(Number(total) || 0));
+    const c = Math.min(t, Math.max(0, Math.trunc(Number(current) || 0)));
+    return t - c;
 }
 
 /** Rounded so a re-render does not churn the DOM over a fractional pixel. */
@@ -148,6 +177,23 @@ export const projectMode = (entity, isGM, mode) =>
     (isMasked(entity, isGM) ? null : (mode ?? null));
 
 /**
+ * Whether a viewer may see this Thread running DOWN.
+ *
+ * The same rule as projectMode, for the same reason, and it has to be stated
+ * separately because the direction survives everything else the mask takes. A
+ * masked Thread already gives up its chip and its shape so that every withheld
+ * row on the board draws identically — and a bar that drains while its
+ * neighbours fill is not identical. It also says the loudest thing a mode chip
+ * could have said: this one is running out. So a masked Thread fills, like all
+ * the others, whatever it is really counting.
+ *
+ * `hideValues` alone is a different question and keeps the drain: that setting
+ * withholds arithmetic, and which way a bar moves is shape.
+ */
+export const projectCountdown = (entity, isGM, countdown) =>
+    (isMasked(entity, isGM) ? false : !!countdown);
+
+/**
  * A clock reading. The same as projectProgress, plus the pips.
  *
  * Also found in the M5 sweep, and the sharper of the two. A continuous bar is a
@@ -157,10 +203,14 @@ export const projectMode = (entity, isGM, mode) =>
  * count them. So a clock whose numbers are withheld renders as a plain bar, like
  * every other Thread whose numbers are withheld, and the pips never leave here.
  */
-export function projectClock({ current, total, isGM, entity }) {
-    const reading = projectProgress({ current, total, isGM, entity });
+export function projectClock({ current, total, isGM, entity, countdown = false }) {
+    const reading = projectProgress({ current, total, isGM, entity, countdown });
     if (!reading.showValues) return { ...reading, pips: null };
     const size = Math.max(0, Math.trunc(Number(total) || 0));
-    const filled = Math.min(size, Math.max(0, Math.trunc(Number(current) || 0)));
+    // `reading.current` is already what the viewer is being told — ticks spent,
+    // or segments left. The pips are that number drawn as dots, so a depleting
+    // clock empties from the right as it runs down, which is the same gesture as
+    // its bar and the opposite of the one beside it.
+    const filled = Math.min(size, Math.max(0, Math.trunc(Number(reading.current) || 0)));
     return { ...reading, pips: Array.from({ length: size }, (_, i) => ({ filled: i < filled })) };
 }

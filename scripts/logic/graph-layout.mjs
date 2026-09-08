@@ -12,12 +12,21 @@
  * resolve would be cheaper and would draw a graph where the reader has to follow
  * arrows backwards to find out what is actually blocking what.
  *
- * ONLY THREADS THAT ARE PART OF A REQUIREMENT ARE DRAWN. A Plot with seven
- * Threads and one dependency between two of them would otherwise put five cards
- * in a column with no arrow on them, which says nothing the list beside it does
- * not say better, and buries the one relationship the reader opened this view
- * for. The rest come back as `orphans` so the caller can say how many there are
- * in a sentence rather than in five boxes.
+ * ONLY THREADS THAT ARE PART OF A REQUIREMENT ARE LAID OUT IN COLUMNS. A Plot
+ * with seven Threads and one dependency between two of them would otherwise put
+ * five cards in a column with no arrow on them, which says nothing the list
+ * beside it does not say better, and buries the one relationship the reader
+ * opened this view for. The rest come back as `orphans`, for the caller to draw
+ * apart from the columns rather than inside them.
+ *
+ * EVERY ROW THAT IS NOT IN A RING CARRIES A CHAIN. A chain is the weakly
+ * connected component: follow the arrows in either direction and you are still
+ * in it. That is the unit the Requirements search filters by, and it is the
+ * right one — somebody who types the name of a Thread in the middle of a chain
+ * wants what it waits on AND what waits on it, and a Thread that merely shares a
+ * requirement with it is part of the same piece of work even though no single
+ * arrow runs between the two. An orphan is a chain of one, which is what keeps
+ * the filter down to one comparison with no second rule for the loose Threads.
  *
  * Ids in, ids out. The caller holds rows that have already been through
  * visibility projection and has no interest in this module holding them too —
@@ -32,7 +41,8 @@ import { cyclesIn } from './gating.mjs';
  *                     existing, which is what makes visibility filtering the
  *                     caller's job and not this module's.
  * @returns {{layers: string[][], edges: {from: string, to: string}[],
- *            cycles: string[], unknown: string[], hasEdges: boolean}}
+ *            cycles: string[], unknown: string[], orphans: string[],
+ *            chains: Record<string, string>, hasEdges: boolean}}
  */
 export function layout(rows = []) {
     const known = new Set(rows.map((r) => r.id));
@@ -95,6 +105,7 @@ export function layout(rows = []) {
     }
 
     return {
+        chains: chainsOf(clean, edges),
         // A sparse layer is impossible — a Thread at depth n has a parent at
         // n-1, and a parent is always drawn alongside its child — but `??=` on
         // an array leaves holes if one ever were, and a hole renders as an empty
@@ -106,4 +117,49 @@ export function layout(rows = []) {
         orphans,
         hasEdges: edges.length > 0 || unknown.length > 0 || tangled.size > 0
     };
+}
+
+/**
+ * Which chain each row belongs to, as a map of id to chain id.
+ *
+ * Union-find over the arrows, read as undirected. Every row in `rows` comes back
+ * with an answer, including the ones no arrow touches — those are chains of one,
+ * and giving them a chain rather than an exception is what lets the caller filter
+ * the whole view with a single comparison.
+ *
+ * A chain is NAMED after the first of its members in input order rather than
+ * after whichever id union-find happened to leave on top. The name reaches a data
+ * attribute and a suite, and both are easier to read when the same board always
+ * produces the same names.
+ */
+function chainsOf(rows, edges) {
+    const parent = new Map(rows.map((r) => [r.id, r.id]));
+
+    const find = (id) => {
+        let root = id;
+        while (parent.get(root) !== root) root = parent.get(root);
+        // Flatten what was walked, so a long chain is not re-walked once per card.
+        let walk = id;
+        while (parent.get(walk) !== root) {
+            const next = parent.get(walk);
+            parent.set(walk, root);
+            walk = next;
+        }
+        return root;
+    };
+
+    for (const { from, to } of edges) {
+        const a = find(from);
+        const b = find(to);
+        if (a !== b) parent.set(a, b);
+    }
+
+    const named = new Map();
+    const chains = {};
+    for (const row of rows) {
+        const root = find(row.id);
+        if (!named.has(root)) named.set(root, row.id);
+        chains[row.id] = named.get(root);
+    }
+    return chains;
 }

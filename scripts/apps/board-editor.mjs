@@ -25,9 +25,10 @@
 
 import {
     ASSET_MODIFIER, CONDITION_EFFECT, CONSTANT_DEFAULTS, EDIT_KIND, LIFECYCLE, MODE,
-    NODE_STATUS, TURN_BEHAVIOUR, VISIBILITY
+    NODE_STATUS, TAG_COLORS, TURN_BEHAVIOUR, VISIBILITY
 } from '../constants.mjs';
 import * as Edit from '../logic/editing.mjs';
+import { CUSTOM } from '../logic/palette.mjs';
 import { wouldCycle } from '../logic/gating.mjs';
 import * as Cond from '../logic/condition.mjs';
 
@@ -179,6 +180,15 @@ function shell(kind, edit, extra = {}) {
         // carries: no name in the header, and no "what the table sees" section.
         isEntity: kind !== EDIT_KIND.CONDITIONS,
         isNew: !edit.id,
+        id: edit.id ?? null,
+        // Deleting from inside the row's own editor rather than from the board.
+        // Only Threads so far, because only Threads were drawn nine at a time;
+        // the three fields are here rather than in the template so the day a
+        // second kind joins is one line, not a second branch in the markup.
+        canDelete: kind === EDIT_KIND.NODE && !!edit.id,
+        deleteAction: 'removeThread',
+        deleteLabel: 'RSR.editor.deleteThread',
+        deleteHint: 'RSR.editor.deleteThreadHint',
         title: TITLE_KEYS[kind][edit.id ? 'edit' : 'new'],
         name: edit.draft.name ?? '',
         dirtyCount: dirty.length,
@@ -197,6 +207,30 @@ function shell(kind, edit, extra = {}) {
         maskNote: edit.draft.maskNote ?? '',
         maskNoteHint: kind === EDIT_KIND.PLOT
             ? 'RSR.editor.maskNoteHintPlot' : 'RSR.editor.maskNoteHintThread',
+        // The swatch row. Default leads, because it is the answer for almost
+        // every row and a GM who wants none of this should not have to hunt for
+        // the way back to it; Custom comes last, because it is the one that
+        // costs the GM something — see logic/palette.mjs on why nine ids beat
+        // one hex.
+        colors: [
+            { value: '', label: 'RSR.color.default', isDefault: true,
+              selected: !edit.draft.color },
+            ...TAG_COLORS.map((value) => ({
+                value, label: `RSR.color.${value}`, isDefault: false,
+                selected: edit.draft.color === value
+            })),
+            { value: CUSTOM, label: 'RSR.color.custom', isCustom: true,
+              selected: edit.draft.color === CUSTOM }
+        ],
+        // The box beside the row. It carries the canonicalised colour, so what
+        // the GM reads back after a save is what was actually stored rather than
+        // what they typed — `rgb(138 144 153)` returns as `#8a9099`, which is
+        // the honest answer to "what did that become".
+        colorCustom: edit.draft.colorCustom ?? '',
+        // <input type="color"> has no empty state — it is #000000 or a
+        // colour — so the swatch it opens on is passed separately and the
+        // text box stays the field of record.
+        colorCustomHex: edit.draft.colorCustom ?? '',
         ...extra
     };
 }

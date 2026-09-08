@@ -27,8 +27,11 @@
         {{/each}}
 
         {{#if isGM}}
+        {{!-- One string, not a label and a number: whether this campaign counts
+              in runs of Cycles is a Settings question, and the badge should not
+              be assembling the answer out of parts. --}}
         <span class="rsr-turn-badge" data-tooltip-class="rsr-tip" data-tooltip="{{localize 'RSR.turn.tooltip'}}">
-            {{turnLabel}} {{turn}}
+            {{turnReading}}
         </span>
         {{/if}}
 
@@ -72,15 +75,30 @@
             {{!-- Drilled into one Plot --}}
             {{#if openPlot}}
             <div class="rsr-view rsr-view-plot">
-                <button type="button" class="rsr-back" data-action="closePlot">
-                    <i class="fa-solid fa-chevron-left" inert></i>
-                    <span>{{localize "RSR.board.allPlots"}}</span>
-                </button>
-
                 {{!-- Reading order, top to bottom: what this is, what it is
                       about, where it stands, what standing there looks like, and
-                      who is standing in it. --}}
+                      who is standing in it.
+
+                      The first three STAY, pinned to the top of the scroller.
+                      Nine Threads is more than a screenful, and a GM three
+                      Threads down had lost the one thing every one of those
+                      rows is about — which Plot this is and how far it has
+                      swung. Everything from Involved Forces down scrolls
+                      normally: the roster is reference, not a running total. --}}
+                <div class="rsr-plot-sticky">
                 <header class="rsr-plot-detail-head">
+                    {{!-- The way out of this Plot, ON the header line rather
+                          than above it. Standing outside the shelf it scrolled
+                          up underneath and was sliced in half by the slab that
+                          covers the scroller's top padding, and a control you
+                          cannot reach is worse than one that is not there.
+                          Inside the thing that pins itself it cannot be covered
+                          by it, and a breadcrumb before the name is what it was
+                          always doing. --}}
+                    <button type="button" class="rsr-crumb" data-action="closePlot">
+                        <i class="fa-solid fa-chevron-left" inert></i>
+                        <span>{{localize "RSR.board.allPlots"}}</span>
+                    </button>
                     <h2 class="rsr-plot-title">{{openPlot.name}}</h2>
                     {{#unless openPlot.isActive}}
                     <span class="rsr-chip rsr-chip-quiet">{{localize openPlot.lifecycleLabel}}</span>
@@ -111,6 +129,20 @@
                             <span>{{localize "RSR.turn.plotAdvance"}}</span>
                         </button>
                     </span>
+                    {{/if}}
+
+                    {{!-- Outside the block above rather than inside it: a Plot
+                          the GM has since put back on the world's clock still
+                          has a cycle of its own to take back. --}}
+                    {{#if openPlot.revert}}
+                    <button type="button" class="rsr-mini rsr-mini-undo" data-action="revertTurn"
+                            data-plot-id="{{openPlot.id}}"
+                            {{#unless openPlot.revert.can}}disabled{{/unless}}
+                            data-tooltip-class="rsr-tip"
+                            data-tooltip="{{localize openPlot.revert.hint}}">
+                        <i class="fa-solid fa-rotate-left" inert></i>
+                        <span>{{localize "RSR.turn.revertLabel"}}</span>
+                    </button>
                     {{/if}}
 
                     {{!-- The pen, again. It is on the card in the list and it was
@@ -167,6 +199,7 @@
                     <p class="rsr-phase-desc">{{openPlot.phaseDescription}}</p>
                     {{/if}}
                 </section>
+                </div>
 
                 {{!-- The roster, in whatever groupings the GM arranged it in.
                       Cosmetic by design — nothing reads a grouping — but which
@@ -233,6 +266,13 @@
 
                 {{#if openPlot.showThreads}}
 
+                {{!-- Only once there is more than one row to tell apart. On a
+                      Plot with a single Thread the box is furniture. --}}
+                {{#if openPlot.hasManyThreads}}
+                {{> "modules/remito-situation-room/templates/partials/search-bar.hbs" scope="threads"
+                    placeholder="RSR.search.threadsPlaceholder"}}
+                {{/if}}
+
                 {{!-- The hand. Drag one of these onto a Thread below to commit
                       it; drag a committed Asset back onto its Force to release. --}}
                 {{#if openPlot.tray.length}}
@@ -267,11 +307,16 @@
                 {{/if}}
 
                 {{#if openPlot.threads.length}}
-                <ul class="rsr-threads">
+                <ul class="rsr-threads" data-search-list="threads">
                     {{#each openPlot.threads}}
                     {{> "modules/remito-situation-room/templates/partials/node-row.hbs"}}
                     {{/each}}
                 </ul>
+                {{!-- Every row is still in the list, hidden. Without this the
+                      board reads as one that has lost its Threads. --}}
+                <p class="rsr-empty rsr-search-empty" data-search-empty="threads" hidden>
+                    {{localize "RSR.search.none"}}
+                </p>
                 {{else}}
                 <p class="rsr-empty">{{localize "RSR.board.noThreads"}}</p>
                 {{/if}}
@@ -308,6 +353,40 @@
                                     <i class="fa-solid fa-hourglass-end" inert></i>
                                     <span>{{localize "RSR.turn.advanceNamed" label=turnLabel}}</span>
                                 </button>
+                                {{!-- Drawn only when the last cycle was the
+                                      WORLD's, and drawn DISABLED when something
+                                      has been recorded since — with the reason
+                                      on it. A control that vanishes is worse
+                                      than one that will not work: this is
+                                      exactly what a GM who pressed the button
+                                      by accident comes looking for. --}}
+                                {{#if turnRevert}}
+                                <button type="button" class="rsr-btn rsr-btn-undo"
+                                        data-action="revertTurn"
+                                        {{#unless turnRevert.can}}disabled{{/unless}}
+                                        data-tooltip-class="rsr-tip"
+                                        data-tooltip="{{localize turnRevert.hint}}">
+                                    <i class="fa-solid fa-rotate-left" inert></i>
+                                    <span>{{localize "RSR.turn.revertLabel"}}</span>
+                                </button>
+                                {{/if}}
+                                {{!-- A page turns because something ended, not
+                                      because four Cycles elapsed, so where a run
+                                      begins is a decision and this is where it
+                                      is taken: beside the button that produced
+                                      the Cycle it opens on. Drawn disabled, with
+                                      the reason, when that Cycle is already
+                                      marked — the same courtesy the undo gets. --}}
+                                {{#if turnMark}}
+                                <button type="button" class="rsr-btn rsr-btn-mark"
+                                        data-action="beginChapter"
+                                        {{#unless turnMark.can}}disabled{{/unless}}
+                                        data-tooltip-class="rsr-tip"
+                                        data-tooltip="{{localize turnMark.hint}}">
+                                    <i class="fa-solid fa-bookmark" inert></i>
+                                    <span>{{localize "RSR.turn.segmentBegin" segment=turnMark.word}}</span>
+                                </button>
+                                {{/if}}
                                 <button type="button" class="rsr-btn" data-action="createPlot">
                                     <i class="fa-solid fa-plus" inert></i>
                                     <span>{{localize "RSR.editor.newPlot"}}</span>
@@ -316,12 +395,25 @@
                         </header>
                         {{/if}}
 
+                        {{!-- Outside the GM header above, because a player's
+                              board has no header and the same eleven Plots.
+                              A card matches on its own name, on any Thread the
+                              reader may see, and on any Asset committed to it —
+                              so "granary" finds the siege that holds it. --}}
+                        {{#if hasManyPlots}}
+                        {{> "modules/remito-situation-room/templates/partials/search-bar.hbs" scope="plots"
+                            placeholder="RSR.search.plotsPlaceholder"}}
+                        {{/if}}
+
                         {{#if plots.length}}
-                        <div class="rsr-plot-grid">
+                        <div class="rsr-plot-grid" data-search-list="plots">
                             {{#each plots}}
                             {{> "modules/remito-situation-room/templates/partials/plot-card.hbs"}}
                             {{/each}}
                         </div>
+                        <p class="rsr-empty rsr-search-empty" data-search-empty="plots" hidden>
+                            {{localize "RSR.search.none"}}
+                        </p>
                         {{else}}
                         <p class="rsr-empty">{{localize "RSR.board.noPlots"}}</p>
                         {{/if}}
@@ -352,7 +444,7 @@
             </header>
 
             <p class="rsr-turn-line">
-                {{localize "RSR.turn.standing" label=@root.turnLabel turn=cockpit.turn count=cockpit.payingCount}}
+                {{localize "RSR.turn.standing" reading=cockpit.reading count=cockpit.payingCount}}
             </p>
 
             {{!-- The footnote. Every Force and what the next cycle does to it,

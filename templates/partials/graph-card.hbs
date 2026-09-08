@@ -1,0 +1,44 @@
+{{!--
+    One Thread on the Requirements view.
+
+    A BUTTON, not a box. This diagram answers exactly one question — what waits
+    on what — and cannot answer any other: there is no bar on a card, no mode, no
+    way to push it. So the reader's next question is always about the row itself,
+    and the only way to reach it was to switch tab and find it by eye among nine.
+    Pressing a card goes back to the list with that Thread's name already in the
+    search box, which both answers the question and shows its working: the box
+    says why the list is short, and clearing it puts everything back.
+
+    Five attributes, each with a job:
+      data-requires     the drawn ids this one waits on, read by the edge drawing
+      data-chain        the piece of work it belongs to, read by the search filter
+      data-search       what the box matches on, lowercased when it was built
+      data-thread-name  what the box is FILLED with when the card is pressed.
+                        The projected name and not the id, because the box
+                        matches text a reader can see — so a masked Thread hands
+                        over its mask, and finds itself by it.
+--}}
+<button type="button"
+        class="rsr-graph-card{{#if this.masked}} is-masked{{/if}}{{#if this.isConcluded}} is-concluded{{/if}}{{#if this.isLocked}} is-locked{{/if}}"
+        data-action="findThread"
+        data-node-id="{{this.id}}"
+        data-thread-name="{{this.name}}"
+        data-requires="{{this.requires}}"
+        data-chain="{{this.chain}}"
+        data-search="{{this.search}}"
+        data-tooltip="{{localize 'RSR.graph.cardHint'}}">
+    <span class="rsr-graph-name">{{this.name}}</span>
+
+    {{!-- A requirement that is not on this screen. Marked rather than drawn,
+          because an arrow would point at the space the hidden Thread would have
+          occupied, and the reader can count columns. Its own tooltip, which wins
+          over the card's while the pointer is on it: what this mark means is a
+          more urgent question than where the card leads. --}}
+    {{#if this.hasUnknown}}
+    <span class="rsr-graph-unknown" data-tooltip-class="rsr-tip"
+          data-tooltip="{{localize 'RSR.graph.unknownHint'}}">
+        <i class="fa-solid fa-question" inert></i>
+        {{localize "RSR.graph.unknown"}}
+    </span>
+    {{/if}}
+</button>

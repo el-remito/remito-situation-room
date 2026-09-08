@@ -294,12 +294,62 @@ for (const kind of [EDIT_KIND.PLOT, EDIT_KIND.NODE, EDIT_KIND.FORCE, EDIT_KIND.A
     const draft = E.draftFrom(kind, null, {}, { plotId: 'p', forceId: 'f' });
     const patch = E.patchFrom(kind, draft);
     const owned = E.FIELDS[kind].map((f) => f.name)
-        // The modifier is the one field the form splits in two and the patch
-        // puts back together, so it is named differently on each side.
-        .filter((n) => !n.startsWith('modifier'));
+        // Two fields the form splits and the patch puts back together, so they
+        // are named differently on each side. `modifier*` becomes one object;
+        // `colorCustom` is read only when the swatch row says CUSTOM and is
+        // folded into `color`. Both are round-tripped by name below.
+        .filter((n) => !n.startsWith('modifier') && n !== 'colorCustom');
     eq(`every ${kind} field the form owns survives patchFrom`,
         owned.filter((n) => !(n in patch)), []);
 }
+
+// ── the colour split ─────────────────────────────────────────────────────────
+// One stored value, two controls. The draft has to split it or a stored hex
+// would match no radio, harvest as empty, and be destroyed by the act of opening
+// the editor and pressing Save — which is the bug this pair of fields exists to
+// avoid and would be entirely silent.
+for (const kind of [EDIT_KIND.PLOT, EDIT_KIND.NODE, EDIT_KIND.FORCE, EDIT_KIND.ASSET]) {
+    const seed = { plotId: 'p', forceId: 'f' };
+    const of = (entity) => E.draftFrom(kind, entity, {}, seed);
+
+    const palette = of({ color: 'moss' });
+    eq(`a ${kind} on a palette colour drafts as that swatch`,
+        [palette.color, palette.colorCustom], ['moss', '']);
+    eq('and patches back to it', E.patchFrom(kind, palette).color, 'moss');
+
+    const custom = of({ color: '#8a9099' });
+    eq(`a ${kind} on the GM's own colour drafts as Custom`,
+        [custom.color, custom.colorCustom], ['custom', '#8a9099']);
+    eq('and patches back to the hex, not to the sentinel',
+        E.patchFrom(kind, custom).color, '#8a9099');
+
+    const none = of({ color: '' });
+    eq(`a ${kind} with no colour drafts as neither`,
+        [none.color, none.colorCustom], ['', '']);
+
+    // The box still holds a colour, but the GM has since clicked a swatch: the
+    // radio decides, and the leftover text is ignored rather than winning.
+    eq('a swatch beats a stale box',
+        E.patchFrom(kind, { ...custom, color: 'rust' }).color, 'rust');
+    // And the other way: Custom selected with nothing typed is no colour, not
+    // the literal string "custom" written into the world.
+    eq('Custom with an empty box saves as no colour',
+        E.patchFrom(kind, { ...custom, colorCustom: '' }).color, '');
+    eq('and Custom with rubbish in the box saves as no colour either',
+        E.patchFrom(kind, { ...custom, colorCustom: 'url(x)' }).color, '');
+}
+
+// The direction a Thread is read is one switch and it has to survive the save,
+// which is exactly what maskLabel and maskNote did not do until the loop above
+// was written. Presence is checked there; this checks the value.
+eq('a Thread drafts as filling',
+    E.draftFrom(EDIT_KIND.NODE, null, {}, { plotId: 'p' }).countdown, false);
+eq('a stored depleting Thread drafts as depleting',
+    E.draftFrom(EDIT_KIND.NODE, { countdown: true }, {}, { plotId: 'p' }).countdown, true);
+eq('and the switch survives the patch with its value',
+    E.patchFrom(EDIT_KIND.NODE,
+        { ...E.draftFrom(EDIT_KIND.NODE, null, {}, { plotId: 'p' }), countdown: true }
+    ).countdown, true);
 
 eq('a mask name of spaces saves as the default, not as spaces',
     E.patchFrom(EDIT_KIND.NODE,
@@ -309,6 +359,18 @@ eq('a mask note keeps its sentence',
     E.patchFrom(EDIT_KIND.NODE,
         { ...E.draftFrom(EDIT_KIND.NODE, null, {}, { plotId: 'p' }), maskNote: ' heard it ' }
     ).maskNote, 'heard it');
+
+// The colour is on all four editors, and it is the one field where an empty
+// string is the ANSWER rather than an unfilled box — it means "the default for
+// this kind", which is what almost every row wants.
+for (const kind of [EDIT_KIND.PLOT, EDIT_KIND.NODE, EDIT_KIND.FORCE, EDIT_KIND.ASSET]) {
+    const blank = E.draftFrom(kind, null, {}, { plotId: 'p', forceId: 'f' });
+    eq(`${kind}: a new row drafts with no colour`, blank.color, '');
+    eq(`${kind}: a chosen colour survives the patch`,
+        E.patchFrom(kind, { ...blank, color: 'plum' }).color, 'plum');
+}
+eq('a stored colour drafts back',
+    E.draftFrom(EDIT_KIND.FORCE, { color: 'stone' }, {}).color, 'stone');
 
 console.log(fail === 0 ? '\n  all passed\n' : `\n  ${fail} FAILED\n`);
 process.exit(fail === 0 ? 0 : 1);

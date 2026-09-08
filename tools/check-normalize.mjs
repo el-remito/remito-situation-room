@@ -118,8 +118,42 @@ eq('a Phase with no description reads empty', N.normalizePhase({ label: 'x' }).d
 
 eq('undefined collection -> []', N.normalizePlots(undefined), []);
 eq('junk entries filtered', N.normalizeAssets([{ name: 'x' }, 'junk', null]).length, 1);
-eq('null turn -> count 0', N.normalizeTurn(null), { count: 0 });
-eq('negative turn clamped', N.normalizeTurn({ count: -3 }), { count: 0 });
+eq('null turn -> count 0', N.normalizeTurn(null),
+    { count: 0, chapters: [], undo: null });
+eq('negative turn clamped', N.normalizeTurn({ count: -3 }),
+    { count: 0, chapters: [], undo: null });
+
+// The undo record is stored beside the count and repaired by the same builder
+// the advance uses, so a setting that was hand-edited in the console still opens
+// — and cannot smuggle a field past it.
+eq('a board with nothing to take back says so rather than carrying a husk',
+    N.normalizeTurn({ count: 4 }).undo, null);
+eq('a record is rebuilt from known keys only',
+    Object.keys(N.normalizeTurn({ count: 4, undo: { count: 3, mischief: 1 } }).undo),
+    ['plotId', 'count', 'forces', 'plots', 'assets', 'logIds']);
+eq('and a record that is not an object is no record',
+    ['', 0, [], 'yes'].map((u) => N.normalizeTurn({ count: 4, undo: u }).undo),
+    [null, null, null, null]);
+
+// Where the runs of Cycles begin is HISTORY, so it is stored on the clock beside
+// the count it reads and not among the defaults. The repair is the same one
+// logic/cycle.mjs uses everywhere else, which is what lets the reading walk the
+// list in order without sorting it first.
+eq('the marks come back in cycle order, whatever order they were typed',
+    N.normalizeTurn({ chapters: [{ at: 9 }, { at: 2, name: ' Act Two ' }] }).chapters,
+    [{ at: 2, name: 'Act Two' }, { at: 9, name: '' }]);
+eq('a mark that is not on a cycle is dropped',
+    N.normalizeTurn({ chapters: [{ at: 0 }, 'later', null, { at: 3 }] }).chapters,
+    [{ at: 3, name: '' }]);
+eq('and a list that is not a list is no marks at all',
+    [null, 'none', 7].map((c) => N.normalizeTurn({ chapters: c }).chapters),
+    [[], [], []]);
+
+// The word only. A run that was given a name of its own uses that instead.
+eq('the word for a run is trimmed, and empty means the built-in one',
+    N.normalizeConstants({ chapterLabel: '  Act  ' }).chapterLabel, 'Act');
+eq('and a length is no longer part of the shape',
+    'chapterLength' in N.normalizeConstants({ chapterLength: 4 }), false);
 
 const withId = N.normalizePlot({ id: 'keep-me' });
 eq('existing id preserved', withId.id, 'keep-me');
@@ -168,6 +202,35 @@ eq('the world keeps the one it was given',
     N.normalizeConstants({ turnLabel: 'Moons' }).turnLabel, 'Moons');
 eq('only a Plot and the world keep a clock name',
     'turnLabel' in N.normalizeNode({}), false);
+
+// ── the colour a row's name is printed in ─────────────────────────
+// A palette id lands in a class attribute; a colour of the GM's own lands in a
+// style attribute, which is a far worse place for a string somebody typed. So
+// the funnel does not filter — it PARSES and re-emits (logic/palette.mjs, and
+// tools/check-palette.mjs for the parsing itself). These assertions are the
+// reason nothing downstream has to sanitise a colour.
+
+eq('a row has no colour of its own by default', N.normalizeNode({}).color, '');
+eq('a colour from the palette is kept', N.normalizeForce({ color: 'stone' }).color, 'stone');
+eq('a word that is not one of the nine is dropped rather than stored',
+    N.normalizeAsset({ color: 'chartreuse' }).color, '');
+eq('and so is anything that could close a class attribute',
+    N.normalizeNode({ color: '" onload=x' }).color, '');
+eq('a non-string colour is dropped too', N.normalizePlot({ color: 7 }).color, '');
+
+// The GM's own, which is the half that reaches a style attribute.
+eq('a hex is kept, canonicalised', N.normalizeForce({ color: '#8A9099' }).color, '#8a9099');
+eq('and so is a short one', N.normalizePlot({ color: '#89a' }).color, '#8899aa');
+eq('an rgb() is stored as the hex it means',
+    N.normalizeAsset({ color: 'rgb(138, 144, 153)' }).color, '#8a9099');
+eq('a colour with CSS after it is not a colour',
+    N.normalizeNode({ color: '#8a9099; background: url(x)' }).color, '');
+eq('nor is one that would close the style attribute',
+    N.normalizeForce({ color: '#8a9099" onload="x' }).color, '');
+eq('every kind carries the field', [
+    'color' in N.normalizePlot({}), 'color' in N.normalizeNode({}),
+    'color' in N.normalizeForce({}), 'color' in N.normalizeAsset({})
+], [true, true, true, true]);
 
 console.log(`\n${fail === 0 ? '  all passed' : `  ${fail} FAILED`}\n`);
 process.exit(fail === 0 ? 0 : 1);

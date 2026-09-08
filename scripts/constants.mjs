@@ -38,8 +38,10 @@ export const TEMPLATES = {
     FORCE_PANEL: `modules/${MODULE_ID}/templates/partials/force-panel.hbs`,
     ASSET_CHIP: `modules/${MODULE_ID}/templates/partials/asset-chip.hbs`,
     GRAPH: `modules/${MODULE_ID}/templates/partials/graph.hbs`,
+    GRAPH_CARD: `modules/${MODULE_ID}/templates/partials/graph-card.hbs`,
     SETTINGS: `modules/${MODULE_ID}/templates/partials/settings.hbs`,
     LOG: `modules/${MODULE_ID}/templates/partials/log.hbs`,
+    SEARCH_BAR: `modules/${MODULE_ID}/templates/partials/search-bar.hbs`,
     EDITOR: `modules/${MODULE_ID}/templates/partials/editor.hbs`,
     EDITOR_CONDITIONS: `modules/${MODULE_ID}/templates/partials/editor-conditions.hbs`,
     EDITOR_PLOT: `modules/${MODULE_ID}/templates/partials/editor-plot.hbs`,
@@ -295,6 +297,21 @@ export const CONSTANT_DEFAULTS = {
      */
     turnLabel: '',
     /**
+     * What this world calls a RUN of Cycles.
+     *
+     * A campaign is rarely one undifferentiated column of cycles: it has years,
+     * chapters, seasons, campaign turns — a larger unit the table counts in, with
+     * the cycle as the small hand. This is the GM's word for that unit, empty
+     * meaning the built-in one, exactly as `turnLabel` works.
+     *
+     * Only the WORD is a default. WHERE each run begins is a fact about the past
+     * rather than a seed for something new, so the marks live on the clock itself
+     * beside the count it reads — data/normalize.mjs `normalizeTurn`, and
+     * logic/cycle.mjs for what a mark means. A run that was given its own name
+     * uses that instead of this word and an ordinal.
+     */
+    chapterLabel: '',
+    /**
      * What the table may see of a row the moment it is created, per kind of row.
      *
      * One default for everything was wrong in practice: a GM wants the Forces on
@@ -320,3 +337,32 @@ export const ENTITY_DEFAULTS = {
     hideValues: false,
     isExample: false
 };
+
+/**
+ * The colours a row may be pinned to, as ids rather than as hex.
+ *
+ * An id and not a colour on purpose. The board is themed with `light-dark()`
+ * pairs throughout — a stored `#8a9099` would be a fixed grey that goes muddy
+ * on one of the two grounds, and there would be no way to fix it without
+ * rewriting the GM's data. An id resolves through CSS, so both halves of every
+ * colour live in the stylesheet with the rest of the palette, and a theme can
+ * have opinions about them.
+ *
+ * Each id is resolved in the stylesheet as a `light-dark()` PAIR, which is the
+ * reason to prefer one over a colour of the GM's own: it has a value for a page
+ * that is white and another for a page that is nearly black. A custom colour is
+ * one value printed on both grounds — see logic/palette.mjs, which owns the
+ * parsing and is where the sanitising now lives, since a custom colour lands in a
+ * style attribute rather than a class.
+ *
+ * Empty means "inherit", which is the default for the kind — or, for an Asset,
+ * whatever its Force is wearing.
+ *
+ * Deliberately NOT the four chip colours. Gold, green, red and violet each mean
+ * exactly one thing on this board (attention, strength, weakness, withheld), and
+ * a name inside a sentence is a different visual channel from a chip: these are
+ * identity, not judgement.
+ */
+export const TAG_COLORS = [
+    'stone', 'steel', 'blue', 'teal', 'moss', 'amber', 'rust', 'plum', 'rose'
+];

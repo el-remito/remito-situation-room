@@ -26,7 +26,7 @@ const n = (id, ...prereqNodeIds) => ({ id, prereqNodeIds });
 
 // ── nothing to draw ──────────────────────────────────────────────────────────
 eq('an empty Plot lays out to nothing', layout([]),
-    { layers: [], edges: [], cycles: [], unknown: [], orphans: [], hasEdges: false });
+    { chains: {}, layers: [], edges: [], cycles: [], unknown: [], orphans: [], hasEdges: false });
 
 // The rule that keeps this view worth opening: a Thread with no relationship to
 // draw is not drawn. Five cards with no arrow on them say nothing the list beside
@@ -91,6 +91,47 @@ const BEHIND = layout([n('a', 'b'), n('b', 'a'), n('c', 'a'), n('d')]);
 eq('a Thread waiting behind a ring goes with it', BEHIND.cycles.sort(), ['a', 'b', 'c']);
 eq('and the untangled remainder has nothing left to point at', BEHIND.layers, []);
 eq('so it is an orphan rather than a lone column', BEHIND.orphans, ['d']);
+
+// ── chains ───────────────────────────────────────────────────────────────────
+// What the Requirements search filters by. A chain is the piece of work a Thread
+// belongs to, and the reason it is WEAKLY connected — arrows read in either
+// direction — is that somebody who types the name of a Thread halfway along one
+// wants both what it waits on and what is waiting on it.
+
+eq('a chain is named after its first member', layout(LINE).chains,
+    { a: 'a', b: 'a', c: 'a' });
+
+// The name has to be stable, because it reaches a data attribute that a filter
+// compares. Handing the same rows over in another order is the same board.
+eq('and the name follows the rows, not the order they arrived in',
+    new Set(Object.values(layout([LINE[2], LINE[0], LINE[1]]).chains)).size, 1);
+
+// The whole reason this is a component and not an ancestry walk: b and c never
+// point at each other, and a reader looking at one wants to know about the other.
+eq('two Threads that only share a requirement are in one chain',
+    layout([n('a'), n('b', 'a'), n('c', 'a')]).chains, { a: 'a', b: 'a', c: 'a' });
+
+eq('a diamond is one chain, not two',
+    new Set(Object.values(layout(DIAMOND).chains)).size, 1);
+
+// The uniform part, and the point of doing it this way: a loose Thread is not an
+// exception the filter has to know about, it is a chain with one member in it.
+eq('a Thread that requires nothing is a chain of its own',
+    layout([n('a'), n('b', 'a'), n('x')]).chains, { a: 'a', b: 'a', x: 'x' });
+
+eq('two separate pieces of work do not share a name',
+    layout([n('a'), n('b', 'a'), n('y'), n('z', 'y')]).chains,
+    { a: 'a', b: 'a', y: 'y', z: 'y' });
+
+// A ring has no chain because it has no card: it is named in a sentence under
+// the graph instead. Handing it one would put it in the filter's world.
+eq('a ring gets no chain at all',
+    Object.keys(layout([n('a', 'c'), n('b', 'a'), n('c', 'b'), n('z')]).chains), ['z']);
+
+// A requirement nobody here can see joins nothing — there is no second end for
+// the arrow to reach, so the Thread stands alone however loudly it is marked.
+eq('a Thread waiting on something unseen is still its own chain',
+    layout([n('a'), n('b', 'gone')]).chains, { a: 'a', b: 'b' });
 
 // ── no holes ─────────────────────────────────────────────────────────────────
 eq('every column drawn has something in it',

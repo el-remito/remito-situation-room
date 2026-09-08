@@ -5,9 +5,10 @@
     together and edited rarely — a dialog per number would be worse. The Save
     handler reads target.closest('form'), so the form element itself matters.
 
-    Everything here seeds a NEW row, with one exception marked below. Changing a
-    default never reaches back and rewrites a Plot, Thread, Force or Asset that
-    already exists, which is what makes this tab safe to touch mid-campaign.
+    Everything here seeds a NEW row except The Cycle section, which is marked as
+    the exception where it stands. Changing a default never reaches back and
+    rewrites a Plot, Thread, Force or Asset that already exists, which is what
+    makes this tab safe to touch mid-campaign.
 
     Every field carries a ⓘ rather than a paragraph under it. Twelve fields with a
     paragraph each is a wall nobody reads twice, and these are numbers a GM sets
@@ -101,10 +102,12 @@
         </div>
     </section>
 
-    {{!-- The one value on this tab that is NOT a seed. Everything else here is
+    {{!-- The one section on this tab that seeds NOTHING. Everything else here is
           copied into the next row created and never reaches an existing one;
-          this renames a clock the whole board is already counting on, which is
-          why it stands apart from the sections that promise otherwise. --}}
+          these rename a clock the whole board is already counting on, and say
+          where its runs began — both of which change how something already on
+          the board is READ, which is why they stand apart from the sections
+          that promise otherwise. --}}
     <section class="rsr-settings-group">
         <h4>{{localize "RSR.settings.cycleTitle"}}</h4>
         <p class="rsr-settings-note">{{localize "RSR.settings.cycleNote"}}</p>
@@ -118,6 +121,110 @@
             </span>
             <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.settings.turnLabelHint'}}"></i>
+        </div>
+
+        {{!-- A campaign is rarely one undifferentiated column of Cycles. This
+              word is what the larger unit is called, and, like the word above,
+              it changes how something already on the board is READ rather than
+              seeding anything new. --}}
+        <div class="rsr-settings-row">
+            <label for="rsr-chapterLabel">{{localize "RSR.settings.segmentLabel"}}</label>
+            <span class="rsr-settings-controls">
+                <input type="text" id="rsr-chapterLabel" name="chapterLabel"
+                       value="{{settings.constants.chapterLabel}}"
+                       placeholder="{{localize 'RSR.turn.segmentLabel'}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.segmentLabelHint'}}"></i>
+        </div>
+
+        {{!-- And this is WHERE each one began: one row per mark, each naming the
+              Cycle it opened on. A list rather than a length, because a chapter
+              ends when something ends and not when a number divides — and because
+              a row can carry a name, which an ordinal worked out by arithmetic
+              never could.
+
+              Rows are added and removed in the DOM and harvested on Save, so
+              adding a second one cannot lose what was half-typed into the first.
+              The hidden row at the end is the one every new row is cloned from. --}}
+        <div class="rsr-settings-row rsr-settings-row-list">
+            <label>{{localize "RSR.settings.segments"}}</label>
+            <span class="rsr-settings-controls rsr-settings-stack">
+                {{!-- Two column heads, each with its own badge, rather than a
+                      badge on every row: the rows are N instances of the same
+                      two questions, and the answers do not change with the row.
+                      It also means a row added by pressing the button below
+                      arrives under headings that were already on screen, rather
+                      than as two blank boxes nobody introduced. --}}
+                <span class="rsr-chapter-head">
+                    <span>
+                        {{localize "RSR.settings.segmentAt"}}
+                        <i class="fa-regular fa-circle-question rsr-info"
+                           data-tooltip-class="rsr-tip"
+                           data-tooltip="{{localize 'RSR.settings.segmentAtHint'}}"></i>
+                    </span>
+                    <span>
+                        {{localize "RSR.settings.segmentNamed"}}
+                        <i class="fa-regular fa-circle-question rsr-info"
+                           data-tooltip-class="rsr-tip"
+                           data-tooltip="{{localize 'RSR.settings.segmentNamedHint'}}"></i>
+                    </span>
+                    <span></span>
+                </span>
+
+                <span class="rsr-chapter-list">
+                    {{#each settings.chapters}}
+                    <span class="rsr-chapter-row">
+                        <input type="number" name="chapterAt" min="1" value="{{this.at}}"
+                               placeholder="{{localize 'RSR.settings.segmentAtPlaceholder'}}"
+                               aria-label="{{localize 'RSR.settings.segmentAt'}}">
+                        {{!-- The placeholder is what this run is CALLED with the
+                              box left empty, which is the most useful thing the
+                              grey text could say: clear the name and you can
+                              read what you get back. --}}
+                        <input type="text" name="chapterName" value="{{this.name}}"
+                               placeholder="{{this.label}}"
+                               aria-label="{{localize 'RSR.settings.segmentNamed'}}">
+                        <button type="button" class="rsr-mini rsr-danger"
+                                data-action="removeChapter"
+                                data-tooltip="{{localize 'RSR.settings.segmentRemove'}}">
+                            <i class="fa-solid fa-xmark" inert></i>
+                        </button>
+                    </span>
+                    {{/each}}
+
+                    {{!-- A new row cannot know its own number until a Cycle is
+                          typed into it, so its name box says what happens when
+                          nothing is typed instead of naming the run. --}}
+                    <span class="rsr-chapter-row" data-chapter-proto hidden>
+                        <input type="number" name="chapterAt" min="1" value=""
+                               placeholder="{{localize 'RSR.settings.segmentAtPlaceholder'}}"
+                               aria-label="{{localize 'RSR.settings.segmentAt'}}">
+                        <input type="text" name="chapterName" value=""
+                               placeholder="{{localize 'RSR.settings.segmentNamedPlaceholder'}}"
+                               aria-label="{{localize 'RSR.settings.segmentNamed'}}">
+                        <button type="button" class="rsr-mini rsr-danger"
+                                data-action="removeChapter"
+                                data-tooltip="{{localize 'RSR.settings.segmentRemove'}}">
+                            <i class="fa-solid fa-xmark" inert></i>
+                        </button>
+                    </span>
+                </span>
+
+                <span class="rsr-chapter-foot">
+                    <button type="button" class="rsr-mini" data-action="addChapter">
+                        <i class="fa-solid fa-plus" inert></i>
+                        <span>{{localize "RSR.settings.segmentAdd"}}</span>
+                    </button>
+                    {{!-- What the board says right now, the way the icon field
+                          shows the glyph it was given: this list changes a
+                          reading and nothing else, so the reading is the
+                          preview. It catches up on Save. --}}
+                    <span class="rsr-settings-said">{{settings.reading}}</span>
+                </span>
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.segmentsHint'}}"></i>
         </div>
     </section>
 

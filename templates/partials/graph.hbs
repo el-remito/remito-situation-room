@@ -1,5 +1,5 @@
 {{!--
-    What requires what, as columns.
+    What requires what, as columns — and, underneath, what requires nothing.
 
     A Thread sits one column right of its deepest prerequisite, so every arrow
     points rightward and none of them doubles back — the layering is decided in
@@ -12,9 +12,28 @@
     list in this markup: an id sitting on the card that owns it cannot be
     mispaired, and a JSON blob in an attribute is one escaping bug from a blank
     board.
+
+    THE LOOSE THREADS ARE CARDS NOW, NOT A COUNT. They used to be a sentence
+    saying how many had been left out, on the reasoning that cards with no arrow
+    on them bury the ones that have them. That reasoning holds for the COLUMNS
+    and nowhere else — so they are drawn below the diagram instead of inside it,
+    where they cannot push a chain off the side of the screen and where "these
+    are waiting on nobody" is a useful answer rather than a missing one.
 --}}
-{{#if openPlot.graph.hasEdges}}
-<div class="rsr-graph">
+
+{{!-- One box for both readings of this Plot: the query is shared with the
+      Threads list, so a name typed here is still typed there. In the list it
+      hides the rows that do not match; here it hides every chain that does not
+      contain a match, because half a chain is a lie about what is blocking
+      what. --}}
+{{#if openPlot.hasManyThreads}}
+{{> "modules/remito-situation-room/templates/partials/search-bar.hbs" scope="graph"
+    placeholder="RSR.search.threadsPlaceholder"}}
+{{/if}}
+
+<div class="rsr-graph" data-search-list="graph">
+
+    {{#if openPlot.graph.hasEdges}}
     <div class="rsr-graph-canvas">
         <svg class="rsr-graph-edges" aria-hidden="true"></svg>
 
@@ -22,35 +41,17 @@
             {{#each openPlot.graph.layers}}
             <div class="rsr-graph-layer">
                 {{#each this.cards}}
-                <div class="rsr-graph-card{{#if this.masked}} is-masked{{/if}}{{#if this.isConcluded}} is-concluded{{/if}}{{#if this.isLocked}} is-locked{{/if}}"
-                     data-node-id="{{this.id}}" data-requires="{{this.requires}}">
-                    <span class="rsr-graph-name">{{this.name}}</span>
-
-                    {{!-- A requirement that is not on this screen. Marked rather
-                          than drawn, because an arrow would point at the space
-                          the hidden Thread would have occupied, and the reader
-                          can count columns. --}}
-                    {{#if this.hasUnknown}}
-                    <span class="rsr-graph-unknown" data-tooltip-class="rsr-tip"
-                          data-tooltip="{{localize 'RSR.graph.unknownHint'}}">
-                        <i class="fa-solid fa-question" inert></i>
-                        {{localize "RSR.graph.unknown"}}
-                    </span>
-                    {{/if}}
-                </div>
+                {{> "modules/remito-situation-room/templates/partials/graph-card.hbs"}}
                 {{/each}}
             </div>
             {{/each}}
         </div>
     </div>
-
-    {{!-- The Threads that were left out, counted rather than drawn: cards with no
-          arrow on them bury the ones that have them. Saying how many were set
-          aside is what keeps that from reading as something gone missing. --}}
-    {{#if openPlot.graph.orphans}}
-    <p class="rsr-graph-loose">
-        {{localize "RSR.graph.orphans" count=openPlot.graph.orphans}}
-    </p>
+    {{else}}
+    {{!-- No arrows anywhere. The loose Threads below are the whole of this
+          Plot, and saying so is kinder than drawing them under a heading that
+          implies something was left out. --}}
+    <p class="rsr-empty rsr-graph-nothing">{{localize "RSR.graph.none"}}</p>
     {{/if}}
 
     {{!-- Threads in a ring, or waiting behind one. They can never open, so they
@@ -63,8 +64,24 @@
         {{#each openPlot.graph.tangled}}<em>{{this}}</em>{{#unless @last}}, {{/unless}}{{/each}}
     </p>
     {{/if}}
+
+    {{#if openPlot.graph.loose.length}}
+    <section class="rsr-graph-free">
+        <h4 class="rsr-graph-free-title">
+            {{localize "RSR.graph.looseTitle"}}
+            <span class="rsr-count">{{openPlot.graph.loose.length}}</span>
+        </h4>
+        <div class="rsr-graph-free-cards">
+            {{#each openPlot.graph.loose}}
+            {{> "modules/remito-situation-room/templates/partials/graph-card.hbs"}}
+            {{/each}}
+        </div>
+    </section>
+    {{/if}}
+
+    {{!-- Every card is still in the view, hidden. Without this a search that
+          matches nothing reads as a Plot whose requirements have vanished. --}}
+    <p class="rsr-empty rsr-search-empty" data-search-empty="graph" hidden>
+        {{localize "RSR.search.none"}}
+    </p>
 </div>
-{{else}}
-{{!-- Seven cards in one column and no arrows is a worse answer than a sentence. --}}
-<p class="rsr-empty">{{localize "RSR.graph.none"}}</p>
-{{/if}}

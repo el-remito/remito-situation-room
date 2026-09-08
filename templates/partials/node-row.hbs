@@ -15,7 +15,8 @@
     question now gets asked out loud, once, in a place with room to answer it.
 --}}
 <li class="rsr-thread{{#if this.masked}} is-masked{{/if}}{{#if this.isLocked}} is-locked{{/if}}{{#if this.isConcluded}} is-concluded{{/if}}"
-    data-thread-id="{{this.id}}">
+    data-thread-id="{{this.id}}"
+    data-search="{{this.search}}">
 
     {{!-- Why the gate is shut. Three gates can shut a Thread and only one of
           them has a name the table may hear: the Threads it is still waiting on,
@@ -63,16 +64,29 @@
                 {{#if this.modeLabel}}
                 <span class="rsr-chip rsr-chip-mode">{{localize this.modeLabel}}</span>
                 {{/if}}
+                {{!-- Which way to read the bar under this. It is not decoration:
+                      3 of 8 filling and 3 of 8 left are the same two numbers
+                      pointing opposite ways, and only watching it move over an
+                      evening would tell them apart. Absent under a mask, with
+                      the mode chip and the drain itself. --}}
+                {{#if this.isDepleting}}
+                <span class="rsr-chip rsr-chip-depleting">
+                    <i class="fa-solid fa-arrow-down-short-wide" inert></i>
+                    {{localize "RSR.thread.depleting"}}
+                </span>
+                {{/if}}
             {{/if}}
 
+            {{!-- The pen, and nothing beside it. The bin used to stand here and
+                  a Plot of nine Threads therefore carried nine of them down the
+                  left of the GM's eye — a row of irreversible buttons next to
+                  the ordinary ones, on a screen whose whole job is reading. It
+                  lives one level in now, at the foot of this Thread's own
+                  editor, where deleting is a thing you went somewhere to do. --}}
             {{#if @root.isGM}}
             <button type="button" class="rsr-icon-btn" data-action="editThread" data-thread-id="{{this.id}}"
                     data-tooltip="{{localize 'RSR.editor.editThread'}}">
                 <i class="fa-solid fa-pen" inert></i>
-            </button>
-            <button type="button" class="rsr-icon-btn rsr-danger" data-action="removeThread" data-thread-id="{{this.id}}"
-                    data-tooltip="{{localize 'RSR.editor.deleteThread'}}">
-                <i class="fa-solid fa-trash" inert></i>
             </button>
             {{/if}}
         </span>
@@ -122,7 +136,7 @@
                     name="push-{{../id}}-{{this.id}}"
                     data-thread-id="{{../id}}" data-force-id="{{this.id}}"
                     data-tooltip="{{localize 'RSR.editor.pushForHint'}}">
-                <i class="fa-solid fa-arrow-right-long" inert></i>
+                <i class="{{../pushIcon}}" inert></i>
             </button>
             {{/if}}
         </li>
@@ -212,7 +226,7 @@
         <button type="button" class="rsr-mini" data-action="pushThread"
                 name="push-{{this.id}}" data-thread-id="{{this.id}}"
                 data-tooltip="{{localize 'RSR.editor.pushHint'}}">
-            <i class="fa-solid fa-arrow-right-long" inert></i>
+            <i class="{{this.pushIcon}}" inert></i>
             <span>{{localize "RSR.editor.push"}}</span>
         </button>
         {{#if this.canConclude}}

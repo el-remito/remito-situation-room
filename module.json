@@ -2,7 +2,7 @@
     "id": "remito-situation-room",
     "title": "Remito Situation Room",
     "description": "A campaign-layer situation board. Players see the Plots shaping the world, their State, and the Threads driving them; the GM gets a cockpit to play the Forces behind those Plots — spending Resources, committing Assets, and pushing Threads to conclusion.",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "compatibility": {
         "minimum": "14.364",
         "verified": "14.365"

@@ -1,6 +1,18 @@
 {{!--
     The Thread editor. ("node" in code, "Thread" to the reader.)
 
+    Four questions, in the order a GM answers them: what it is, how it advances,
+    whether it is open, and what concluding it does. Each is a section with a
+    heading and one sentence saying what it decides — the M7 pass, and the same
+    treatment the ⓘ badges got in M5.5. Before it, this screen was a run of
+    fields in schema order with nothing saying which two mattered.
+
+    The two gates share a section on purpose. M6 keeps them independent in the
+    code — a reveal does not pay off a requirement — but to the reader they
+    answer one question, which is *why will this not open*, and answering it in
+    two places three sections apart is how a GM ends up looking for a third gate
+    that does not exist.
+
     Outcomes are one row per Force on the Plot rather than a repeating widget:
     the set is fixed by the roster, so there is nothing to add or remove. A row
     left at zero with nothing written is not saved.
@@ -10,9 +22,12 @@
 --}}
 
 <section class="rsr-form-section">
+    <h3>{{localize "RSR.editor.secWhat"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secThreadWhatLead"}}</p>
     <p class="rsr-form-note">
         {{localize "RSR.editor.threadOn"}} <strong>{{editor.plotName}}</strong>
     </p>
+
     <div class="rsr-form-row">
         <label for="rsr-f-name">{{localize "RSR.editor.name"}}</label>
         <input type="text" id="rsr-f-name" name="name" value="{{editor.draft.name}}">
@@ -24,6 +39,9 @@
 </section>
 
 <section class="rsr-form-section">
+    <h3>{{localize "RSR.editor.secThreadAdvance"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secThreadAdvanceLead"}}</p>
+
     <div class="rsr-form-row">
         <label for="rsr-f-mode">{{localize "RSR.editor.mode"}}</label>
         <select id="rsr-f-mode" name="mode">
@@ -39,6 +57,10 @@
         </select>
     </div>
 
+    {{!-- One question per row. These were a single row with the second label
+          living inside the first row's inline span, where the CSS draws it small
+          and grey — a second question wearing the clothes of an annotation on
+          the first. --}}
     <div class="rsr-form-row">
         <label for="rsr-f-threshold">{{localize "RSR.editor.threshold"}}</label>
         <span class="rsr-form-inline">
@@ -46,7 +68,12 @@
                    value="{{editor.draft.threshold}}">
             <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.editor.thresholdHint'}}"></i>
-            <label for="rsr-f-segments">{{localize "RSR.editor.segments"}}</label>
+        </span>
+    </div>
+
+    <div class="rsr-form-row">
+        <label for="rsr-f-segments">{{localize "RSR.editor.segments"}}</label>
+        <span class="rsr-form-inline">
             <input type="number" id="rsr-f-segments" name="segments" min="1"
                    value="{{editor.draft.segments}}">
             <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
@@ -69,16 +96,64 @@
                data-tooltip="{{localize 'RSR.editor.countdownHint'}}"></i>
         </span>
     </div>
+</section>
+
+{{!-- Both gates, in one place, because they answer one question. --}}
+<section class="rsr-form-section">
+    <h3>{{localize "RSR.editor.secThreadOpen"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secThreadOpenLead"}}</p>
 
     <div class="rsr-form-row">
         <label for="rsr-f-status">{{localize "RSR.editor.status"}}</label>
-        <select id="rsr-f-status" name="status">
-            {{#each editor.statuses}}
-            <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
-            {{/each}}
-        </select>
-        <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
-           data-tooltip="{{localize 'RSR.editor.statusHint'}}"></i>
+        <span class="rsr-form-inline">
+            <select id="rsr-f-status" name="status">
+                {{#each editor.statuses}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                {{/each}}
+            </select>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.editor.statusHint'}}"></i>
+        </span>
+    </div>
+
+    <div class="rsr-form-row is-stacked">
+        <label>
+            {{localize "RSR.editor.prereqs"}}
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.editor.prereqsHint'}}"></i>
+        </label>
+        <span class="rsr-form-stack">
+            {{#if editor.prereqs.length}}
+            <span class="rsr-chip-row">
+                {{#each editor.prereqs}}
+                <span class="rsr-edit-chip">
+                    <span>{{this.name}}</span>
+                    <button type="button" class="rsr-icon-btn rsr-icon-tiny" data-action="removePrereq"
+                            data-thread-id="{{this.id}}" data-tooltip="{{localize 'RSR.editor.removePrereq'}}">
+                        <i class="fa-solid fa-xmark" inert></i>
+                    </button>
+                </span>
+                {{/each}}
+            </span>
+            {{else}}
+            <span class="rsr-form-note">{{localize "RSR.editor.noPrereqs"}}</span>
+            {{/if}}
+
+            {{#if editor.availablePrereqs.length}}
+            <span class="rsr-form-add">
+                <select id="rsr-pick-prereq" name="pick-prereq">
+                    <option value="">{{localize "RSR.editor.pickThread"}}</option>
+                    {{#each editor.availablePrereqs}}
+                    <option value="{{this.id}}">{{this.name}}</option>
+                    {{/each}}
+                </select>
+                <button type="button" class="rsr-btn" data-action="addPrereq">
+                    <i class="fa-solid fa-plus" inert></i>
+                    <span>{{localize "RSR.editor.addPrereq"}}</span>
+                </button>
+            </span>
+            {{/if}}
+        </span>
     </div>
 </section>
 
@@ -89,59 +164,28 @@
         <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.editor.outcomesHint'}}"></i>
     </h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.outcomesLead"}}</p>
 
     {{#if editor.outcomes.length}}
+    <div class="rsr-outcome-head">
+        <span>{{localize "RSR.editor.outcomeWho"}}</span>
+        <span>{{localize "RSR.editor.outcomeMoves"}}</span>
+        <span>{{localize "RSR.editor.outcomeSays"}}</span>
+    </div>
     {{#each editor.outcomes}}
     <div class="rsr-outcome-row">
         <span class="rsr-outcome-force">{{this.name}}</span>
         <input type="number" id="rsr-oc-delta-{{this.forceId}}" class="rsr-outcome-delta"
                data-row-group="outcomes" data-row-key="{{this.forceId}}" data-row-field="delta"
-               value="{{this.delta}}">
+               value="{{this.delta}}"
+               aria-label="{{localize 'RSR.editor.outcomeMoves'}}">
         <input type="text" id="rsr-oc-note-{{this.forceId}}"
                data-row-group="outcomes" data-row-key="{{this.forceId}}" data-row-field="note"
-               value="{{this.note}}" placeholder="{{localize 'RSR.editor.outcomeNotePlaceholder'}}">
+               value="{{this.note}}" placeholder="{{localize 'RSR.editor.outcomeNotePlaceholder'}}"
+               aria-label="{{localize 'RSR.editor.outcomeSays'}}">
     </div>
     {{/each}}
     {{else}}
     <p class="rsr-form-note">{{localize "RSR.editor.noForcesOnPlot"}}</p>
-    {{/if}}
-</section>
-
-<section class="rsr-form-section">
-    <h3>
-        {{localize "RSR.editor.prereqs"}}
-        <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
-           data-tooltip="{{localize 'RSR.editor.prereqsHint'}}"></i>
-    </h3>
-
-    {{#if editor.prereqs.length}}
-    <div class="rsr-chip-row">
-        {{#each editor.prereqs}}
-        <span class="rsr-edit-chip">
-            <span>{{this.name}}</span>
-            <button type="button" class="rsr-icon-btn rsr-icon-tiny" data-action="removePrereq"
-                    data-thread-id="{{this.id}}" data-tooltip="{{localize 'RSR.editor.removePrereq'}}">
-                <i class="fa-solid fa-xmark" inert></i>
-            </button>
-        </span>
-        {{/each}}
-    </div>
-    {{else}}
-    <p class="rsr-form-note">{{localize "RSR.editor.noPrereqs"}}</p>
-    {{/if}}
-
-    {{#if editor.availablePrereqs.length}}
-    <div class="rsr-form-add">
-        <select id="rsr-pick-prereq" name="pick-prereq">
-            <option value="">{{localize "RSR.editor.pickThread"}}</option>
-            {{#each editor.availablePrereqs}}
-            <option value="{{this.id}}">{{this.name}}</option>
-            {{/each}}
-        </select>
-        <button type="button" class="rsr-btn" data-action="addPrereq">
-            <i class="fa-solid fa-plus" inert></i>
-            <span>{{localize "RSR.editor.addPrereq"}}</span>
-        </button>
-    </div>
     {{/if}}
 </section>

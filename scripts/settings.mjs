@@ -25,6 +25,7 @@ import {
 } from './data/normalize.mjs';
 import { resolveConditions } from './logic/condition.mjs';
 import { refreshAll } from './ui/refresh.mjs';
+import { announcePhaseCrossings } from './ui/phase-note.mjs';
 
 /** Collections stored as ArrayField(ObjectField), each normalized on the way out. */
 const COLLECTIONS = {
@@ -40,12 +41,20 @@ export function registerSettings() {
     const { ArrayField, ObjectField } = foundry.data.fields;
 
     for (const key of Object.keys(COLLECTIONS)) {
+        // Plots carry State, and a State that has crossed a Phase boundary has a
+        // note waiting for the GM. It hangs off the setting rather than off the
+        // operation that moved it, because four different writes move State and
+        // this is the one place all four pass through. See ui/phase-note.mjs.
+        const onChange = key === SETTINGS.PLOTS
+            ? (raw) => { refreshAll(); announcePhaseCrossings(normalizePlots(raw)); }
+            : refreshAll;
+
         game.settings.register(MODULE_ID, key, {
             scope: 'world',
             config: false,          // one setting, one editor — the board is the only writer
             type: new ArrayField(new ObjectField()),
             default: [],
-            onChange: refreshAll
+            onChange
         });
     }
 

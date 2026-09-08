@@ -11,10 +11,11 @@
 
 import { MODULE_ID, TEMPLATES, VIEW } from './scripts/constants.mjs';
 import { registerSettings, registerBoardMenu } from './scripts/settings.mjs';
-import { registerRelay } from './scripts/data/relay.mjs';
+import { registerRelay, registerAnnouncements } from './scripts/data/relay.mjs';
 import { registerSidebarButton } from './scripts/ui/sidebar-button.mjs';
+import { seedPhaseWatch } from './scripts/ui/phase-note.mjs';
 import * as state from './scripts/data/state.mjs';
-import { SituationRoom, openBoard } from './scripts/apps/situation-room.mjs';
+import { SituationRoom, openBoard, showBoardAsDirected } from './scripts/apps/situation-room.mjs';
 
 Hooks.once('init', () => {
     registerSettings();
@@ -48,6 +49,16 @@ Hooks.once('init', () => {
 
 Hooks.once('ready', () => {
     registerRelay();
+
+    // The relay's other direction: a GM addressing the table. Registered here
+    // rather than inside relay.mjs so the socket funnel keeps importing no
+    // application class.
+    registerAnnouncements({ 'board.show': showBoardAsDirected });
+
+    // Where every Plot stands right now, remembered and not announced. Without
+    // this the first Phase crossing after a reload would read as a first sighting
+    // and pass in silence — see ui/phase-note.mjs.
+    seedPhaseWatch(state.readBoard().plots);
 
     game.modules.get(MODULE_ID).api = {
         open: openBoard,

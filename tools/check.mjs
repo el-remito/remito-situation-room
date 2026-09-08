@@ -98,7 +98,17 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
 
     // Keys reached through a variant suffix (RSR.help.x.body.gm) or an enum value
     // are assembled at render time, so a prefix here spares a false positive.
-    const DYNAMIC_PREFIXES = ['RSR.help.', 'RSR.thread.mode.', 'RSR.thread.status.',
+    // 'RSR.help.' is deliberately NOT here. It was, and it hid a whole Help
+    // section — gating — that had been written and never added to the section
+    // list. Help keys are built from HELP_SECTIONS as `RSR.help.<key>.body.gm`,
+    // so the prefixes below are the section keys themselves: adding a section
+    // means adding one line here, and writing copy for a section nobody renders
+    // now fails the pass instead of passing quietly.
+    const HELP_SECTION_KEYS = ['plots', 'threads', 'gating', 'advancing', 'forces',
+        'state', 'log', 'editing', 'settings'];
+
+    const DYNAMIC_PREFIXES = [...HELP_SECTION_KEYS.map((k) => `RSR.help.${k}.`),
+        'RSR.thread.mode.', 'RSR.thread.status.',
         'RSR.plot.lifecycle.', 'RSR.asset.modifier.', 'RSR.visibility.',
         'RSR.settings.visibility.', 'RSR.editor.tone.', 'RSR.asset.condition.',
         'RSR.asset.effectScale.', 'RSR.plot.turnBehaviour.', 'RSR.turn.reason.',

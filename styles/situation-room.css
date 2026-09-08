@@ -2873,3 +2873,145 @@
     align-items: center;
     gap: 0.5rem;
 }
+
+/* ══ M7 — the note that fires ═════════════════════════════════════════════════
+   A Phase note is prose the GM wrote for themselves, so it is laid out as prose:
+   a heading sentence naming the crossing, the note under it at reading width,
+   and a quiet line saying nobody else was shown it. The dialog is narrow by
+   default and a note runs to several sentences, so the width is set here. */
+.rsr-phase-note .window-content { max-width: 34rem; }
+
+.rsr-note-card {
+    border-left: 3px solid var(--rsr-border);
+    padding: 0.1rem 0 0.1rem 0.75rem;
+    margin-block: 0.35rem;
+}
+
+/* The tone the GM gave the Phase, as the edge of the card rather than the colour
+   of the text — see ui/phase-note.mjs for why it is not the chip class. */
+.rsr-note-card[data-tone="calm"]    { border-left-color: var(--rsr-strength); }
+.rsr-note-card[data-tone="neutral"] { border-left-color: var(--rsr-gold-soft); }
+.rsr-note-card[data-tone="warn"]    { border-left-color: var(--rsr-gold); }
+.rsr-note-card[data-tone="danger"]  { border-left-color: var(--rsr-weakness); }
+
+.rsr-note-crossed {
+    margin: 0 0 0.4rem;
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-note-body {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.rsr-note-aside {
+    margin: 0.5rem 0 0;
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-11, 11px);
+    font-style: italic;
+}
+
+/* ── Show Players ─────────────────────────────────────────────────────────────
+   The same pill as the preview control beside it, because they are the same kind
+   of thing: two ways of putting the board in front of somebody. It never takes
+   the auto margin — the Cycle badge or the preview button has already done the
+   pushing, and a second `margin-left: auto` in one flex row SPLITS the free space
+   rather than stacking against it. */
+.rsr-show-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    margin-left: 0.4rem;
+    padding: 0.25rem 0.6rem;
+    background: transparent;
+    border: 1px solid var(--rsr-border);
+    border-radius: 999px;
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-12, 12px);
+    cursor: pointer;
+}
+
+.rsr-show-btn:hover:not(:disabled) {
+    background: transparent;
+    border-color: var(--rsr-gold);
+    color: var(--rsr-gold);
+}
+
+/* pointer-events stays on so the tooltip can still say WHY it is off. */
+.rsr-show-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: auto;
+}
+
+/* ══ M7 — the editors read as documents ═══════════════════════════════════════
+   Every editor screen is a stack of sections, and until this round half of those
+   sections had no heading at all: a GM landed on a block of fields in schema
+   order with nothing saying where one question ended and the next began. Each
+   section now leads with a heading and one sentence, so the pass the ⓘ badges
+   got in M5.5 reaches the forms those badges are scattered across. */
+
+/* The heading carries real weight and a rule under it, because it is now doing
+   the work of separating sections rather than just labelling one. */
+.rsr-form-section h3 {
+    margin: 0 0 0.35rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--rsr-border);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* The sentence under the heading. Wider leading and a reading measure, because
+   it is prose and not a field label — and a bottom margin large enough that the
+   first row below it reads as belonging to the heading rather than to the lead. */
+.rsr-form-lead {
+    max-width: 44rem;
+    margin: 0 0 0.7rem;
+    font-size: var(--font-size-12, 12px);
+    line-height: 1.5;
+    color: var(--rsr-ink-muted);
+}
+
+/* Sections breathe. They are cards on a scrolling page, and 0.75rem between two
+   bordered blocks reads as a table rather than as chapters. */
+.rsr-editor-form { gap: 1.1rem; }
+.rsr-form-section { padding: 0.85rem 0.95rem 0.8rem; }
+
+/* The Save bar is sticky, so the bottom of the form scrolls UNDER it. Without
+   room to spare, the last control on the last section is the one permanently
+   half-covered — and on the Plot editor that is the default every new Thread
+   inherits. The gap is the bar's own height plus its gap. */
+.rsr-editor-form { padding-bottom: 0.75rem; }
+.rsr-view-editor { scroll-padding-bottom: 4rem; }
+
+/* A stacked control column, for a row whose answer is a list rather than a
+   field: the prerequisite chips and their picker sit under one label instead of
+   claiming a section of their own away from the switch they share a question
+   with. */
+.rsr-form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.rsr-form-stack > .rsr-form-note { margin: 0; }
+
+/* Column heads over the outcome rows. Same grid as the row beneath, so the three
+   labels stand over the three things they name — and the same reason the Segment
+   list's third column is a fixed width: `auto` resolves per grid container. */
+.rsr-editor-form .rsr-outcome-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+    color: var(--rsr-ink-muted);
+    font-size: var(--font-size-11, 11px);
+}
+
+.rsr-editor-form .rsr-outcome-head > :first-child { flex: 0 0 10rem; }
+.rsr-editor-form .rsr-outcome-head > :nth-child(2) { flex: 0 0 5rem; }
+.rsr-editor-form .rsr-outcome-head > :last-child { flex: 1; min-width: 0; }

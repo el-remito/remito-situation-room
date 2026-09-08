@@ -1,8 +1,22 @@
 {{!--
     The Plot editor.
 
-    Same reading order as the Plot itself: what it is, what it is about, where it
-    stands, the ladder it stands on, and who is standing in it.
+    Same reading order as the Plot itself: what it is, where it stands, the ladder
+    it stands on, who is standing in it, and last the two things that are seeds
+    rather than facts.
+
+    THE M7 PASS. Every section now has a heading and one sentence saying what it
+    decides, and Lifecycle moved up into the first section — it was sitting in an
+    unlabelled block at the bottom with three unrelated defaults, and it is the
+    single field that decides whether the Plot is on the board at all. The State
+    range became three rows rather than three boxes in a row, because "from" and
+    "to" were labelled inside the first row's inline span, where the stylesheet
+    draws a label small and grey and they read as footnotes on "State now".
+
+    The last section is named for what it is: nothing in it moves anything that
+    already exists. That is the same promise the Settings tab makes, and naming
+    it here is what stops a GM changing the default mode expecting the Threads
+    they already wrote to follow.
 
     Two widgets carry the round. Phases are cards, not the pipe-delimited textarea
     the GM was previously asked to type by hand. The roster is columns of chips
@@ -11,6 +25,9 @@
 --}}
 
 <section class="rsr-form-section">
+    <h3>{{localize "RSR.editor.secWhat"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secPlotWhatLead"}}</p>
+
     <div class="rsr-form-row">
         <label for="rsr-f-name">{{localize "RSR.editor.name"}}</label>
         <input type="text" id="rsr-f-name" name="name" value="{{editor.draft.name}}">
@@ -18,6 +35,18 @@
     <div class="rsr-form-row is-tall">
         <label for="rsr-f-description">{{localize "RSR.editor.description"}}</label>
         <textarea id="rsr-f-description" name="description" rows="3">{{editor.draft.description}}</textarea>
+    </div>
+    <div class="rsr-form-row">
+        <label for="rsr-f-lifecycle">{{localize "RSR.editor.lifecycle"}}</label>
+        <span class="rsr-form-inline">
+            <select id="rsr-f-lifecycle" name="lifecycle">
+                {{#each editor.lifecycles}}
+                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                {{/each}}
+            </select>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.editor.lifecycleHint'}}"></i>
+        </span>
     </div>
 </section>
 
@@ -27,13 +56,23 @@
         <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.editor.stateHint'}}"></i>
     </h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secPlotStateLead"}}</p>
+
     <div class="rsr-form-row">
         <label for="rsr-f-state">{{localize "RSR.editor.stateNow"}}</label>
         <span class="rsr-form-inline">
             <input type="number" id="rsr-f-state" name="state" value="{{editor.draft.state}}">
-            <label for="rsr-f-stateMin">{{localize "RSR.editor.stateFrom"}}</label>
+        </span>
+    </div>
+    <div class="rsr-form-row">
+        <label for="rsr-f-stateMin">{{localize "RSR.editor.stateFrom"}}</label>
+        <span class="rsr-form-inline">
             <input type="number" id="rsr-f-stateMin" name="stateMin" value="{{editor.draft.stateMin}}">
-            <label for="rsr-f-stateMax">{{localize "RSR.editor.stateTo"}}</label>
+        </span>
+    </div>
+    <div class="rsr-form-row">
+        <label for="rsr-f-stateMax">{{localize "RSR.editor.stateTo"}}</label>
+        <span class="rsr-form-inline">
             <input type="number" id="rsr-f-stateMax" name="stateMax" value="{{editor.draft.stateMax}}">
         </span>
     </div>
@@ -47,6 +86,7 @@
         <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.editor.phasesHint'}}"></i>
     </h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secPlotPhasesLead"}}</p>
 
     {{#each editor.phases}}
     <article class="rsr-phase-card">
@@ -79,11 +119,20 @@
                    data-row-group="phases" data-row-key="{{this.index}}" data-row-field="description"
                    value="{{this.description}}" placeholder="{{localize 'RSR.editor.phaseSeenPlaceholder'}}">
         </div>
+
+        {{!-- The one field on this board written to be read LATER. State crossing
+              into this Phase puts it in front of the GM, and nobody else — see
+              ui/phase-note.mjs. Left empty, the crossing passes in silence, which
+              is the opt-out. --}}
         <div class="rsr-form-row">
             <label for="rsr-ph-gmNotes-{{this.index}}">{{localize "RSR.editor.phaseNotes"}}</label>
-            <input type="text" id="rsr-ph-gmNotes-{{this.index}}" class="rsr-gm-field"
-                   data-row-group="phases" data-row-key="{{this.index}}" data-row-field="gmNotes"
-                   value="{{this.gmNotes}}" placeholder="{{localize 'RSR.editor.phaseNotesPlaceholder'}}">
+            <span class="rsr-form-inline">
+                <input type="text" id="rsr-ph-gmNotes-{{this.index}}" class="rsr-gm-field"
+                       data-row-group="phases" data-row-key="{{this.index}}" data-row-field="gmNotes"
+                       value="{{this.gmNotes}}" placeholder="{{localize 'RSR.editor.phaseNotesPlaceholder'}}">
+                <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                   data-tooltip="{{localize 'RSR.editor.phaseNotesHint'}}"></i>
+            </span>
         </div>
 
         {{!-- What reaching this Phase does to the Threads on this Plot. Two
@@ -181,6 +230,7 @@
         <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.editor.groupHint'}}"></i>
     </h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secPlotRosterLead"}}</p>
 
     <div class="rsr-roster-board" data-roster-board>
         {{#each editor.columns}}
@@ -238,22 +288,13 @@
     </div>
 </section>
 
+{{!-- Which clock this Plot keeps. The count it has reached is not a field: it
+      moves by pressing a cycle, and a number the GM can type here is a number
+      that can disagree with the board. --}}
 <section class="rsr-form-section">
-    <div class="rsr-form-row">
-        <label for="rsr-f-lifecycle">{{localize "RSR.editor.lifecycle"}}</label>
-        <span class="rsr-form-inline">
-            <select id="rsr-f-lifecycle" name="lifecycle">
-                {{#each editor.lifecycles}}
-                <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
-                {{/each}}
-            </select>
-            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
-               data-tooltip="{{localize 'RSR.editor.lifecycleHint'}}"></i>
-        </span>
-    </div>
-    {{!-- Which clock this Plot keeps. The count it has reached is not a field:
-          it moves by pressing a cycle, and a number the GM can type here is a
-          number that can disagree with the board. --}}
+    <h3>{{localize "RSR.editor.secPlotClock"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secPlotClockLead"}}</p>
+
     <div class="rsr-form-row">
         <label for="rsr-f-turnBehaviour">{{localize "RSR.editor.turnBehaviour"}}</label>
         <span class="rsr-form-inline">
@@ -266,6 +307,7 @@
                data-tooltip="{{localize 'RSR.editor.turnBehaviourHint'}}"></i>
         </span>
     </div>
+
     {{!-- Shown whatever the behaviour is, and used only by a Plot that keeps its
           own clock. Hiding it behind the select above would mean re-rendering
           the form on a change event, which is the one thing this editor does not
@@ -280,6 +322,13 @@
                data-tooltip="{{localize 'RSR.editor.turnLabelHint'}}"></i>
         </span>
     </div>
+</section>
+
+{{!-- The one section on this screen that changes nothing already on the board. --}}
+<section class="rsr-form-section">
+    <h3>{{localize "RSR.editor.secPlotSeeds"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secPlotSeedsLead"}}</p>
+
     <div class="rsr-form-row">
         <label for="rsr-f-defaultMode">{{localize "RSR.editor.defaultMode"}}</label>
         <span class="rsr-form-inline">

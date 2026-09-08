@@ -10,6 +10,9 @@
 --}}
 
 <section class="rsr-form-section">
+    <h3>{{localize "RSR.editor.secWhat"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secAssetWhatLead"}}</p>
+
     <div class="rsr-form-row">
         <label for="rsr-f-forceId">{{localize "RSR.asset.owner"}}</label>
         <select id="rsr-f-forceId" name="forceId">
@@ -61,6 +64,9 @@
       Asset stands and opens that dialog. --}}
 {{#if editor.condition}}
 <section class="rsr-form-section">
+    <h3>{{localize "RSR.asset.conditionLabel"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secAssetConditionLead"}}</p>
+
     <div class="rsr-form-row">
         <label>{{localize "RSR.asset.conditionLabel"}}</label>
         <span class="rsr-form-inline">
@@ -84,21 +90,33 @@
 {{/if}}
 
 <section class="rsr-form-section">
+    <h3>{{localize "RSR.editor.secAssetDoes"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secAssetDoesLead"}}</p>
+
+    {{!-- Two rows, not one. "By how much" was labelled inside the first row's
+          inline span, which is where this stylesheet puts annotations — so the
+          number that decides the size of the effect read as a footnote on the
+          select that decides its kind. --}}
     <div class="rsr-form-row">
-        <label for="rsr-f-modifierKind">
-            {{localize "RSR.asset.effect"}}
-            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
-               data-tooltip="{{localize 'RSR.asset.effectHint'}}"></i>
-        </label>
+        <label for="rsr-f-modifierKind">{{localize "RSR.asset.effect"}}</label>
         <span class="rsr-form-inline">
             <select id="rsr-f-modifierKind" name="modifierKind">
                 {{#each editor.effects}}
                 <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
                 {{/each}}
             </select>
-            <label for="rsr-f-modifierValue">{{localize "RSR.editor.byHowMuch"}}</label>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.asset.effectHint'}}"></i>
+        </span>
+    </div>
+
+    <div class="rsr-form-row">
+        <label for="rsr-f-modifierValue">{{localize "RSR.editor.byHowMuch"}}</label>
+        <span class="rsr-form-inline">
             <input type="number" id="rsr-f-modifierValue" name="modifierValue"
                    value="{{editor.draft.modifierValue}}">
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.editor.byHowMuchHint'}}"></i>
         </span>
     </div>
 </section>
@@ -109,6 +127,7 @@
         <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.force.tagsHint'}}"></i>
     </h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secTagsLead"}}</p>
 
     <div class="rsr-tag-columns">
         <div class="rsr-tag-column">

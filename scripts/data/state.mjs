@@ -206,10 +206,36 @@ const operations = {
     },
 
     /** Deleting a plot takes its nodes with it and releases any asset committed to them. */
+    /**
+     * Delete a Plot and everything that only existed inside it.
+     *
+     * Its Threads go with it, and so this has to perform every sweep
+     * `node.delete` performs — once, for all of them. It did not, and the gap was
+     * only invisible because most prerequisite chains live inside one Plot: a
+     * Thread in ANOTHER Plot that required one of these read the dangling id
+     * forever after. `unmetPrereqs` forgives an id that resolves to nothing, so
+     * the board did not lie, but the stored lists carried names of Threads that
+     * no longer existed and the prerequisite picker had a blank row in it.
+     */
     async 'plot.delete'({ plotId }) {
         const doomedNodes = new Set(S.getNodes().filter((n) => n.plotId === plotId).map((n) => n.id));
-        await S.setPlots(S.getPlots().filter((p) => p.id !== plotId));
-        await S.setNodes(S.getNodes().filter((n) => n.plotId !== plotId));
+        const kept = (ids) => (ids ?? []).filter((id) => !doomedNodes.has(id));
+
+        await S.setPlots(S.getPlots()
+            .filter((p) => p.id !== plotId)
+            .map((p) => ({
+                ...p,
+                phases: p.phases.map((ph) => ({
+                    ...ph,
+                    revealNodeIds: kept(ph.revealNodeIds),
+                    lockNodeIds: kept(ph.lockNodeIds)
+                }))
+            })));
+        await S.setNodes(S.getNodes()
+            .filter((n) => n.plotId !== plotId)
+            .map((n) => (n.prereqNodeIds.some((id) => doomedNodes.has(id))
+                ? { ...n, prereqNodeIds: kept(n.prereqNodeIds) }
+                : n)));
         await S.setAssets(S.getAssets().map((a) => (
             a.plotId === plotId || doomedNodes.has(a.nodeId)
                 ? { ...a, plotId: null, nodeId: null }
@@ -816,9 +842,15 @@ const operations = {
         // A few developments of its own, so the chronicle has something in it the
         // first time a GM looks at the board. Replaces the previous example's
         // entries rather than stacking a second copy of them.
-        await S.setLog(
-            [...log, ...S.getLog().filter((e) => !e.isExample)].slice(0, Log.LOG_LIMIT)
-        );
+        //
+        // The GM's own lines are kept whole and the EXAMPLE's are what gets cut
+        // when the two together overflow. Trimming the combined list would push
+        // real history off the end of a full chronicle to make room for a demo,
+        // and Remove Example could not bring it back — which would make
+        // Generate a destructive button in the one place it promises not to be.
+        const mine = S.getLog().filter((e) => !e.isExample);
+        const room = Math.max(0, Log.LOG_LIMIT - mine.length);
+        await S.setLog([...log.slice(0, room), ...mine].slice(0, Log.LOG_LIMIT));
     },
 
     /**
@@ -827,10 +859,52 @@ const operations = {
      * list can drift out of step with the data it points at.
      */
     async 'example.remove'() {
-        await S.setPlots(S.getPlots().filter((p) => !p.isExample));
-        await S.setNodes(S.getNodes().filter((n) => !n.isExample));
+        // The same sweeps the four deletes perform, run once for the whole
+        // fixture. Without them a GM who wired one of their own Threads to an
+        // example Thread — which is exactly what the example is FOR — would be
+        // left with an id pointing at nothing after pressing Remove.
+        const goneNodes = new Set(S.getNodes().filter((n) => n.isExample).map((n) => n.id));
+        const goneForces = new Set(S.getForces().filter((f) => f.isExample).map((f) => f.id));
+        const gonePlots = new Set(S.getPlots().filter((p) => p.isExample).map((p) => p.id));
+        const kept = (ids) => (ids ?? []).filter((id) => !goneNodes.has(id));
+
+        await S.setPlots(S.getPlots()
+            .filter((p) => !p.isExample)
+            .map((p) => ({
+                ...p,
+                forceIds: p.forceIds.filter((id) => !goneForces.has(id)),
+                phases: p.phases.map((ph) => ({
+                    ...ph,
+                    revealNodeIds: kept(ph.revealNodeIds),
+                    lockNodeIds: kept(ph.lockNodeIds)
+                }))
+            })));
+
+        await S.setNodes(S.getNodes()
+            .filter((n) => !n.isExample)
+            .map((n) => {
+                const byForce = Object.fromEntries(Object.entries(n.progress.byForce)
+                    .filter(([forceId]) => !goneForces.has(forceId)));
+                return {
+                    ...n,
+                    prereqNodeIds: kept(n.prereqNodeIds),
+                    progress: { ...n.progress, byForce },
+                    outcomes: n.outcomes.filter((o) => !goneForces.has(o.forceId)),
+                    concludedBy: goneForces.has(n.concludedBy) ? null : n.concludedBy
+                };
+            }));
+
         await S.setForces(S.getForces().filter((f) => !f.isExample));
-        await S.setAssets(S.getAssets().filter((a) => !a.isExample));
+
+        // An Asset belonging to an example Force goes with it, the way it would
+        // under force.delete. One of the GM's own that was standing on example
+        // ground is released rather than deleted.
+        await S.setAssets(S.getAssets()
+            .filter((a) => !a.isExample && !goneForces.has(a.forceId))
+            .map((a) => (goneNodes.has(a.nodeId) || gonePlots.has(a.plotId)
+                ? { ...a, nodeId: null, plotId: null }
+                : a)));
+
         await S.setLog(S.getLog().filter((e) => !e.isExample));
     }
 };

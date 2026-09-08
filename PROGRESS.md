@@ -16,7 +16,7 @@ before its milestone has passed.
 | M5.5 | passed | `fbf8a2d` |
 | M6 | passed | `228b0df` |
 | M6.5 | passed | `824ab99` |
-| M7 | in progress | — |
+| M7 | passed | — |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)
@@ -383,11 +383,48 @@ a modulo, and it is the one that matches how a campaign actually turns a page.
 - [x] Verified in a live world
 
 ## M7 — Polish
-- [ ] Phase notes fire on entry
-- [ ] The five in-board editors get the pass the ⓘ badges got — grouping,
-      labels that name the thing rather than the property, and CSS to match
+
+The last milestone, and almost none of it is new mechanics. What it owes is the
+part that cannot be written into the code: that the screens explain themselves,
+that the documentation matches the build, and that the three deletes nobody had
+finished say what they cost.
+
+- [x] A Phase note fires the moment State crosses into it — `ui/phase-note.mjs`,
+      hung off the Plots setting rather than off one operation, because four
+      different writes move State and this is the one place all four pass through
+- [x] It fires in both directions and writes nothing: a note describes the
+      situation the board is in, and a chronicle line naming a Phase would go
+      stale the first time a threshold moved
+- [x] An empty note is the opt-out, and the ⓘ on the field says so
+- [x] `removal.mjs` gains `plotRemoval`, `forceRemoval` and `assetRemoval`; all
+      four reports now share one shape so one reader can print any of them
+- [x] `plot.delete` sweeps the references its own Threads leave behind — it never
+      did, and a cross-plot prerequisite was left pointing at nothing
+- [x] The Plot, Force and Asset confirmations drop their one-line warnings for the
+      fallout list. The Force delete says the word *deleted* about its Assets, and
+      that nothing is refunded
+- [x] `check-removal.mjs` covers all four reports and asserts the shared shape
+- [x] Every editor section gains a heading and one sentence saying what it
+      decides; four "two questions in one row" rows are split; Lifecycle moves up
+      into the Plot's first section and the seeds get a section that says so
       (asked for in M6 round 2)
-- [ ] Help copy: all sections, gm + player variants
-- [ ] i18n sweep + static passes
-- [ ] README
-- [ ] Whitepaper rewrite (`Remito Situation Room.md`)
+- [x] CSS section M7: headings with a rule, a reading measure for the leads,
+      room under the sticky Save bar, and column heads over the outcome rows
+- [x] **Show Players** — a GM-only header button that opens the board on every
+      connected player's screen, showing what the GM is showing
+- [x] `relay.mjs` gains the other direction: a GM broadcast, sender-checked,
+      unacknowledged, still the only place `game.socket` is touched
+- [x] Help: a full read through as GM and as player. It found a whole section —
+      **gating**, written in M6 — that was never added to `HELP_SECTIONS` and so
+      never rendered
+- [x] `check.mjs` pass 2 names each Help section instead of treating the whole
+      namespace as one dynamic prefix, which is what hid it
+- [x] The fixture already exercised all four modes, a prereq chain, every
+      visibility state and a Phase crossing in both directions from one Thread
+- [x] **Generate Example** no longer pushes the GM's own chronicle lines off the
+      end of a full log, and **Remove Example** sweeps the references it leaves
+- [x] README — there was none
+- [x] Whitepaper rewrite (`Remito Situation Room.md`) — it cut off mid-sentence
+      and predated the Node → Thread rename
+- [x] i18n sweep, static passes and the suites
+- [x] Verified in a live world

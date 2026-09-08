@@ -12,6 +12,9 @@
 --}}
 
 <section class="rsr-form-section">
+    <h3>{{localize "RSR.editor.secWhat"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secForceWhatLead"}}</p>
+
     <div class="rsr-form-row">
         <label for="rsr-f-name">{{localize "RSR.editor.name"}}</label>
         <input type="text" id="rsr-f-name" name="name" value="{{editor.draft.name}}">
@@ -39,14 +42,23 @@
 
 <section class="rsr-form-section">
     <h3>{{localize "RSR.force.resources"}}</h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secForcePurseLead"}}</p>
 
+    {{!-- One question per row. These shared a row, with Income labelled inside
+          the inline span where the stylesheet draws a label small and grey —
+          so the second of the two numbers read as a note on the first. --}}
     <div class="rsr-form-row">
         <label for="rsr-f-resources">{{localize "RSR.editor.purse"}}</label>
         <span class="rsr-form-inline">
             <input type="number" id="rsr-f-resources" name="resources" value="{{editor.draft.resources}}">
             <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.force.resourcesHint'}}"></i>
-            <label for="rsr-f-income">{{localize "RSR.force.income"}}</label>
+        </span>
+    </div>
+
+    <div class="rsr-form-row">
+        <label for="rsr-f-income">{{localize "RSR.force.income"}}</label>
+        <span class="rsr-form-inline">
             <input type="number" id="rsr-f-income" name="income" value="{{editor.draft.income}}">
             <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.force.incomeHint'}}"></i>
@@ -71,6 +83,7 @@
         <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
            data-tooltip="{{localize 'RSR.force.tagsHint'}}"></i>
     </h3>
+    <p class="rsr-form-lead">{{localize "RSR.editor.secTagsLead"}}</p>
 
     <div class="rsr-tag-columns">
         <div class="rsr-tag-column">
@@ -124,7 +137,7 @@
 {{#if editor.assets.length}}
 <section class="rsr-form-section">
     <h3>{{localize "RSR.asset.plural"}}</h3>
-    <p class="rsr-form-note">{{localize "RSR.editor.assetsElsewhere"}}</p>
+    <p class="rsr-form-lead">{{localize "RSR.editor.assetsElsewhere"}}</p>
     <div class="rsr-chip-row">
         {{#each editor.assets}}
         <button type="button" class="rsr-edit-chip is-link" data-action="editAsset"

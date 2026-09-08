@@ -47,6 +47,20 @@
             <span>{{localize "RSR.preview.label"}}</span>
         </button>
         {{/if}}
+
+        {{!-- Also the REAL GM. Disabled rather than hidden when nobody is
+              connected: a control that vanishes reads as a control that broke. --}}
+        {{#if showPlayers}}
+        <button type="button"
+                class="rsr-show-btn"
+                data-action="showPlayers"
+                {{#unless showPlayers.can}}disabled{{/unless}}
+                data-tooltip-class="rsr-tip"
+                data-tooltip="{{localize showPlayers.hint}}">
+            <i class="fa-solid fa-tv" inert></i>
+            <span>{{localize "RSR.show.label"}}</span>
+        </button>
+        {{/if}}
     </nav>
 
     {{!-- Loud on purpose. Everything below this line is a lie of omission being

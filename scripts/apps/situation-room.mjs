@@ -41,6 +41,9 @@ import {
 } from '../logic/visibility.mjs';
 import * as Edit from '../logic/editing.mjs';
 import { harvest, readField, clearField, editorContext } from './board-editor.mjs';
+// The only import from the relay outside state.mjs: Show Players says something
+// rather than writing something, and the socket has exactly one home.
+import { announce } from '../data/relay.mjs';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -76,6 +79,13 @@ const whileLooking = (actions, navigation = [
 const HELP_SECTIONS = [
     { key: 'plots' },
     { key: 'threads' },
+    // Written in M6 and left off this list until the M7 read-through, which is
+    // the only reason it was ever found: pass 2 of tools/check.mjs treated the
+    // whole help namespace as one dynamic prefix, so three defined-and-never-
+    // rendered keys looked exactly like the eight that were being rendered. The
+    // pass now names each section, and it sits with Threads because a shut gate
+    // is something a reader meets on a Thread row.
+    { key: 'gating' },
     { key: 'advancing' },
     { key: 'forces' },
     { key: 'state' },
@@ -266,7 +276,8 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             clearLog: SituationRoom._onClearLog,
             generateExample: SituationRoom._onGenerateExample,
             clearExample: SituationRoom._onClearExample,
-            togglePreview: SituationRoom._onTogglePreview
+            togglePreview: SituationRoom._onTogglePreview,
+            showPlayers: SituationRoom._onShowPlayers
         })
     };
 
@@ -375,6 +386,65 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         // segment no player has.
         if (this.#asPlayer && this.#view !== VIEW.HELP) this.#view = VIEW.SITUATION;
         this.render();
+    }
+
+    /**
+     * The Show Players control, and whether there is anyone to show it to.
+     *
+     * A press with nobody connected succeeds and does nothing, which is the worst
+     * of the three possible outcomes — so the button says so instead. Counted
+     * from active non-GM users: a second GM is not the table.
+     */
+    #buildShowPlayers() {
+        const watching = game.users?.filter((u) => u.active && !u.isGM).length ?? 0;
+        return {
+            can: watching > 0,
+            hint: watching > 0 ? 'RSR.show.hint' : 'RSR.show.nobody'
+        };
+    }
+
+    /**
+     * What the table is sent when the GM presses Show Players.
+     *
+     * Only ever a view the table HAS. The Cockpit and Settings are the GM's own
+     * segments, and an open editor is authoring rather than a place — sending any
+     * of the three would ask every player's client to land somewhere it cannot
+     * go, so all three resolve to the Situation list.
+     *
+     * The open Plot rides along unfiltered, and the receiving client decides
+     * whether it may see it. That is the M5 rule rather than a shortcut:
+     * visibility is answered against the reader's own `isGM`, and a GM's guess
+     * about what a player may see is exactly the second opinion M5 exists to
+     * remove.
+     */
+    #showPayload() {
+        const ownView = this.#view === VIEW.COCKPIT
+            || this.#view === VIEW.SETTINGS
+            || this.#edit !== null;
+        if (ownView) return { view: VIEW.SITUATION, plotId: null, tab: 'threads' };
+        return { view: this.#view, plotId: this.#plotId, tab: this.#plotTab };
+    }
+
+    /**
+     * Open the board here because a GM asked for it.
+     *
+     * An already-open window is re-pointed rather than reopened: a player who
+     * has the board up should find it showing what they were called over to see,
+     * not find a second one on top of the first.
+     */
+    showAsDirected({ view, plotId = null, tab = 'threads' }, byUserId) {
+        const board = readBoard();
+        const plot = plotId ? plotById(board, plotId) : null;
+        // Judged here, on this client, against this reader's own eyes.
+        const mine = plot && visibleRows([plot], game.user.isGM).length === 1;
+
+        this.#plotId = mine ? plotId : null;
+        this.#plotTab = mine ? tab : 'threads';
+        this.#view = (view === VIEW.COCKPIT || view === VIEW.SETTINGS) ? VIEW.SITUATION : view;
+        this.render(true);
+
+        const who = game.users?.get(byUserId)?.name ?? '';
+        ui.notifications?.info(game.i18n.format('RSR.show.opened', { gm: who }));
     }
 
     // ── edit mode ────────────────────────────────────────────────────────────
@@ -495,6 +565,9 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             // The control belongs to the real GM, and has to survive the preview
             // it turns on — it is the only way back out.
             canPreview: game.user.isGM,
+            // Built from the REAL GM for the same reason canPreview is: a GM
+            // previewing the table's board is still the person who can summon it.
+            showPlayers: game.user.isGM ? this.#buildShowPlayers() : null,
             isPreview: this.#asPlayer,
             isSituation: this.#view === VIEW.SITUATION,
             isCockpit: this.#view === VIEW.COCKPIT,
@@ -2386,6 +2459,31 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         const { confirmRemoveExample } = await import('./editors.mjs');
         await confirmRemoveExample();
     }
+
+    /**
+     * Put this board on every player's screen.
+     *
+     * Writes nothing, so it is not routed through state.mjs — there is no world
+     * state for "the table is looking at this", and inventing one would leave a
+     * stale pointer in the settings for every session after.
+     */
+    static _onShowPlayers() {
+        if (!game.user.isGM) return;
+        announce('board.show', this.#showPayload());
+        ui.notifications?.info(game.i18n.localize('RSR.show.sent'));
+    }
+}
+
+/**
+ * What this client does when a GM says look at this.
+ *
+ * Exported for the entry point to hand to the relay, which must not import an
+ * application class — the same reason ui/refresh.mjs finds its windows by a
+ * static marker instead.
+ */
+export function showBoardAsDirected(payload = {}, byUserId = '') {
+    if (!instance || instance.closed) instance = new SituationRoom();
+    instance.showAsDirected(payload, byUserId);
 }
 
 /** One board per client. Re-opening brings the existing window forward. */

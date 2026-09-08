@@ -21,6 +21,17 @@ const REQUEST_TIMEOUT_MS = 10_000;
 /** op name -> async (payload) => void. Populated by data/state.mjs via registerOperations. */
 const OPERATIONS = new Map();
 
+/**
+ * name -> (payload) => void, for the other direction: a GM addressing the table.
+ *
+ * A write travels player -> GM and needs an answer. An announcement travels
+ * GM -> everyone and needs none: nothing is stored, nothing is acknowledged, and
+ * a client that missed it has lost nothing it can read back later. Registered by
+ * the UI layer for the same reason OPERATIONS is registered by state.mjs — this
+ * module must import neither, or the funnel becomes a cycle.
+ */
+const ANNOUNCEMENTS = new Map();
+
 /** requestId -> { resolve, reject, timer } for requests this client is awaiting. */
 const pending = new Map();
 
@@ -30,6 +41,23 @@ const pending = new Map();
  */
 export function registerOperations(ops) {
     for (const [name, fn] of Object.entries(ops)) OPERATIONS.set(name, fn);
+}
+
+/** Called once from the entry point, with the handlers the UI layer answers to. */
+export function registerAnnouncements(handlers) {
+    for (const [name, fn] of Object.entries(handlers)) ANNOUNCEMENTS.set(name, fn);
+}
+
+/**
+ * Say something to every other client. GM only, and unacknowledged by design.
+ *
+ * The sender does not run its own announcement: a GM pressing Show Players is
+ * already looking at the thing they are showing, and reopening their own window
+ * underneath them would be the one client the feature actively harms.
+ */
+export function announce(name, payload = {}) {
+    if (!game.user?.isGM) return;
+    game.socket.emit(SOCKET, { action: 'announce', name, payload, userId: game.user.id });
 }
 
 /**
@@ -102,6 +130,15 @@ async function onMessage(message) {
             console.error(`${SOCKET} | relayed "${message.op}" failed`, err);
             game.socket.emit(SOCKET, { ...ack, ok: false, error: err.message });
         }
+        return;
+    }
+
+    if (message.action === 'announce') {
+        // Anyone can emit on a socket, so the sender is checked rather than
+        // trusted: without this, a player could open windows on the whole table.
+        if (!game.users?.get(message.userId)?.isGM) return;
+        if (message.userId === game.user?.id) return;
+        ANNOUNCEMENTS.get(message.name)?.(message.payload ?? {}, message.userId);
         return;
     }
 

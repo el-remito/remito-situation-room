@@ -34,8 +34,8 @@
 
 import { ASSET_MODIFIER, MODE, VISIBILITY } from '../constants.mjs';
 import {
-    readBoard, plotById, nodeById, nodesForPlot, deletePlot, deleteNode,
-    removeExample, concludeNode, forceById, plotsForForce, assetsForForce,
+    readBoard, plotById, nodeById, deletePlot, deleteNode,
+    removeExample, concludeNode, forceById,
     deleteForce, upsertAsset, deleteAsset, adjustForceResources, advanceTurn,
     turnPreview, turnTimers, turnSkips, advancePlotTurn, readConstants, advanceNode,
     readConditions, setAssetCondition, revertTurn, beginChapter
@@ -47,7 +47,9 @@ import {
 } from '../logic/progress.mjs';
 import { canAfford, pushCost, hasOwnTurn } from '../logic/economy.mjs';
 import { worldClock, plotClock, cycleReading, runLabelAt, runMarks } from '../ui/clock.mjs';
-import { threadRemoval } from '../logic/removal.mjs';
+import {
+    threadRemoval, plotRemoval, forceRemoval, assetRemoval
+} from '../logic/removal.mjs';
 import {
     refusal as revertRefusal, summary as revertSummary, nextMark, hasMark
 } from '../logic/cycle.mjs';
@@ -1115,17 +1117,27 @@ export async function createAssetFromDocument(forceId, uuid) {
 
 // ── destructive confirmations ────────────────────────────────────────────────
 
+/**
+ * Deleting a Plot, and saying what that costs.
+ *
+ * The largest delete on the board, and for a long time the one that said the
+ * least: a count of Threads, and nothing about what those Threads were holding.
+ * A Plot on screen is a name and a State bar — the Assets standing on its
+ * Threads are drawn on Force cards, the Phase that names one of them may be in a
+ * different Plot entirely, and none of it is visible from the button.
+ */
 export async function confirmDeletePlot(plotId) {
-    const plot = plotById(readBoard(), plotId);
+    const board = readBoard();
+    const plot = plotById(board, plotId);
     if (!plot) return false;
-    const threads = nodesForPlot(readBoard(), plotId).length;
+    const report = plotRemoval(plotId, board);
 
     const ok = await DialogV2.confirm({
         window: { title: L('RSR.editor.deletePlot') },
-        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
+        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor', 'rsr-delete-dialog'],
         content: `<p>${game.i18n.format('RSR.editor.deletePlotWarning', {
-            name: esc(plot.name), count: threads
-        })}</p>`,
+            name: esc(plot.name)
+        })}</p>` + falloutMarkup(report),
         rejectClose: false
     });
     if (!ok) return false;
@@ -1152,10 +1164,63 @@ function falloutMarkup(report) {
         `<li><i class="${icon}" inert></i><span>${game.i18n.format(key, data)}</span></li>`
     );
 
+    // The Threads a Plot takes with it. First, because it is the largest thing
+    // that happens and every other line below is a consequence of it.
+    for (const thread of report.threads) {
+        line('fa-solid fa-diagram-project',
+            thread.concluded ? 'RSR.editor.falloutThreadDone' : 'RSR.editor.falloutThread',
+            { name: `<strong>${esc(thread.name)}</strong>` });
+    }
+
+    // `fate` is the whole reason this is one loop and not two: a Thread and a
+    // Plot RELEASE their Assets, a Force DELETES them, and those two sentences
+    // must never be printed for each other.
     for (const asset of report.assets) {
-        line('fa-solid fa-cubes-stacked', 'RSR.editor.falloutAsset', {
-            name: `<strong>${esc(asset.name)}</strong>`, force: esc(asset.forceName)
+        const key = asset.fate === 'deleted'
+            ? 'RSR.editor.falloutAssetGone' : 'RSR.editor.falloutAsset';
+        line('fa-solid fa-cubes-stacked', key, {
+            name: `<strong>${esc(asset.name)}</strong>`,
+            force: esc(asset.forceName),
+            thread: esc(asset.nodeName ?? '')
         });
+    }
+
+    for (const plot of report.plotsCast) {
+        line('fa-solid fa-scroll', 'RSR.editor.falloutCast', {
+            plot: `<strong>${esc(plot.name)}</strong>`
+        });
+    }
+
+    for (const contest of report.contests) {
+        line('fa-solid fa-scale-balanced', 'RSR.editor.falloutContest', {
+            name: `<strong>${esc(contest.name)}</strong>`, pool: contest.pool
+        });
+    }
+
+    for (const outcome of report.outcomes) {
+        line('fa-solid fa-pen-nib', 'RSR.editor.falloutOutcome', {
+            name: `<strong>${esc(outcome.name)}</strong>`
+        });
+    }
+
+    for (const credit of report.credits) {
+        line('fa-solid fa-flag-checkered', 'RSR.editor.falloutCredit', {
+            name: `<strong>${esc(credit.name)}</strong>`
+        });
+    }
+
+    if (report.commitment) {
+        const c = report.commitment;
+        line('fa-solid fa-hand-holding',
+            c.nodeName ? 'RSR.editor.falloutStandingOn' : 'RSR.editor.falloutLentTo',
+            {
+                thread: `<strong>${esc(c.nodeName)}</strong>`,
+                plot: `<strong>${esc(c.plotName)}</strong>`
+            });
+    }
+
+    if (report.rosterCount > 0) {
+        line('fa-solid fa-users', 'RSR.editor.falloutRoster', { count: report.rosterCount });
     }
 
     for (const dep of report.dependents) {
@@ -1180,7 +1245,18 @@ function falloutMarkup(report) {
         line('fa-solid fa-scroll', 'RSR.editor.falloutLog', { count: report.logCount });
     }
 
-    if (lines.length === 0) return `<p class="rsr-fallout-none">${L('RSR.editor.falloutNone')}</p>`;
+    if (lines.length === 0) {
+        // Written per kind rather than once: "nothing requires it" is true of a
+        // Thread and meaningless of a Force, and a reassurance that does not
+        // match what was asked reads as a form letter.
+        const none = {
+            thread: 'RSR.editor.falloutNoneThread',
+            plot: 'RSR.editor.falloutNonePlot',
+            force: 'RSR.editor.falloutNoneForce',
+            asset: 'RSR.editor.falloutNoneAsset'
+        }[report.kind] ?? 'RSR.editor.falloutNoneThread';
+        return `<p class="rsr-fallout-none">${L(none)}</p>`;
+    }
     return `<p class="rsr-fallout-head">${L('RSR.editor.falloutHead')}</p>`
         + `<ul class="rsr-fallout">${lines.join('')}</ul>`;
 }
@@ -1260,19 +1336,27 @@ export async function confirmRemoveExample() {
     return true;
 }
 
+/**
+ * Deleting a Force, and saying what that costs.
+ *
+ * The most destructive of the four. Every other delete on this board releases
+ * what it was holding; this one takes its Assets with it, permanently, and
+ * refunds nothing — the Resources spent developing them are simply gone. Two
+ * counts in a sentence were never going to carry that, so the Assets are named
+ * one by one and the word is *deleted*.
+ */
 export async function confirmDeleteForce(forceId) {
     const board = readBoard();
     const force = forceById(board, forceId);
     if (!force) return false;
+    const report = forceRemoval(forceId, board);
 
     const ok = await DialogV2.confirm({
         window: { title: L('RSR.editor.deleteForce') },
-        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
+        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor', 'rsr-delete-dialog'],
         content: `<p>${game.i18n.format('RSR.editor.deleteForceWarning', {
-            name: esc(force.name),
-            plots: plotsForForce(board, forceId).length,
-            assets: assetsForForce(board, forceId).length
-        })}</p>`,
+            name: esc(force.name)
+        })}</p>` + falloutMarkup(report),
         rejectClose: false
     });
     if (!ok) return false;
@@ -1280,14 +1364,26 @@ export async function confirmDeleteForce(forceId) {
     return true;
 }
 
+/**
+ * Deleting an Asset, and saying what that costs.
+ *
+ * The shallowest of the four — nothing else stores an Asset's id — but not a
+ * silent one. A committed Asset is discounting pushes on a Thread that is on
+ * another screen, and nothing refunds what it cost to develop. A GM deleting one
+ * to take back raising it should learn that here rather than from the purse.
+ */
 export async function confirmDeleteAsset(assetId) {
-    const asset = readBoard().assets.find((a) => a.id === assetId);
+    const board = readBoard();
+    const asset = board.assets.find((a) => a.id === assetId);
     if (!asset) return false;
+    const report = assetRemoval(assetId, board);
 
     const ok = await DialogV2.confirm({
         window: { title: L('RSR.editor.deleteAsset') },
-        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
-        content: `<p>${game.i18n.format('RSR.editor.deleteAssetWarning', { name: esc(asset.name) })}</p>`,
+        classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor', 'rsr-delete-dialog'],
+        content: `<p>${game.i18n.format('RSR.editor.deleteAssetWarning', {
+            name: esc(asset.name)
+        })}</p>` + falloutMarkup(report),
         rejectClose: false
     });
     if (!ok) return false;

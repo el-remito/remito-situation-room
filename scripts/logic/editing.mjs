@@ -454,6 +454,41 @@ export function addPhase(draft) {
 export const removePhase = (draft, index) =>
     withPhases(draft, clone(draft.phases).filter((_, i) => i !== index));
 
+/**
+ * A Phase's two gate lists.
+ *
+ * The lists are kept MUTUALLY EXCLUSIVE here rather than in the picker, because
+ * a rule enforced where the data changes cannot be walked around by a second
+ * caller. Naming a Thread in one list takes it out of the other, which is also
+ * the reading a GM expects: they are answering one question — what does reaching
+ * this Phase do to that Thread — and the answer has three states, not four.
+ *
+ * @param {string} which 'reveal' or 'lock'
+ */
+export function setPhaseGate(draft, index, which, nodeId) {
+    if (!nodeId) return clone(draft);
+    const [into, outOf] = which === 'lock'
+        ? ['lockNodeIds', 'revealNodeIds']
+        : ['revealNodeIds', 'lockNodeIds'];
+
+    return withPhases(draft, clone(draft.phases).map((phase, i) => (i !== index ? phase : {
+        ...phase,
+        [into]: phase[into].includes(nodeId) ? phase[into] : [...phase[into], nodeId],
+        [outOf]: phase[outOf].filter((id) => id !== nodeId)
+    })));
+}
+
+/** Taking a Thread out of a list leaves the Phase saying nothing about it. */
+export const clearPhaseGate = (draft, index, which, nodeId) => withPhases(
+    draft,
+    clone(draft.phases).map((phase, i) => (i !== index ? phase : {
+        ...phase,
+        [which === 'lock' ? 'lockNodeIds' : 'revealNodeIds']:
+            phase[which === 'lock' ? 'lockNodeIds' : 'revealNodeIds']
+                .filter((id) => id !== nodeId)
+    }))
+);
+
 export function addTag(draft, polarity, text) {
     const value = str(text).trim();
     const next = clone(draft);

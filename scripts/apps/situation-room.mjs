@@ -21,10 +21,11 @@ import {
 import {
     readBoard, visiblePlots, plotById, nodesForPlot, forcesForPlot,
     assetsForNode, hasExample, forceById, allForces, assetsForForce,
-    plotsForForce, turnPreview, readLog
+    plotsForForce, turnPreview, readLog, gateFor
 } from '../data/state.mjs';
 import { resolvePhase, resolvePhaseForGM, statePercent } from '../logic/state-track.mjs';
 import { resolveMode, effectiveThreshold, isFull } from '../logic/progress.mjs';
+import { layout } from '../logic/graph-layout.mjs';
 import {
     engagedForceIds, uncommittedAssets, followsTurn, hasOwnTurn, clockName
 } from '../logic/economy.mjs';
@@ -56,7 +57,9 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @param {object} actions      the data-action map
  * @param {string[]} navigation names that only move the reader around
  */
-const whileLooking = (actions, navigation = ['selectView', 'openPlot', 'closePlot', 'togglePreview']) =>
+const whileLooking = (actions, navigation = [
+    'selectView', 'openPlot', 'closePlot', 'togglePreview', 'setPlotTab'
+]) =>
     Object.fromEntries(Object.entries(actions).map(([name, handler]) => [
         name,
         navigation.includes(name) ? handler : function (...args) {
@@ -170,6 +173,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             selectView: SituationRoom._onSelectView,
             openPlot: SituationRoom._onOpenPlot,
             closePlot: SituationRoom._onClosePlot,
+            setPlotTab: SituationRoom._onSetPlotTab,
             createPlot: SituationRoom._onCreatePlot,
             editPlot: SituationRoom._onEditPlot,
             removePlot: SituationRoom._onRemovePlot,
@@ -198,6 +202,9 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             closeEdit: SituationRoom._onCloseEdit,
             addPhase: SituationRoom._onAddPhase,
             removePhase: SituationRoom._onRemovePhase,
+            addPhaseReveal: SituationRoom._onAddPhaseReveal,
+            addPhaseLock: SituationRoom._onAddPhaseLock,
+            removePhaseGate: SituationRoom._onRemovePhaseGate,
             addTag: SituationRoom._onAddTag,
             removeTag: SituationRoom._onRemoveTag,
             addPrereq: SituationRoom._onAddPrereq,
@@ -237,6 +244,15 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
     /** The plot currently drilled into, or null for the list. */
     #plotId = null;
+
+    /**
+     * Which half of an open Plot is showing: its Threads, or what requires what.
+     *
+     * Instance state like #view, and reset when a Plot is opened — the graph is a
+     * thing you go and look at, not a mode the board stays in, and arriving at a
+     * different Plot in Requirements would hide the Threads somebody came for.
+     */
+    #plotTab = 'threads';
 
     /**
      * Whether the GM is looking at the board as the table sees it.
@@ -535,13 +551,68 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
 
     #buildPlotDetail(board, plot, isGM) {
         const nodes = visibleRows(nodesForPlot(board, plot.id), isGM);
+        const threads = nodes.map((node) => this.#buildThread(board, plot, node, isGM));
         return {
             ...this.#plotHeader(board, plot, isGM),
             description: projectIdentity(plot, isGM, maskLabel(EDIT_KIND.PLOT)).description,
             groups: this.#buildGroups(board, plot, isGM),
-            threads: nodes.map((node) => this.#buildThread(board, plot, node, isGM)),
+            threads,
             threadCount: nodes.length,
-            tray: this.#buildTray(board, plot, isGM)
+            tray: this.#buildTray(board, plot, isGM),
+            showThreads: this.#plotTab !== 'graph',
+            showGraph: this.#plotTab === 'graph',
+            graph: this.#buildGraph(nodes, threads)
+        };
+    }
+
+    /**
+     * What requires what, laid out in columns.
+     *
+     * VISIBILITY IS DONE BEFORE THIS RUNS, and that is the whole of the rule
+     * here: `nodes` has already been through `visibleRows`, so a hidden Thread is
+     * not in the layout's world at all. Its dependents therefore have a
+     * requirement the layout cannot resolve, which comes back as `unknown` and
+     * draws a mark rather than an arrow — an arrow would point at the space
+     * where the hidden Thread would have been, which is a worse leak than naming
+     * it, because the reader can count the columns.
+     */
+    #buildGraph(nodes, threads) {
+        const shape = layout(nodes);
+        const rows = new Map(threads.map((row) => [row.id, row]));
+        const drawn = new Set(shape.layers.flat());
+        const unknown = new Set(shape.unknown);
+
+        const card = (id) => {
+            const row = rows.get(id);
+            const requires = (nodes.find((n) => n.id === id)?.prereqNodeIds ?? [])
+                .filter((prereqId) => drawn.has(prereqId));
+            return {
+                id,
+                name: row?.name ?? '',
+                masked: !!row?.masked,
+                isConcluded: !!row?.isConcluded,
+                isLocked: !!row?.isLocked,
+                hasUnknown: unknown.has(id),
+                // Space-joined for the attribute the edge drawing reads. The
+                // alternative was serialising the edge list into the markup as
+                // JSON, which is one escaping bug away from a broken board;
+                // ids on the card that owns them cannot be mispaired.
+                requires: requires.join(' ')
+            };
+        };
+
+        return {
+            hasEdges: shape.hasEdges,
+            layers: shape.layers.map((ids) => ({ cards: ids.map(card) })),
+            // A count, not a list. The Threads with nothing to require and
+            // nothing requiring them are already on the other tab in full; what
+            // this view owes the reader is the assurance that they were left out
+            // on purpose rather than lost.
+            orphans: shape.orphans.length,
+            // Threads in a ring, or waiting behind one. They can never open, so
+            // they are named outright rather than drawn in a column that would
+            // imply an order they do not have.
+            tangled: shape.cycles.map((id) => rows.get(id)?.name).filter(Boolean)
         };
     }
 
@@ -816,7 +887,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         // `shown` decides both the chip and the shape, and is null under a mask.
         const shown = projectMode(node, isGM, mode);
         const concluded = node.status === NODE_STATUS.CONCLUDED;
-        const locked = node.status === NODE_STATUS.LOCKED;
+        // Not the stored status: that is only ONE of the three things that shut a
+        // Thread, and a row drawn from it alone would sit open with a
+        // prerequisite outstanding, or shut after State had moved past the Phase
+        // that closed it. See logic/gating.mjs — the answer is derived every time
+        // because every one of its inputs can change without touching this row.
+        const gate = gateFor(board, node);
+        const shut = !concluded && !gate.open;
         const assets = assetsForNode(board, node.id);
 
         // Assets committed to this Thread change what it costs, so the bar and the
@@ -833,14 +910,20 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             status: node.status,
             statusLabel: `RSR.thread.status.${node.status}`,
             isConcluded: concluded,
-            isLocked: locked,
+            isLocked: shut,
             isContested: false,
             isClock: false,
             isPool: false,
-            // GM affordances. A locked Thread is still advanceable — locking is about
-            // what the fiction allows, and the GM is the one deciding that.
-            canPush: isGM && !concluded,
-            canConclude: isGM && !concluded,
+            // A shut gate takes the controls with it. This used to read "a locked
+            // Thread is still advanceable, because locking is about what the
+            // fiction allows and the GM decides that" — which was true while the
+            // only lock was the GM's own switch. It is not true of a Thread
+            // waiting on one that has not concluded, and a gate that can be
+            // pushed straight through is decoration. The GM's remedy is to open
+            // the gate: throw the switch, conclude the prerequisite, or move
+            // State off the Phase that shut it.
+            canPush: isGM && !concluded && !shut,
+            canConclude: isGM && !concluded && !shut,
             canReopen: isGM && concluded,
             isFull: isFull(node, plot, assets),
             discounted: isGM && threshold !== node.threshold ? node.threshold : null
@@ -861,14 +944,32 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             };
         });
 
-        // Prerequisites are named only when the viewer may see the prerequisite too;
-        // otherwise a locked Thread would leak the name of a hidden one.
-        const prereqs = node.prereqNodeIds
-            .map((id) => board.nodes.find((n) => n.id === id))
-            .filter(Boolean);
-        row.prereqNames = visibleRows(prereqs, isGM)
+        // What is still OWED, and only while it is owed. The row used to list
+        // every prerequisite whether or not it had concluded, which reads as
+        // blocked long after the chain has been walked. Named only when the
+        // viewer may see the prerequisite too, or a shut Thread would give away
+        // the name of a hidden one by explaining itself.
+        const owed = shut
+            ? gate.unmet.map((id) => board.nodes.find((n) => n.id === id)).filter(Boolean)
+            : [];
+        row.prereqNames = visibleRows(owed, isGM)
             .map((n) => projectIdentity(n, isGM, maskLabel(EDIT_KIND.NODE)).name);
-        row.hasUnseenPrereqs = prereqs.length > row.prereqNames.length;
+        row.hasUnseenPrereqs = owed.length > row.prereqNames.length;
+
+        // WHICH gate, for the GM alone. The table is told that a Thread is shut,
+        // and what it is waiting on among the Threads they can already see —
+        // which of the GM's own switches is down is a fact about the GM's screen,
+        // and the Phase that shut it is the GM's authoring rather than the
+        // fiction. Both would read as an admission that there is more here.
+        row.shutBy = !isGM || !shut ? [] : [
+            ...(gate.phaseLocked ? ['RSR.gate.byPhase'] : []),
+            ...(gate.manual && !gate.revealed ? ['RSR.gate.byGM'] : [])
+        ];
+
+        // The reveal that fired, said out loud. The GM authored this Thread shut
+        // and a Phase has since opened it; without the line they would go looking
+        // for a switch they still believe is down.
+        row.revealedByPhase = isGM && gate.revealed && gate.manual && !concluded;
 
         if (concluded) {
             const winner = node.concludedBy ? forceById(board, node.concludedBy) : null;
@@ -1118,6 +1219,12 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      */
     _onRender(context, options) {
         super._onRender(context, options);
+
+        // Before the GM-only work below: the graph is drawn for everybody, and a
+        // previewing GM is looking at the table's board and must see the same
+        // arrows on it.
+        this.#drawGraph();
+
         // v1 keeps the player write path closed, so only a GM moves Assets around
         // — and a GM previewing the table's board is not one of them, or the
         // preview would be a screenshot with live controls behind it.
@@ -1145,6 +1252,67 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 }
             }).bind(this.element);
         }
+    }
+
+    /**
+     * The arrows on the requirement graph.
+     *
+     * Layout decided the columns; this decides the curves, and it has to run here
+     * because nothing before the browser knows where a card actually landed —
+     * a long Thread name wraps, a column grows, and every coordinate moves.
+     * Cards carry the ids they require, so an arrow is a lookup rather than a
+     * parallel list that can fall out of step with the markup.
+     *
+     * Coordinates are taken relative to the layer STRIP rather than to the
+     * viewport. The strip is not the scroller — the frame around it is — so both
+     * the strip and the cards inside it shift by the same amount when the graph
+     * is scrolled sideways, and subtracting one from the other cancels it. That
+     * is what keeps an arrow on its own cards once the graph outgrows the panel.
+     */
+    #drawGraph() {
+        const graph = this.element?.querySelector('.rsr-graph');
+        const svg = graph?.querySelector('.rsr-graph-edges');
+        const layers = graph?.querySelector('.rsr-graph-layers');
+        if (!svg || !layers) return;
+
+        const frame = layers.getBoundingClientRect();
+        const width = Math.ceil(frame.width);
+        const height = Math.ceil(frame.height);
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        svg.setAttribute('width', width);
+        svg.setAttribute('height', height);
+
+        const box = (el) => {
+            const r = el.getBoundingClientRect();
+            return { x: r.left - frame.left, y: r.top - frame.top, w: r.width, h: r.height };
+        };
+
+        const parts = [];
+        for (const card of graph.querySelectorAll('.rsr-graph-card[data-requires]')) {
+            const to = box(card);
+            for (const id of card.dataset.requires.split(' ').filter(Boolean)) {
+                const source = graph.querySelector(`.rsr-graph-card[data-node-id="${CSS.escape(id)}"]`);
+                if (!source) continue;
+                const from = box(source);
+
+                // Out of the right edge of the requirement, into the left edge of
+                // what requires it. The control points sit on the midline so the
+                // curve leaves and arrives horizontally, which is what makes a
+                // column of arrows readable when several land on one card.
+                const x1 = from.x + from.w;
+                const y1 = from.y + from.h / 2;
+                const x2 = to.x;
+                const y2 = to.y + to.h / 2;
+                const mid = (x1 + x2) / 2;
+                parts.push(`<path class="rsr-graph-edge" d="M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}" />`);
+                // The head is drawn rather than marked up: a <marker> takes its
+                // colour from context-stroke, which is one browser version away
+                // from being invisible, and a triangle is three numbers.
+                parts.push(`<path class="rsr-graph-head" d="M ${x2} ${y2} l -7 -4 l 0 8 z" />`);
+            }
+        }
+
+        svg.innerHTML = parts.join('');
     }
 
     #onRosterDragStart(event) {
@@ -1245,6 +1413,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     static async _onOpenPlot(event, target) {
         if (!await this.#leaveEditor()) return;
         this.#plotId = target.dataset.plotId ?? null;
+        this.#plotTab = 'threads';
+        this.render();
+    }
+
+    /** Threads or Requirements. A way of looking; it writes nothing. */
+    static _onSetPlotTab(event, target) {
+        this.#plotTab = target.dataset.tab === 'graph' ? 'graph' : 'threads';
         this.render();
     }
 
@@ -1502,6 +1677,36 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
     static _onRemovePhase(event, target) {
         const index = Number(target.dataset.index);
         this.#mutate((draft) => Edit.removePhase(draft, index));
+    }
+
+    /**
+     * A Phase names a Thread it opens or one it shuts. Both buttons read the one
+     * picker on that card — `pick-gate-<index>`, per card, because a Plot with
+     * four Phases has four of these on screen at once and one shared name would
+     * hand every card whichever value the first one happened to hold.
+     */
+    static #onPhaseGate(target, which) {
+        const index = Number(target.dataset.index);
+        this.#mutate((draft, form) => {
+            const field = `pick-gate-${index}`;
+            const id = readField(form, field);
+            if (!id) return draft;
+            clearField(form, field);
+            return Edit.setPhaseGate(draft, index, which, id);
+        });
+    }
+
+    static _onAddPhaseReveal(event, target) {
+        SituationRoom.#onPhaseGate.call(this, target, 'reveal');
+    }
+
+    static _onAddPhaseLock(event, target) {
+        SituationRoom.#onPhaseGate.call(this, target, 'lock');
+    }
+
+    static _onRemovePhaseGate(event, target) {
+        const { index, which, threadId } = target.dataset;
+        this.#mutate((draft) => Edit.clearPhaseGate(draft, Number(index), which, threadId));
     }
 
     /** The text comes from the add-a-tag box, which is cleared once it is taken. */

@@ -28,6 +28,7 @@ import {
     NODE_STATUS, TURN_BEHAVIOUR, VISIBILITY
 } from '../constants.mjs';
 import * as Edit from '../logic/editing.mjs';
+import { wouldCycle } from '../logic/gating.mjs';
 import * as Cond from '../logic/condition.mjs';
 
 // ── harvesting ───────────────────────────────────────────────────────────────
@@ -268,6 +269,21 @@ function plotContext(edit, board) {
     // Headings used anywhere on the board, so a GM can reuse one without retyping.
     const known = [...new Set(board.plots.flatMap((p) => Object.values(p.forceGroups ?? {})))].sort();
 
+    // Every Thread on this Plot, for the two gate pickers on each Phase card. A
+    // gate names a Thread on the Plot whose State moved, and nowhere else: a
+    // Phase reaching across to another Plot's Thread would put a lock on a row
+    // whose own board gives no hint of where it came from.
+    const threads = board.nodes
+        .filter((n) => n.plotId === draft.id)
+        .sort(byName)
+        .map((n) => ({ id: n.id, name: n.name }));
+    const threadName = new Map(threads.map((t) => [t.id, t.name]));
+
+    /** Chips for one of a Phase's two lists, dropping ids whose Thread is gone. */
+    const gateChips = (ids, which, index) => ids
+        .filter((id) => threadName.has(id))
+        .map((id) => ({ id, which, index, name: threadName.get(id) }));
+
     return shell(EDIT_KIND.PLOT, edit, {
         draft,
         phases: draft.phases.map((phase, index) => ({
@@ -275,7 +291,14 @@ function plotContext(edit, board) {
             index,
             tones: TONES.map((value) => ({
                 value, label: `RSR.editor.tone.${value}`, selected: value === phase.tone
-            }))
+            })),
+            reveals: gateChips(phase.revealNodeIds, 'reveal', index),
+            locks: gateChips(phase.lockNodeIds, 'lock', index),
+            // One picker feeds both buttons, so a Thread this Phase already has
+            // something to say about is off the list either way — the way to
+            // change your mind is to drop the chip, not to add it twice.
+            availableThreads: threads.filter((t) =>
+                !phase.revealNodeIds.includes(t.id) && !phase.lockNodeIds.includes(t.id))
         })),
         columns,
         knownGroups: known,
@@ -325,8 +348,13 @@ function threadContext(edit, board) {
         prereqs: siblings
             .filter((n) => chosen.has(n.id))
             .map((n) => ({ id: n.id, name: n.name })),
+        // A Thread that already waits on this one — at any depth — is not
+        // offered, because naming it would close a loop and both Threads would
+        // then wait on each other for good. Refused by omission rather than by
+        // an error after the fact: there is no reason to let a GM pick something
+        // and then be told no.
         availablePrereqs: siblings
-            .filter((n) => !chosen.has(n.id))
+            .filter((n) => !chosen.has(n.id) && !wouldCycle(edit.id, n.id, board.nodes))
             .map((n) => ({ id: n.id, name: n.name }))
     });
 }

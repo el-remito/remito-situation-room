@@ -141,6 +141,32 @@ eq('the first Phase of all starts at zero', E.addPhase(blank).phases[0].threshol
 eq('removing takes the one named', E.removePhase(two, 0).phases[0].threshold, 10);
 eq('adding a Phase does not touch the draft it was given', d.phases.length, 1);
 
+// A Phase's two gate lists. The exclusivity is enforced in the mutation rather
+// than in the picker, so it holds whichever way the list was reached.
+const revealed = E.setPhaseGate(d, 0, 'reveal', 'n1');
+eq('a Phase can name a Thread it reveals', revealed.phases[0].revealNodeIds, ['n1']);
+eq('naming it twice names it once',
+    E.setPhaseGate(revealed, 0, 'reveal', 'n1').phases[0].revealNodeIds, ['n1']);
+
+const flipped = E.setPhaseGate(revealed, 0, 'lock', 'n1');
+eq('locking a Thread the same Phase revealed moves it across',
+    [flipped.phases[0].revealNodeIds, flipped.phases[0].lockNodeIds], [[], ['n1']]);
+eq('and back again',
+    E.setPhaseGate(flipped, 0, 'reveal', 'n1').phases[0].lockNodeIds, []);
+
+eq('clearing leaves the Phase saying nothing about it',
+    E.clearPhaseGate(revealed, 0, 'reveal', 'n1').phases[0].revealNodeIds, []);
+eq('clearing the list it is not in changes nothing',
+    E.clearPhaseGate(revealed, 0, 'lock', 'n1').phases[0].revealNodeIds, ['n1']);
+eq('an empty pick is not a gate', E.setPhaseGate(d, 0, 'reveal', '').phases[0].revealNodeIds, []);
+eq('a gate lands on the Phase named and no other',
+    E.setPhaseGate(E.addPhase(d), 1, 'lock', 'n1').phases[0].lockNodeIds, []);
+eq('setting a gate does not touch the draft it was given', d.phases[0].revealNodeIds, []);
+eq('and both lists survive the patch',
+    (({ revealNodeIds, lockNodeIds }) => [revealNodeIds, lockNodeIds])(
+        E.patchFrom(EDIT_KIND.PLOT, flipped).phases[0]),
+    [[], ['n1']]);
+
 // ── tags ─────────────────────────────────────────────────────────────────────
 let f = E.addTag(force, POLARITY.STRENGTH, 'Siegecraft');
 f = E.addTag(f, POLARITY.WEAKNESS, 'Overextended');

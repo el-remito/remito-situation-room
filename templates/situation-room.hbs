@@ -112,6 +112,21 @@
                         </button>
                     </span>
                     {{/if}}
+
+                    {{!-- The pen, again. It is on the card in the list and it was
+                          nowhere in here, so changing a Plot meant leaving the
+                          Plot — and every reason to change one is a reason you
+                          are standing inside it. Pinned right rather than set
+                          beside the name, which the chips already share. --}}
+                    {{#if @root.isGM}}
+                    <span class="rsr-plot-detail-tools">
+                        <button type="button" class="rsr-icon-btn" data-action="editPlot"
+                                data-plot-id="{{openPlot.id}}"
+                                data-tooltip="{{localize 'RSR.editor.editPlot'}}">
+                            <i class="fa-solid fa-pen" inert></i>
+                        </button>
+                    </span>
+                    {{/if}}
                 </header>
 
                 {{#if openPlot.description}}
@@ -187,13 +202,36 @@
                         {{localize "RSR.thread.plural"}}
                         <span class="rsr-count">{{openPlot.threadCount}}</span>
                     </h3>
-                    {{#if isGM}}
-                    <button type="button" class="rsr-btn" data-action="createThread">
-                        <i class="fa-solid fa-plus" inert></i>
-                        <span>{{localize "RSR.editor.newThread"}}</span>
-                    </button>
-                    {{/if}}
+                    <span class="rsr-head-tools">
+                        {{!-- Two readings of the same Threads. The list is what
+                              is happening; Requirements is what is waiting on
+                              what, which the list can only ever say one row at a
+                              time. Everyone gets both — a table that can see a
+                              Thread can see what it is waiting for. --}}
+                        <span class="rsr-tabs" role="tablist">
+                            <button type="button" role="tab" class="rsr-tab{{#if openPlot.showThreads}} is-on{{/if}}"
+                                    aria-selected="{{#if openPlot.showThreads}}true{{else}}false{{/if}}"
+                                    data-action="setPlotTab" data-tab="threads">
+                                <i class="fa-solid fa-list" inert></i>
+                                <span>{{localize "RSR.thread.plural"}}</span>
+                            </button>
+                            <button type="button" role="tab" class="rsr-tab{{#if openPlot.showGraph}} is-on{{/if}}"
+                                    aria-selected="{{#if openPlot.showGraph}}true{{else}}false{{/if}}"
+                                    data-action="setPlotTab" data-tab="graph">
+                                <i class="fa-solid fa-diagram-project" inert></i>
+                                <span>{{localize "RSR.graph.tab"}}</span>
+                            </button>
+                        </span>
+                        {{#if isGM}}
+                        <button type="button" class="rsr-btn" data-action="createThread">
+                            <i class="fa-solid fa-plus" inert></i>
+                            <span>{{localize "RSR.editor.newThread"}}</span>
+                        </button>
+                        {{/if}}
+                    </span>
                 </header>
+
+                {{#if openPlot.showThreads}}
 
                 {{!-- The hand. Drag one of these onto a Thread below to commit
                       it; drag a committed Asset back onto its Force to release. --}}
@@ -236,6 +274,10 @@
                 </ul>
                 {{else}}
                 <p class="rsr-empty">{{localize "RSR.board.noThreads"}}</p>
+                {{/if}}
+
+                {{else}}
+                {{> "modules/remito-situation-room/templates/partials/graph.hbs"}}
                 {{/if}}
             </div>
 

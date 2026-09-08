@@ -355,6 +355,11 @@
 
 .rsr-plot-detail-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
 
+/* Pinned right, and centred rather than sat on the header's baseline: a
+   glyph has no text baseline worth aligning to, and lining its box up with
+   the title's underside hangs it low. */
+.rsr-plot-detail-tools { margin-left: auto; align-self: center; }
+
 .rsr-plot-title {
     margin: 0;
     font-family: var(--rsr-heading);
@@ -2143,3 +2148,199 @@
    colour this module uses for ordinary emphasis. */
 #tooltip.rsr-tip strong,
 .locked-tooltip.rsr-tip strong { color: var(--golden, #f3c267); }
+
+
+/* ── M6 — gating and the requirement graph ─────────────────────── */
+
+/* WHY the gate is shut, beside the fact that it is. The two chips are the GM's
+   half of that line — the table is told a Thread is not open and what it is
+   waiting on, never which of the GM's own switches is down. */
+.rsr-gate-why {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0 0.35rem;
+    font-size: var(--font-size-10, 10px);
+    font-style: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--rsr-withheld);
+    border: 1px solid var(--rsr-withheld);
+    border-radius: 3px;
+}
+
+/* The counterpart line: the GM shut this Thread and a Phase has opened it. Not
+   a warning — it is the feature working — so it wears the colour the board uses
+   for something being all right rather than the one it uses for withheld. */
+.rsr-gate-open { color: var(--rsr-strength); font-style: normal; }
+.rsr-gate-open i { margin-right: 0.25rem; }
+
+/* ── the Phase card's two lists ────────────────────────────────── */
+
+.rsr-phase-gates {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--rsr-border);
+}
+
+.rsr-phase-gate {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    margin-bottom: 0.3rem;
+}
+
+/* A fixed column for the two labels so the chips start at one left edge. Reveals
+   and Locks are read as a pair and a ragged start makes them read as two
+   unrelated rows. */
+.rsr-phase-gate-name {
+    flex: 0 0 6rem;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-phase-gate-name i { margin-right: 0.25rem; }
+.rsr-phase-gate .rsr-form-note { margin: 0; }
+
+/* ── the requirement graph ──────────────────────────────────── */
+
+.rsr-graph { margin-top: 0.5rem; }
+
+/* The scroll lives here rather than on the layer strip, because the arrows are
+   drawn into an svg sized to the strip's full width: scrolling the strip alone
+   would slide the cards out from under their own curves. */
+.rsr-graph-canvas {
+    position: relative;
+    overflow-x: auto;
+    padding-bottom: 0.3rem;
+}
+
+/* Under the cards, and inert. Sized in script to the strip it covers, which is
+   why only two edges are pinned: `inset: 0` would constrain left AND right and
+   the width attribute would lose, squashing the drawing to the visible width
+   while its viewBox still spanned the whole strip. Painted first and therefore
+   under the layers, which are positioned too. */
+.rsr-graph-edges {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.rsr-graph-edge {
+    fill: none;
+    stroke: var(--rsr-gold-soft);
+    stroke-width: 1.5;
+}
+
+.rsr-graph-head { fill: var(--rsr-gold-soft); stroke: none; }
+
+/* Columns of Threads, left to right in the order they must be finished. `start`
+   rather than `stretch`: a column of two beside a column of five should read as
+   two cards, not as two cards stretched to five cards' worth of height. */
+.rsr-graph-layers {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 3.5rem;
+    min-width: min-content;
+    padding: 0.2rem 0;
+}
+
+.rsr-graph-layer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.rsr-graph-card {
+    position: relative;
+    width: 11rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--rsr-panel-deep);
+    border: 1px solid var(--rsr-border);
+    border-radius: 5px;
+}
+
+/* The same three readings the Thread rows carry, so a Thread looks like itself
+   in both halves of the Plot. */
+.rsr-graph-card.is-locked { opacity: 0.72; }
+.rsr-graph-card.is-concluded { border-left: 3px solid var(--rsr-strength); }
+.rsr-graph-card.is-masked { border-style: dashed; color: var(--rsr-ink-muted); }
+
+.rsr-graph-name {
+    display: block;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-12, 12px);
+    /* Wrapping is wanted — a Thread name is a sentence fragment and truncating
+       it would hide the half that says which one it is — but not mid-word, or a
+       card eleven rem wide breaks "Quartermaster" across two lines. */
+    overflow-wrap: break-word;
+}
+
+/* A requirement that is not on this screen. The colour is the module's one hue
+   for withheld, so it reads as the same fact the masked rows carry. */
+.rsr-graph-unknown {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-size: var(--font-size-10, 10px);
+    font-style: italic;
+    color: var(--rsr-withheld);
+}
+
+.rsr-graph-unknown i { margin-right: 0.2rem; }
+
+/* The count of what was left out. Quiet: it is a reassurance, not a finding. */
+.rsr-graph-loose {
+    margin: 0.5rem 0 0;
+    font-size: var(--font-size-11, 11px);
+    font-style: italic;
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-graph-tangle {
+    margin: 0.5rem 0 0;
+    font-size: var(--font-size-12, 12px);
+    color: var(--rsr-weakness);
+}
+
+.rsr-graph-tangle i { margin-right: 0.3rem; }
+.rsr-graph-tangle em { font-style: normal; color: var(--rsr-ink); }
+
+/* ── Threads / Requirements ────────────────────────────────── */
+
+/* Two readings of one list, so they share a border and read as one control
+   rather than as two buttons that happen to sit together. */
+.rsr-tabs {
+    display: inline-flex;
+    border: 1px solid var(--rsr-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.rsr-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    /* Core's `a.button, button, kbd` rule forces height: var(--button-size), and
+       a tab in a section header has to sit on that header's own line. */
+    height: auto;
+    min-height: 0;
+    padding: 0.2rem 0.55rem;
+    font-size: var(--font-size-11, 11px);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--rsr-ink-muted);
+}
+
+.rsr-tab + .rsr-tab { border-left: 1px solid var(--rsr-border); }
+.rsr-tab:hover { background: var(--rsr-panel-soft); }
+
+/* Both the ground and the ink are stated. Daggerheart paints buttons gold with
+   dark navy text, so a tab that claimed only one of them would be navy glyphs on
+   a near-black strip — the same trap the quick chips fell into in M4 round 5. */
+.rsr-tab.is-on {
+    background: var(--rsr-gold-dim);
+    color: var(--rsr-gold);
+}

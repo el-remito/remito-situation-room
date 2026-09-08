@@ -194,7 +194,8 @@ export async function promptPush(threadId, { forceId = null } = {}) {
     // enough to clip its own example.
     //
     // Two quick chips, not three. A strip of them starts to read as a menu, and
-    // the number beside it can be typed — these are for the push that is ±1.
+    // the number beside it can be typed — these are a stepper for the push that
+    // is counted out rather than known, and each press moves the field by one.
     const content = `
         <header class="rsr-push-head">
             <strong class="rsr-push-name">${esc(node.name)}</strong>
@@ -260,11 +261,18 @@ export async function promptPush(threadId, { forceId = null } = {}) {
             const note = form.elements.note;
             if (note) note.placeholder = L('RSR.editor.pushNotePlaceholder');
 
-            // The quick chips write the amount rather than pushing by it: the GM
-            // still sees what is about to happen, and can still edit it.
+            // The quick chips STEP the amount, they do not set it. Assigning was
+            // the first build and it made a strip of nudges that could only ever
+            // produce 1 or -1: pressing +1 four times left the field reading 1,
+            // which is the one number the GM did not mean. Four presses now read
+            // 4, and the field is still typeable for a push nobody wants to count
+            // out. Nothing is clamped — stepping past a full clock is the
+            // ordinary way to say "and then some", and `chargeFor` already bills
+            // only what actually moved.
             for (const chip of form.querySelectorAll('[data-quick]')) {
                 chip.addEventListener('click', () => {
-                    amount.value = chip.dataset.quick;
+                    const step = Math.trunc(Number(chip.dataset.quick) || 0);
+                    amount.value = String(Math.trunc(Number(amount.value) || 0) + step);
                     amount.dispatchEvent(new Event('input', { bubbles: true }));
                 });
             }

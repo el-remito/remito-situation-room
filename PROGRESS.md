@@ -237,13 +237,37 @@ clock. Numbered between M5 and M6 because it is neither of them.
       route was checked against the client and does not withhold anything
 
 ## M6 — Gating and the graph
-- [ ] Phase reveal/lock lists
-- [ ] `logic/gating.mjs` — prereq DAG + cycle detection
-- [ ] `logic/graph-layout.mjs` — DAG layering
-- [ ] Graph rendering (fallback: indented list)
+- [x] `logic/gating.mjs` — the three gates, derived and stored nowhere
+- [x] `phaseGate` — the ladder below the current State, cumulative, last mention wins
+- [x] `unmetPrereqs` — what a Thread is still owed; a requirement that is gone is not owed
+- [x] `gateOf` — the three combined; a Phase reveal clears the GM's switch and nothing else
+- [x] `dependentsOf` / `wouldCycle` / `cyclesIn` — the edge relation and its rings
+- [x] `tools/check-gating.mjs` — 39 assertions, the combinations above all
+- [x] `logic/graph-layout.mjs` — longest-path layering, rings set aside, orphans reported
+- [x] `tools/check-graph-layout.mjs` — 26 assertions
+- [x] `state.mjs` refuses a push or a conclusion through a shut gate
+- [x] Phase reveal/lock lists are editable, and mutually exclusive at the mutation
+- [x] The prerequisite picker cannot author a cycle, at any depth
+- [x] The Thread row says the gate is shut and which gate did it (the why is GM-only)
+- [x] The requires line names what is still OWED, not what was ever required
+- [x] **Requirements** beside **Threads**: the graph, its cards and its SVG edges
+- [x] Only Threads that are part of a requirement are drawn; the rest are counted
+- [x] CSS section M6; `RSR.gate.*`, `RSR.editor.phase*`, `RSR.graph.*`
+- [x] The fixture: a Phase that locks, a Phase that reveals, a three-column chain
+- [x] `RSR.help.gating.*` — a section of its own, GM and player
+
+### Round 2 — from verification
+- [x] The pen is inside the open Plot too, not only on its card in the list
+- [x] The push dialog's −1 / +1 chips step the amount instead of assigning it
+- [x] `pushAmountHint` rewritten as documentation, and says the chips step
+- [x] Recorded for M7: the editors get the pass the ⓘ badges got
+- [x] Verified in a live world
 
 ## M7 — Polish
 - [ ] Phase notes fire on entry
+- [ ] The five in-board editors get the pass the ⓘ badges got — grouping,
+      labels that name the thing rather than the property, and CSS to match
+      (asked for in M6 round 2)
 - [ ] Help copy: all sections, gm + player variants
 - [ ] i18n sweep + static passes
 - [ ] README

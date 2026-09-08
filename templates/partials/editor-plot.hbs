@@ -85,6 +85,83 @@
                    data-row-group="phases" data-row-key="{{this.index}}" data-row-field="gmNotes"
                    value="{{this.gmNotes}}" placeholder="{{localize 'RSR.editor.phaseNotesPlaceholder'}}">
         </div>
+
+        {{!-- What reaching this Phase does to the Threads on this Plot. Two
+              lists, and one picker feeding both: a Thread this Phase already
+              speaks about is off the picker, because the way to change the
+              answer is to drop the chip rather than to say two things about the
+              same Thread. Reveals opens a Thread the GM has shut; Locks closes
+              one, and keeps it closed for as long as State stands here. --}}
+        <div class="rsr-phase-gates">
+            <div class="rsr-phase-gate">
+                <span class="rsr-phase-gate-name">
+                    <i class="fa-solid fa-lock-open" inert></i>
+                    {{localize "RSR.editor.phaseReveals"}}
+                </span>
+                {{#if this.reveals.length}}
+                <span class="rsr-chip-row">
+                    {{#each this.reveals}}
+                    <span class="rsr-edit-chip">
+                        <span>{{this.name}}</span>
+                        <button type="button" class="rsr-icon-btn rsr-icon-tiny"
+                                data-action="removePhaseGate" data-index="{{this.index}}"
+                                data-which="{{this.which}}" data-thread-id="{{this.id}}"
+                                data-tooltip="{{localize 'RSR.editor.removePhaseGate'}}">
+                            <i class="fa-solid fa-xmark" inert></i>
+                        </button>
+                    </span>
+                    {{/each}}
+                </span>
+                {{else}}
+                <span class="rsr-form-note">{{localize "RSR.editor.phaseGateNone"}}</span>
+                {{/if}}
+            </div>
+
+            <div class="rsr-phase-gate">
+                <span class="rsr-phase-gate-name">
+                    <i class="fa-solid fa-lock" inert></i>
+                    {{localize "RSR.editor.phaseLocks"}}
+                </span>
+                {{#if this.locks.length}}
+                <span class="rsr-chip-row">
+                    {{#each this.locks}}
+                    <span class="rsr-edit-chip">
+                        <span>{{this.name}}</span>
+                        <button type="button" class="rsr-icon-btn rsr-icon-tiny"
+                                data-action="removePhaseGate" data-index="{{this.index}}"
+                                data-which="{{this.which}}" data-thread-id="{{this.id}}"
+                                data-tooltip="{{localize 'RSR.editor.removePhaseGate'}}">
+                            <i class="fa-solid fa-xmark" inert></i>
+                        </button>
+                    </span>
+                    {{/each}}
+                </span>
+                {{else}}
+                <span class="rsr-form-note">{{localize "RSR.editor.phaseGateNone"}}</span>
+                {{/if}}
+            </div>
+
+            {{#if this.availableThreads.length}}
+            <div class="rsr-form-add">
+                <select id="rsr-ph-gate-{{this.index}}" name="pick-gate-{{this.index}}">
+                    <option value="">{{localize "RSR.editor.pickThread"}}</option>
+                    {{#each this.availableThreads}}
+                    <option value="{{this.id}}">{{this.name}}</option>
+                    {{/each}}
+                </select>
+                <button type="button" class="rsr-btn" data-action="addPhaseReveal"
+                        data-index="{{this.index}}">
+                    <i class="fa-solid fa-lock-open" inert></i>
+                    <span>{{localize "RSR.editor.phaseReveals"}}</span>
+                </button>
+                <button type="button" class="rsr-btn" data-action="addPhaseLock"
+                        data-index="{{this.index}}">
+                    <i class="fa-solid fa-lock" inert></i>
+                    <span>{{localize "RSR.editor.phaseLocks"}}</span>
+                </button>
+            </div>
+            {{/if}}
+        </div>
     </article>
     {{/each}}
 

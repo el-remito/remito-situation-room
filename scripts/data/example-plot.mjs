@@ -35,6 +35,8 @@ const ID = {
     ledger: 'rsr-ex-node-ledger',
     quarter: 'rsr-ex-node-quarter',
     envoy: 'rsr-ex-node-envoy',
+    ford: 'rsr-ex-node-ford',
+    court: 'rsr-ex-node-court',
     battalion: 'rsr-ex-asset-battalion',
     dragon: 'rsr-ex-asset-dragon',
     runners: 'rsr-ex-asset-runners'
@@ -100,11 +102,20 @@ export function buildExample() {
             { id: 'rsr-ex-phase-critical', label: 'Critical', tone: 'warn', threshold: 50,
               description: 'Siege lines are visible from the wall. Nobody on it sleeps.',
               gmNotes: 'Siege lines visible from the wall. The Guard stops sleeping.',
-              revealNodeIds: [], lockNodeIds: [] },
+              // The lines close the river, so the grain stops. State is 58, so
+              // this has already fired: Smuggling Grain reads as shut, with the
+              // reason on the row. Type State back under 50 in this editor and
+              // it opens again — a Phase gate is not an event that
+              // happened, it is where the situation currently stands.
+              revealNodeIds: [], lockNodeIds: [ID.grain] },
             { id: 'rsr-ex-phase-fire', label: 'Rain of Fire', tone: 'danger', threshold: 75,
               description: 'The bombardment has started. Nothing in the city is safe.',
               gmNotes: 'Bombardment begins. Every scene in the city takes a complication.',
-              revealNodeIds: [], lockNodeIds: [] }
+              // Not reached yet. Push State to 75 and this opens the assault the
+              // GM had locked — and it STAYS shut, because it also
+              // waits on the siege engines. Two independent gates, and a reveal
+              // is not a skeleton key for the other one.
+              revealNodeIds: [ID.gate], lockNodeIds: [] }
         ],
         defaultMode: MODE.FIAT,
         forceIds: [ID.legion, ID.guard],
@@ -144,7 +155,9 @@ export function buildExample() {
             { id: 'rsr-ex-phase-heard', label: 'Heard From', tone: 'calm', threshold: 60,
               description: 'A rider came back with her seal. The plea reached somebody.',
               gmNotes: 'Vaelport now knows. What the Duke does about it is the next question.',
-              revealNodeIds: [], lockNodeIds: [] }
+              // Nobody gets an audience before word arrives. State is 20, so
+              // this has not fired and the audience is shut twice over.
+              revealNodeIds: [ID.court], lockNodeIds: [] }
         ],
         defaultMode: MODE.INVEST,
         forceIds: [ID.guard],
@@ -273,17 +286,51 @@ export function buildExample() {
             visibility: VISIBILITY.MASKED, hideValues: false, playerAssignable: false
         },
         {
+            // The head of the Long Road's chain, and the reason that Plot has a
+            // graph worth opening: three Threads that must happen in order, which
+            // a list can only ever say one row at a time.
+            ...example, id: ID.ford, plotId: ID.road, sort: 0,
+            name: 'Slipping the Ford Patrol',
+            description: 'Legion outriders hold the Salt Road crossing. She has to be past them '
+                + 'before anything else on this road matters.',
+            mode: MODE.CLOCK,
+            threshold: 4, segments: 4,
+            progress: { pool: 2, byForce: {} },
+            outcomes: [{ forceId: ID.guard, delta: 10, note: 'She is across, and nobody saw her.' }],
+            status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
+            visibility: VISIBILITY.VISIBLE, hideValues: false, playerAssignable: false
+        },
+        {
             // On the other Plot, and therefore on the other clock. Pressing Next
             // Cycle for the siege does not move her; the Long Road's own button
             // does, and that is the whole of what this Thread is here to show.
-            ...example, id: ID.envoy, plotId: ID.road, sort: 0,
+            ...example, id: ID.envoy, plotId: ID.road, sort: 1,
             name: 'Reaching Vaelport',
             description: 'Six hundred miles, two rivers, and a Legion patrol on the ford.',
             mode: MODE.INVEST,
             threshold: 12, segments: 6,
             progress: { pool: 4, byForce: { [ID.guard]: 4 } },
             outcomes: [{ forceId: ID.guard, delta: 40, note: 'The plea is read aloud at court.' }],
-            status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
+            // Shut until the ford is behind her. The row says so by name, because
+            // the ford is a Thread the table can see; a requirement they could
+            // not see would say only that there is one.
+            status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [ID.ford],
+            visibility: VISIBILITY.VISIBLE, hideValues: false, playerAssignable: false
+        },
+        {
+            // The third column, and the row that carries all three gates at once:
+            // the GM has it locked, it waits on the envoy arriving, and the Plot's
+            // own Heard From Phase is what lifts the lock. Reaching 60 opens the
+            // switch and leaves the requirement standing.
+            ...example, id: ID.court, plotId: ID.road, sort: 2,
+            name: 'An Audience at Court',
+            description: 'The Duke of Vaelport hears petitions on the first of the month, '
+                + 'and has heard nothing from Northwall in a year.',
+            mode: MODE.FIAT,
+            threshold: 9, segments: 6,
+            progress: { pool: 0, byForce: {} },
+            outcomes: [{ forceId: ID.guard, delta: 35, note: 'Vaelport rides north.' }],
+            status: NODE_STATUS.LOCKED, concludedBy: null, prereqNodeIds: [ID.envoy],
             visibility: VISIBILITY.VISIBLE, hideValues: false, playerAssignable: false
         }
     ];

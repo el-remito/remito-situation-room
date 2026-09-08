@@ -20,6 +20,7 @@ import {
     resolveMode, addToPool, tickClock, addForForce, concludeThread, reopenThread
 } from '../logic/progress.mjs';
 import * as Econ from '../logic/economy.mjs';
+import * as Gate from '../logic/gating.mjs';
 import * as Log from '../logic/log.mjs';
 import { MODE } from '../constants.mjs';
 
@@ -61,6 +62,18 @@ export const assetsForForce = (board, forceId) =>
     board.assets.filter((a) => a.forceId === forceId).sort(bySort);
 
 /** Assets committed to one node — the ones whose modifiers actually apply. */
+/**
+ * The gate on one Thread: whether it is open, and which of the three shut it.
+ *
+ * Derived on every read and stored nowhere — see logic/gating.mjs for why. It
+ * lives here rather than in the app because the app is not the only caller: the
+ * two write operations below ask the same question before they run, and a guard
+ * that consulted a different function than the one that drew the button would
+ * eventually disagree with it.
+ */
+export const gateFor = (board, node) =>
+    Gate.gateOf(node, plotById(board, node?.plotId), board.nodes);
+
 export const assetsForNode = (board, nodeId) =>
     board.assets.filter((a) => a.nodeId === nodeId).sort(bySort);
 
@@ -381,6 +394,12 @@ const operations = {
         const assets = S.getAssets().filter((a) => a.nodeId === nodeId);
         const mode = resolveMode(node, plot);
 
+        // A shut gate refuses the write outright, for the same reason an
+        // unaffordable push does: the render that offered the control can be a
+        // Phase crossing out of date by the time the button is pressed. The UI
+        // does not offer it either, and neither of those is sufficient alone.
+        if (Gate.isShut(node, plot, S.getNodes())) return;
+
         // The dialog refuses what a Force cannot afford, so this guard catches the
         // case where the purse changed under a stale render — it refuses rather
         // than half-applies. Only a spend can overdraw; a gain never needs checking.
@@ -438,6 +457,11 @@ const operations = {
         const plots = S.getPlots();
         const plot = plots.find((p) => p.id === node.plotId);
         if (!plot) return;
+        // Concluding a Thread is how a prerequisite gets met, so a Thread behind
+        // its own shut gate must not be able to reach past it. Committing an
+        // Asset to one still is allowed — standing a battalion by ahead of a
+        // door opening is exactly what a GM does with a gate they can see.
+        if (Gate.isShut(node, plot, nodes)) return;
 
         const result = concludeThread(plot, node, forceId);
         await S.setNodes(nodes.map((n) => (n.id === nodeId

@@ -372,5 +372,85 @@ for (const kind of [EDIT_KIND.PLOT, EDIT_KIND.NODE, EDIT_KIND.FORCE, EDIT_KIND.A
 eq('a stored colour drafts back',
     E.draftFrom(EDIT_KIND.FORCE, { color: 'stone' }, {}).color, 'stone');
 
+// ── the consequence, through the draft and back ──────────────────────────────
+// Five flat controls rather than a nested field, which is what lets FIELDS and
+// `harvest` stay one loop each. The round trip is the property that matters.
+{
+    const stored = normalizeNode({
+        name: 'Siege Engines', consequenceOn: true, consequenceSize: 4,
+        consequencePerForce: true, consequenceDelta: -20,
+        consequenceNote: '  the works burn  ',
+        progress: { pool: 7, consequence: 3 }
+    });
+    const draft = E.draftFrom(EDIT_KIND.NODE, stored, { clockSegments: 6 });
+
+    eq('the config drafts out', [
+        draft.consequenceOn, draft.consequenceSize,
+        draft.consequencePerForce, draft.consequenceDelta
+    ], [true, 4, true, -20]);
+    eq('a new Thread seeds its size from the world s clock',
+        E.draftFrom(EDIT_KIND.NODE, null, { clockSegments: 8 }, { plotId: 'p' }).consequenceSize, 8);
+    eq('and tracks nothing until asked',
+        E.draftFrom(EDIT_KIND.NODE, null, {}, { plotId: 'p' }).consequenceOn, false);
+
+    const patch = E.patchFrom(EDIT_KIND.NODE, draft);
+    eq('the config patches back', [
+        patch.consequenceOn, patch.consequenceSize, patch.consequencePerForce
+    ], [true, 4, true]);
+    eq('the consequence note is trimmed on the way out', patch.consequenceNote, 'the works burn');
+    eq('a size of nothing is refused at the patch',
+        E.patchFrom(EDIT_KIND.NODE, { ...draft, consequenceSize: 0 }).consequenceSize, 1);
+
+    // THE PROPERTY THIS SPLIT EXISTS FOR: a push landing while the editor is
+    // open has to survive the Save that follows, so neither pile may ride out
+    // on the patch. Asserted for both, because the second one is new and the
+    // first is the reason the rule was written.
+    eq('a patch carries no progress at all', 'progress' in patch, false);
+    eq('and every field it does carry is one the editor owns',
+        Object.keys(patch).filter((k) => !(
+            E.FIELDS[EDIT_KIND.NODE].some((f) => f.name === k)
+            || ['plotId', 'outcomes', 'prereqNodeIds', 'color'].includes(k)
+        )), []);
+}
+
+// The five controls are declared, which is what the template writes and what
+// `harvest` reads back. A field in one and not the other is the bug this catches.
+eq('every consequence control is declared',
+    ['consequenceOn', 'consequenceSize', 'consequencePerForce',
+        'consequenceDelta', 'consequenceNote']
+        .filter((name) => !E.FIELDS[EDIT_KIND.NODE].some((f) => f.name === name)), []);
+
+// ── the deadline, through the draft and back ─────────────────────────────────
+{
+    const stored = normalizeNode({
+        name: 'Breaching the Gate', expiryOn: true, expirySize: 3,
+        expiryClock: 'plot', expiryLabel: '  Too Late  ',
+        progress: { expiry: 2 }
+    });
+    const draft = E.draftFrom(EDIT_KIND.NODE, stored, { clockSegments: 6 });
+
+    eq('the deadline drafts out',
+        [draft.expiryOn, draft.expirySize, draft.expiryClock], [true, 3, 'plot']);
+    eq('a new Thread seeds its size from the world s clock',
+        E.draftFrom(EDIT_KIND.NODE, null, { clockSegments: 8 }, { plotId: 'p' }).expirySize, 8);
+    eq('and rides the world s cycle until told otherwise',
+        E.draftFrom(EDIT_KIND.NODE, null, {}, { plotId: 'p' }).expiryClock, 'world');
+    eq('with no deadline at all', E.draftFrom(EDIT_KIND.NODE, null, {}, { plotId: 'p' }).expiryOn, false);
+
+    const patch = E.patchFrom(EDIT_KIND.NODE, draft);
+    eq('the deadline patches back',
+        [patch.expiryOn, patch.expirySize, patch.expiryClock], [true, 3, 'plot']);
+    eq('its word is trimmed on the way out', patch.expiryLabel, 'Too Late');
+    eq('a size of nothing is refused at the patch',
+        E.patchFrom(EDIT_KIND.NODE, { ...draft, expirySize: 0 }).expirySize, 1);
+    // The same property the Consequence has, restated for the second count: the
+    // cycle moves this while the editor is open, and Save must not undo it.
+    eq('and the count never rides out on the patch', 'progress' in patch, false);
+}
+
+eq('every deadline control is declared',
+    ['expiryOn', 'expirySize', 'expiryClock', 'expiryLabel']
+        .filter((name) => !E.FIELDS[EDIT_KIND.NODE].some((f) => f.name === name)), []);
+
 console.log(fail === 0 ? '\n  all passed\n' : `\n  ${fail} FAILED\n`);
 process.exit(fail === 0 ? 0 : 1);

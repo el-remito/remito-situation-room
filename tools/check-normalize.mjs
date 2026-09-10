@@ -130,7 +130,7 @@ eq('a board with nothing to take back says so rather than carrying a husk',
     N.normalizeTurn({ count: 4 }).undo, null);
 eq('a record is rebuilt from known keys only',
     Object.keys(N.normalizeTurn({ count: 4, undo: { count: 3, mischief: 1 } }).undo),
-    ['plotId', 'count', 'forces', 'plots', 'assets', 'logIds']);
+    ['plotId', 'count', 'forces', 'plots', 'assets', 'nodes', 'logIds']);
 eq('and a record that is not an object is no record',
     ['', 0, [], 'yes'].map((u) => N.normalizeTurn({ count: 4, undo: u }).undo),
     [null, null, null, null]);
@@ -231,6 +231,75 @@ eq('every kind carries the field', [
     'color' in N.normalizePlot({}), 'color' in N.normalizeNode({}),
     'color' in N.normalizeForce({}), 'color' in N.normalizeAsset({})
 ], [true, true, true, true]);
+
+// ── the consequence ──────────────────────────────────────────────────────────
+// Config on the node, counts under progress. That split is what stops the
+// editor's Save from clobbering a push that landed while the form was open —
+// `patchFrom` carries the config and never carries progress.
+const clean = N.normalizeNode({});
+eq('a Thread tracks no complications by default', clean.consequenceOn, false);
+eq('and carries a size anyway, so turning it on needs no second edit',
+    clean.consequenceSize, 6);
+eq('a size of zero is repaired to one', N.normalizeNode({ consequenceSize: 0 }).consequenceSize, 1);
+eq('a size of nonsense falls back', N.normalizeNode({ consequenceSize: 'x' }).consequenceSize, 6);
+eq('the per-side switch is off by default', clean.consequencePerForce, false);
+eq('the consequence outcome starts at nothing',
+    [clean.consequenceDelta, clean.consequenceNote], [0, '']);
+eq('a non-string consequence note is dropped',
+    N.normalizeNode({ consequenceNote: {} }).consequenceNote, '');
+
+eq('both counts exist on a fresh Thread',
+    [clean.progress.consequence, clean.progress.consequenceByForce], [0, {}]);
+eq('a stored count survives',
+    N.normalizeNode({ progress: { consequence: 3 } }).progress.consequence, 3);
+eq('and a per-side one is repaired like the other pile',
+    N.normalizeNode({ progress: { consequenceByForce: { 'f-a': '2', '': 9, 'f-b': 'x' } } })
+        .progress.consequenceByForce, { 'f-a': 2, 'f-b': 0 });
+// A world saved before any of this opens with the count at nothing rather than
+// with the key missing — which is the whole reason this file exists.
+eq('a Thread written before the track existed still reads',
+    'consequence' in N.normalizeNode({ progress: { pool: 4 } }).progress, true);
+eq('and its own progress is untouched by the repair',
+    N.normalizeNode({ progress: { pool: 4 } }).progress.pool, 4);
+
+// The sentinel is a plain non-empty string and survives the same repair a Force
+// id does. `force.delete` never matches it, which is the point of choosing one.
+eq('a Thread ended by its complications keeps the credit',
+    N.normalizeNode({ concludedBy: 'rsr-consequence' }).concludedBy, 'rsr-consequence');
+
+// ── which pile a chronicle line moved ────────────────────────────────────────
+eq('a line says the Thread s own progress unless told otherwise',
+    N.normalizeLogEntry({}).track, 'progress');
+eq('a consequence line says so', N.normalizeLogEntry({ track: 'consequence' }).track, 'consequence');
+eq('and a track nobody has heard of reads as progress',
+    N.normalizeLogEntry({ track: 'nonsense' }).track, 'progress');
+
+// ── the deadline ─────────────────────────────────────────────────────────────
+eq('a Thread has no deadline by default', clean.expiryOn, false);
+eq('and carries a size and a clock anyway', [clean.expirySize, clean.expiryClock], [6, 'world']);
+eq('a size of zero is repaired to one', N.normalizeNode({ expirySize: 0 }).expirySize, 1);
+eq('a clock nobody has heard of reads as the world s',
+    N.normalizeNode({ expiryClock: 'sundial' }).expiryClock, 'world');
+eq('and a real one carries', N.normalizeNode({ expiryClock: 'plot' }).expiryClock, 'plot');
+eq('a Thread has no word of its own by default', clean.expiryLabel, '');
+eq('a word of spaces is no word at all',
+    N.normalizeNode({ expiryLabel: '   ' }).expiryLabel, '');
+eq('the count starts at nothing', clean.progress.expiry, 0);
+eq('a negative count is repaired',
+    N.normalizeNode({ progress: { expiry: -4 } }).progress.expiry, 0);
+// Deliberately NOT clamped at the size: this function repairs one value at a
+// time and cannot see a sibling field, and a count above the size reads as run
+// out, which it correctly is.
+eq('a count above the size is left for the reading to call run out',
+    N.normalizeNode({ expirySize: 3, progress: { expiry: 9 } }).progress.expiry, 9);
+eq('a Thread written before deadlines existed still reads',
+    'expiry' in N.normalizeNode({ progress: { pool: 4 } }).progress, true);
+
+eq('a world has no word for running out by default', K.expiryLabel, '');
+eq('one the GM typed carries',
+    N.normalizeConstants({ expiryLabel: 'Closed' }).expiryLabel, 'Closed');
+eq('and a word of spaces falls back to the built-in one',
+    N.normalizeConstants({ expiryLabel: '  ' }).expiryLabel, '');
 
 console.log(`\n${fail === 0 ? '  all passed' : `  ${fail} FAILED`}\n`);
 process.exit(fail === 0 ? 0 : 1);

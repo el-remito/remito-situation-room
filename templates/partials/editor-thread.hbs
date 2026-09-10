@@ -38,13 +38,31 @@
     </div>
 </section>
 
+{{!--
+    How it advances.
+
+    THIS SECTION ASKS ONLY WHAT THE MODE CAN ANSWER. It used to ask everything of
+    everybody: a Narrative Thread, which tracks nothing at all, was asked for a
+    threshold, a segment count and a direction to read them in — three fields it
+    would never look at, and no way for a GM to tell a field that is ignored from
+    one they forgot to fill in.
+
+    `editor.shape` is the answer, built from the ONE table in logic/progress.mjs
+    that the arithmetic reads too, so the form and the maths cannot drift. The
+    mode select carries `data-reshapes`, which harvests and re-renders on change —
+    so nothing typed is lost when the section rebuilds around a new answer.
+
+    The Consequence is the second track, and it is not a mode: every mode but
+    Narrative may carry one, and a Thread with the toggle off is the Thread it
+    always was.
+--}}
 <section class="rsr-form-section">
     <h3>{{localize "RSR.editor.secThreadAdvance"}}</h3>
     <p class="rsr-form-lead">{{localize "RSR.editor.secThreadAdvanceLead"}}</p>
 
     <div class="rsr-form-row">
         <label for="rsr-f-mode">{{localize "RSR.editor.mode"}}</label>
-        <select id="rsr-f-mode" name="mode">
+        <select id="rsr-f-mode" name="mode" data-reshapes>
             {{#each editor.modes}}
             <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>
                 {{#if this.isInherit}}
@@ -57,10 +75,16 @@
         </select>
     </div>
 
+    {{!-- What this mode actually counts. It matters most on Narrative, where the
+          rows below are absent and the section would otherwise read as a form
+          that broke rather than as an answer. --}}
+    <p class="rsr-form-note">{{localize editor.modeLead}}</p>
+
     {{!-- One question per row. These were a single row with the second label
           living inside the first row's inline span, where the CSS draws it small
           and grey — a second question wearing the clothes of an annotation on
           the first. --}}
+    {{#if editor.shape.threshold}}
     <div class="rsr-form-row">
         <label for="rsr-f-threshold">{{localize "RSR.editor.threshold"}}</label>
         <span class="rsr-form-inline">
@@ -70,7 +94,9 @@
                data-tooltip="{{localize 'RSR.editor.thresholdHint'}}"></i>
         </span>
     </div>
+    {{/if}}
 
+    {{#if editor.shape.segments}}
     <div class="rsr-form-row">
         <label for="rsr-f-segments">{{localize "RSR.editor.segments"}}</label>
         <span class="rsr-form-inline">
@@ -80,21 +106,132 @@
                data-tooltip="{{localize 'RSR.editor.segmentsHint'}}"></i>
         </span>
     </div>
+    {{/if}}
 
-    {{!-- Sits under the two numbers it is about: it decides which way they are
-          read, not what they are. The label carries its own scope because the
-          switch is stored on every Thread and only means something on the two
-          modes that have one shared reading — saying so in the label is cheaper
-          and steadier than a control that greys itself out a mode change too
-          late. --}}
+    {{!-- Sits under the number it is about: it decides which way that number is
+          read, not what it is. It no longer carries a scope note in its label —
+          the row is simply absent on the one mode with no number to run either
+          way, which says the same thing without asking the reader to hold it. --}}
+    {{#if editor.shape.countdown}}
     <div class="rsr-form-row">
         <label for="rsr-f-countdown">{{localize "RSR.editor.countdown"}}</label>
         <span class="rsr-form-check">
             <input type="checkbox" id="rsr-f-countdown" name="countdown"{{#if editor.draft.countdown}} checked{{/if}}>
-            <span class="rsr-form-note">{{localize "RSR.editor.countdownScope"}}</span>
             <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
                data-tooltip="{{localize 'RSR.editor.countdownHint'}}"></i>
         </span>
+    </div>
+    {{/if}}
+
+    {{!-- The Consequence. A subsection rather than one more row, because turning
+          it on adds a whole second reading to the row this Thread draws, and a
+          checkbox in a run of numbers would not say so. --}}
+    {{#if editor.shape.consequence}}
+    <div class="rsr-form-sub">
+        <h4>{{localize "RSR.editor.consequence"}}</h4>
+        <p class="rsr-form-lead">{{localize "RSR.editor.consequenceLead"}}</p>
+
+        <div class="rsr-form-row">
+            <label for="rsr-f-consequence-on">{{localize "RSR.editor.consequenceOn"}}</label>
+            <span class="rsr-form-check">
+                <input type="checkbox" id="rsr-f-consequence-on" name="consequenceOn" data-reshapes{{#if editor.draft.consequenceOn}} checked{{/if}}>
+                <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                   data-tooltip="{{localize 'RSR.editor.consequenceHint'}}"></i>
+            </span>
+        </div>
+
+        {{#if editor.draft.consequenceOn}}
+        <div class="rsr-form-row">
+            <label for="rsr-f-consequence-size">{{localize "RSR.editor.consequenceSize"}}</label>
+            <span class="rsr-form-inline">
+                <input type="number" id="rsr-f-consequence-size" name="consequenceSize" min="1"
+                       value="{{editor.draft.consequenceSize}}">
+                <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                   data-tooltip="{{localize 'RSR.editor.consequenceSizeHint'}}"></i>
+            </span>
+        </div>
+
+        {{!-- Contested alone. Two sides racing each other rarely go wrong the
+              same way at the same rate, but one complication mounting over the
+              whole contest is just as ordinary a shape — so the GM says which. --}}
+        {{#if editor.shape.perForce}}
+        <div class="rsr-form-row">
+            <label for="rsr-f-consequence-per-force">{{localize "RSR.editor.consequencePerForce"}}</label>
+            <span class="rsr-form-check">
+                <input type="checkbox" id="rsr-f-consequence-per-force" name="consequencePerForce"{{#if editor.draft.consequencePerForce}} checked{{/if}}>
+                <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                   data-tooltip="{{localize 'RSR.editor.consequencePerForceHint'}}"></i>
+            </span>
+        </div>
+        {{/if}}
+        {{/if}}
+    </div>
+    {{/if}}
+
+    {{!-- The Expiration Clock, and it is OUTSIDE every shape branch on purpose.
+          A deadline is not a way of advancing, it is a way of running out — the
+          Narrative Thread that tracks nothing at all can be given three cycles
+          exactly as readily as the Clock can, which is why it is absent from
+          MODE_SHAPE and present here whatever the picker says. --}}
+    <div class="rsr-form-sub">
+        <h4>{{localize "RSR.editor.expiry"}}</h4>
+        <p class="rsr-form-lead">{{localize "RSR.editor.expiryLead"}}</p>
+
+        <div class="rsr-form-row">
+            <label for="rsr-f-expiry-on">{{localize "RSR.editor.expiryOn"}}</label>
+            <span class="rsr-form-check">
+                <input type="checkbox" id="rsr-f-expiry-on" name="expiryOn" data-reshapes{{#if editor.draft.expiryOn}} checked{{/if}}>
+                <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                   data-tooltip="{{localize 'RSR.editor.expiryHint'}}"></i>
+            </span>
+        </div>
+
+        {{#if editor.draft.expiryOn}}
+        <div class="rsr-form-row">
+            <label for="rsr-f-expiry-size">{{localize "RSR.editor.expirySize"}}</label>
+            <span class="rsr-form-inline">
+                <input type="number" id="rsr-f-expiry-size" name="expirySize" min="1"
+                       value="{{editor.draft.expirySize}}">
+                <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                   data-tooltip="{{localize 'RSR.editor.expirySizeHint'}}"></i>
+            </span>
+        </div>
+
+        {{!-- Which clock takes the time away. The Plot's own is offered only
+              while that Plot is keeping one — a setting that quietly does
+              nothing is worse than an absent one. --}}
+        <div class="rsr-form-row">
+            <label for="rsr-f-expiry-clock">{{localize "RSR.editor.expiryClock"}}</label>
+            <span class="rsr-form-inline">
+                <select id="rsr-f-expiry-clock" name="expiryClock" data-reshapes>
+                    {{#each editor.expiryClocks}}
+                    <option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{localize this.label}}</option>
+                    {{/each}}
+                </select>
+                <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                   data-tooltip="{{localize 'RSR.editor.expiryClockHint'}}"></i>
+            </span>
+        </div>
+
+        {{!-- The clock is running on nothing: this Thread rides its Plot's own
+              cycle and the Plot is no longer keeping one. Said rather than
+              silently repaired, because the fix is a decision — move the Thread
+              to the world's clock, or the Plot back onto its own. --}}
+        {{#if editor.expiryStranded}}
+        <p class="rsr-form-note is-condition">{{localize "RSR.editor.expiryStranded"}}</p>
+        {{/if}}
+
+        <div class="rsr-form-row">
+            <label for="rsr-f-expiry-label">{{localize "RSR.editor.expiryLabel"}}</label>
+            <span class="rsr-form-inline">
+                <input type="text" id="rsr-f-expiry-label" name="expiryLabel"
+                       value="{{editor.draft.expiryLabel}}"
+                       placeholder="{{localize editor.expiryPlaceholder}}">
+                <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+                   data-tooltip="{{localize 'RSR.editor.expiryLabelHint'}}"></i>
+            </span>
+        </div>
+        {{/if}}
     </div>
 </section>
 
@@ -187,5 +324,25 @@
     {{/each}}
     {{else}}
     <p class="rsr-form-note">{{localize "RSR.editor.noForcesOnPlot"}}</p>
+    {{/if}}
+
+    {{!-- The one ending with no Force behind it. Two plain named controls rather
+          than a data-row-group row: the repeating rows above are keyed by Force
+          id and swept by it in three places, and a row in that list standing for
+          nobody would have to survive all three. --}}
+    {{#if editor.consequenceOutcome}}
+    <div class="rsr-outcome-row is-consequence">
+        <span class="rsr-outcome-force">
+            <i class="fa-solid fa-triangle-exclamation" inert></i>
+            {{localize "RSR.thread.consequence"}}
+        </span>
+        <input type="number" id="rsr-f-consequence-delta" class="rsr-outcome-delta"
+               name="consequenceDelta" value="{{editor.consequenceOutcome.delta}}"
+               aria-label="{{localize 'RSR.editor.outcomeMoves'}}">
+        <input type="text" id="rsr-f-consequence-note" name="consequenceNote"
+               value="{{editor.consequenceOutcome.note}}"
+               placeholder="{{localize 'RSR.editor.consequenceNotePlaceholder'}}"
+               aria-label="{{localize 'RSR.editor.outcomeSays'}}">
+    </div>
     {{/if}}
 </section>

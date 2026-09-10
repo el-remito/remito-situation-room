@@ -32,21 +32,28 @@
  *    so the push note sets its own from the render callback instead.
  */
 
-import { ASSET_MODIFIER, MODE, VISIBILITY } from '../constants.mjs';
+import {
+    ASSET_MODIFIER, CONCLUDED_BY_CONSEQUENCE, MODE, TRACK, VISIBILITY
+} from '../constants.mjs';
 import {
     readBoard, plotById, nodeById, deletePlot, deleteNode,
     removeExample, concludeNode, forceById,
     deleteForce, upsertAsset, deleteAsset, adjustForceResources, advanceTurn,
-    turnPreview, turnTimers, turnSkips, advancePlotTurn, readConstants, advanceNode,
+    turnPreview, turnTimers, turnDeadlines, turnResolvable, turnSkips, advancePlotTurn,
+    readConstants, advanceNode,
     readConditions, setAssetCondition, revertTurn, beginChapter
 } from '../data/state.mjs';
 import { getDefaultVisibility } from '../settings.mjs';
 import {
     investmentOf, outcomeFor, stateAfterConclusion, effectiveThreshold, leader,
-    resolveMode, depletes, pushSign
+    resolveMode, depletes, pushSign, hasConsequence, consequenceShared,
+    consequenceSize, consequenceOf, consequenceFull
 } from '../logic/progress.mjs';
 import { canAfford, pushCost, hasOwnTurn } from '../logic/economy.mjs';
-import { worldClock, plotClock, cycleReading, runLabelAt, runMarks } from '../ui/clock.mjs';
+import * as Expiry from '../logic/expiry.mjs';
+import {
+    worldClock, plotClock, cycleReading, runLabelAt, runMarks, expiryLabel
+} from '../ui/clock.mjs';
 import {
     threadRemoval, plotRemoval, forceRemoval, assetRemoval
 } from '../logic/removal.mjs';
@@ -147,6 +154,25 @@ function readingOf(node, mode, threshold, forces, draining = false) {
 }
 
 /**
+ * What the CONSEQUENCE currently reads, in the same line the reading above
+ * occupies for the Thread's own progress.
+ *
+ * Never inverted. A complication is what is mounting, whichever direction the
+ * Thread beside it is written in — see `promptPush` on why `draining` is forced
+ * off for this track.
+ *
+ * A per-side track prints every side, the way a contest does, so a GM pressing
+ * one side's button can still see what the others are standing at.
+ */
+function consequenceReadingOf(node, plot, forces) {
+    const size = consequenceSize(node);
+    if (consequenceShared(node, plot)) return `${consequenceOf(node)} / ${size}`;
+    return forces.length
+        ? forces.map((f) => `${f.name} ${consequenceOf(node, f.id)} / ${size}`).join('  ·  ')
+        : '—';
+}
+
+/**
  * One dialog for every push, replacing the strip of +1 / +3 / −1 buttons that used
  * to hang off each Thread and each Force.
  *
@@ -161,33 +187,76 @@ function readingOf(node, mode, threshold, forces, draining = false) {
  * The note is the third field, and it is the reason the log exists: a number moving
  * is not a development until someone says what happened.
  */
-export async function promptPush(threadId, { forceId = null } = {}) {
+export async function promptPush(threadId, { forceId = null, track = TRACK.PROGRESS } = {}) {
     const board = readBoard();
     const node = nodeById(board, threadId);
     if (!node) return false;
     const plot = plotById(board, node.plotId);
     const mode = resolveMode(node, plot);
+
+    /**
+     * WHICH PILE THIS PRESS IS POINTED AT.
+     *
+     * The button standing beside the reading said so, which is why there is no
+     * picker for it here: a control that moves the number it is next to needs no
+     * second question about which number it meant.
+     *
+     * A Consequence push is refused outright when the Thread does not keep one.
+     * The control is not drawn in that case, but a render can be stale — a second
+     * GM may have switched the track off, or the mode to Narrative, while this one
+     * was reading — and the same rule that refuses an unaffordable push applies.
+     */
+    const onConsequence = track === TRACK.CONSEQUENCE;
+    if (onConsequence && !hasConsequence(node, plot)) {
+        ui.notifications?.warn(L('RSR.notify.noConsequence'));
+        return false;
+    }
+
+    const onExpiry = track === TRACK.EXPIRY;
+    if (onExpiry && !Expiry.hasExpiry(node)) {
+        ui.notifications?.warn(L('RSR.notify.noExpiry'));
+        return false;
+    }
+
     // The GM is never in preview here — the dialog does not open for a player —
     // so this is the stored answer rather than a projected one.
-    const draining = depletes(node, plot);
+    //
+    // A Consequence never drains. It is what is MOUNTING, whichever way the
+    // reading beside it is written: eight weeks of rations falling to nothing is
+    // still a situation whose complications are piling up, and a track that
+    // inverted with the Thread it stands under would count them backwards.
+    // A deadline reads DOWN always — nobody counts up to a door closing — and
+    // that is not the Thread's `countdown` switch, which is about its own
+    // progress. So the box is filled in the direction the deadline moves: you
+    // type −1 to give it one more cycle, and the reading rises by one.
+    const draining = onExpiry || (!onConsequence && depletes(node, plot));
     // What one press of the forward direction looks like in the box. −1 on a
     // depleting Thread, because the field is filled in the direction the reading
     // moves — see `pushSign`. state.mjs turns it back around at the write.
-    const sign = pushSign(node, plot);
+    // −1 on a deadline, because spending a cycle of it is what the button is
+    // for; −1 on a depleting Thread for the reason `pushSign` gives; 1 on
+    // everything else, including a Consequence, which only ever mounts.
+    const sign = onExpiry ? -1 : (draining ? pushSign(node, plot) : 1);
     const assets = board.assets.filter((a) => a.nodeId === node.id);
     const threshold = effectiveThreshold(node, assets);
     const forces = (plot?.forceIds ?? []).map((id) => forceById(board, id)).filter(Boolean);
 
     // Contested Threads keep one pile per side, so there is no pile for a push in
-    // nobody's name to land in.
-    if (mode === MODE.CONTESTED && forces.length === 0) {
+    // nobody's name to land in. A Consequence on the same Thread may still be one
+    // shared track, in which case nobody's name is exactly where it lands.
+    // A deadline names nobody: time passing is not something a side does, and
+    // the picker is not drawn for it at all.
+    const needsSide = onExpiry ? false : (onConsequence
+        ? (mode === MODE.CONTESTED && !consequenceShared(node, plot))
+        : mode === MODE.CONTESTED);
+    if (needsSide && forces.length === 0) {
         ui.notifications?.warn(L('RSR.notify.contestedNeedsForce'));
         return false;
     }
 
     const NOBODY = 'nobody';
     const options = [
-        ...(mode === MODE.CONTESTED ? [] : [{ value: NOBODY, label: L('RSR.editor.pushNobody') }]),
+        ...(needsSide ? [] : [{ value: NOBODY, label: L('RSR.editor.pushNobody') }]),
         ...forces.map((f) => ({
             value: f.id,
             label: game.i18n.format('RSR.editor.pushForceOption', {
@@ -195,8 +264,17 @@ export async function promptPush(threadId, { forceId = null } = {}) {
             })
         }))
     ];
-    const preselect = forceId ?? (mode === MODE.CONTESTED ? forces[0]?.id ?? NOBODY : NOBODY);
-    const suggested = preselect === NOBODY ? 0 : -pushCost(1);
+    const preselect = forceId ?? (needsSide ? forces[0]?.id ?? NOBODY : NOBODY);
+    /**
+     * What the cost box opens on.
+     *
+     * A complication is not a purchase. Nobody buys the siege works catching
+     * fire, so a Consequence push suggests nothing and the box starts at zero —
+     * still typeable, because a Force that spent to make something go wrong for
+     * somebody else is an ordinary table event and this dialog has never been in
+     * the business of refusing those.
+     */
+    const suggested = onConsequence || onExpiry || preselect === NOBODY ? 0 : -pushCost(1);
 
 
     // One screenful: what is being moved, then the numbers, then what is said
@@ -210,13 +288,27 @@ export async function promptPush(threadId, { forceId = null } = {}) {
     // Two quick chips, not three. A strip of them starts to read as a menu, and
     // the number beside it can be typed — these are a stepper for the push that
     // is counted out rather than known, and each press moves the field by one.
+    // Which pile, said in the header rather than asked in a picker. The chip
+    // stands where the mode chip stands on an ordinary push, because on this
+    // dialog "what am I moving" is the same size of question as "what kind of
+    // Thread is this" — and on a Consequence push it is the more important one.
+    const trackChip = onConsequence
+        ? `<span class="rsr-chip rsr-chip-consequence">${esc(L('RSR.thread.consequence'))}</span>`
+        : (onExpiry
+            ? `<span class="rsr-chip rsr-chip-expiry">${esc(L('RSR.thread.expiry'))}</span>`
+            : '');
     const content = `
         <header class="rsr-push-head">
             <strong class="rsr-push-name">${esc(node.name)}</strong>
             <span class="rsr-chip rsr-chip-mode">${esc(L(`RSR.thread.mode.${mode}`))}</span>
+            ${trackChip}
             ${draining ? `<span class="rsr-chip rsr-chip-depleting">${esc(L('RSR.thread.depleting'))}</span>` : ''}
         </header>
-        <p class="rsr-push-reading">${esc(readingOf(node, mode, threshold, forces, draining))}</p>
+        <p class="rsr-push-reading">${esc(onExpiry
+            ? `${Expiry.expiryLeft(node)} / ${Expiry.expirySize(node)}`
+            : (onConsequence
+                ? consequenceReadingOf(node, plot, forces)
+                : readingOf(node, mode, threshold, forces, draining)))}</p>
 
         <div class="rsr-push-grid">
             <label for="rsr-push-amount">${esc(L('RSR.editor.pushAmount'))}${info('RSR.editor.pushAmountHint')}</label>
@@ -226,6 +318,7 @@ export async function promptPush(threadId, { forceId = null } = {}) {
                 <button type="button" class="rsr-quick" data-quick="1">+1</button>
             </span>
 
+            ${onExpiry ? '' : `
             <label for="rsr-push-force">${esc(L('RSR.editor.pushForce'))}</label>
             <span class="rsr-push-field">
                 ${select('forceId', options, preselect, 'rsr-push-force')}
@@ -233,7 +326,7 @@ export async function promptPush(threadId, { forceId = null } = {}) {
                     ${esc(L('RSR.editor.pushCost'))}${info('RSR.editor.pushCostHint')}
                 </label>
                 <input type="number" id="rsr-push-cost" name="resourceDelta" value="${suggested}">
-            </span>
+            </span>`}
         </div>
 
         <div class="rsr-push-note-block">
@@ -266,10 +359,12 @@ export async function promptPush(threadId, { forceId = null } = {}) {
             const amount = form.elements.amount;
             const who = form.elements.forceId;
             const cost = form.elements.resourceDelta;
-            if (!amount || !who || !cost) return;
-
-            let touched = false;
-            cost.addEventListener('input', () => { touched = true; });
+            // The deadline's dialog has neither of the last two: time passing
+            // names nobody and costs nothing, so those controls are not
+            // rendered at all rather than rendered and ignored. Everything
+            // below them is about keeping the cost in step with the amount, so
+            // there is nothing left to wire.
+            if (!amount) return;
 
             // Set here, not in the markup: cleanHTML strips placeholder from a
             // textarea. See the file header.
@@ -284,6 +379,9 @@ export async function promptPush(threadId, { forceId = null } = {}) {
             // out. Nothing is clamped — stepping past a full clock is the
             // ordinary way to say "and then some", and `chargeFor` already bills
             // only what actually moved.
+            //
+            // Above the early return below, because these are the one control a
+            // deadline's dialog shares with every other push.
             for (const chip of form.querySelectorAll('[data-quick]')) {
                 chip.addEventListener('click', () => {
                     const step = Math.trunc(Number(chip.dataset.quick) || 0);
@@ -291,6 +389,11 @@ export async function promptPush(threadId, { forceId = null } = {}) {
                     amount.dispatchEvent(new Event('input', { bubbles: true }));
                 });
             }
+
+            if (!who || !cost) return;
+
+            let touched = false;
+            cost.addEventListener('input', () => { touched = true; });
 
             const sync = () => {
                 if (touched) return;
@@ -300,6 +403,10 @@ export async function promptPush(threadId, { forceId = null } = {}) {
                 // Costed on what the push BUYS, not on what is typed: on a
                 // depleting Thread the two have opposite signs and only one of
                 // them is a spend.
+                //
+                // A Consequence buys nothing, so it suggests nothing and leaves
+                // the box wherever the GM put it.
+                if (onConsequence || onExpiry) return;
                 const n = Math.trunc(Number(amount.value) || 0) * sign;
                 cost.value = String(who.value === NOBODY ? 0 : -pushCost(n));
             };
@@ -310,7 +417,13 @@ export async function promptPush(threadId, { forceId = null } = {}) {
             label: L('RSR.editor.pushConfirm'),
             // Pointing the way the reading will move, like the button that
             // opened this dialog.
-            icon: draining ? 'fa-solid fa-arrow-left-long' : 'fa-solid fa-arrow-right-long',
+            // The track first, then the direction. A deadline and a complication
+            // each have a shape of their own, and only an ordinary push is
+            // described by an arrow.
+            icon: onExpiry ? 'fa-solid fa-hourglass-end'
+                : (onConsequence ? 'fa-solid fa-triangle-exclamation'
+                    : (draining ? 'fa-solid fa-arrow-left-long'
+                        : 'fa-solid fa-arrow-right-long')),
             // The return value IS the dialog result — see the header note.
             callback: (event, button) => {
                 const form = button.form;
@@ -340,7 +453,7 @@ export async function promptPush(threadId, { forceId = null } = {}) {
         return false;
     }
 
-    await advanceNode(threadId, result);
+    await advanceNode(threadId, { ...result, track });
     return true;
 }
 
@@ -599,6 +712,22 @@ export async function promptConclude(threadId) {
     // them without wrapping into an unreadable mess. Putting the radio in the row
     // also means the choice sits beside the investment and consequence it follows
     // from, instead of a separate strip underneath.
+    /**
+     * The fourth answer: its own complications ended it.
+     *
+     * Offered only when the Thread keeps a Consequence, and PRESELECTED when that
+     * track is at its line — which is the whole reason the ending exists. It
+     * carries its own State change like every other row, so the GM reads what
+     * each answer costs before choosing between them rather than after.
+     *
+     * `invested` is a dash because nobody spent anything: a complication is what
+     * happened to this Thread, not what was bought with it.
+     */
+    const consequence = hasConsequence(node, plot);
+    const complicated = consequence && consequenceFull(node, plot);
+    const consequenceDelta = stateAfterConclusion(plot, node, CONCLUDED_BY_CONSEQUENCE)
+        - plot.state;
+
     const ahead = leader(node, plot.forceIds);
     const options = [
         ...rows.map((r) => ({
@@ -607,12 +736,23 @@ export async function promptConclude(threadId) {
             invested: String(r.invested),
             delta: `${r.delta >= 0 ? '+' : ''}${r.delta}`,
             note: r.note,
-            checked: r.force.id === ahead
+            // A full Consequence takes the default off whoever was ahead: the
+            // reading that reached its line is the one the GM came to answer.
+            checked: !complicated && r.force.id === ahead
         })),
+        ...(consequence ? [{
+            value: CONCLUDED_BY_CONSEQUENCE,
+            name: L('RSR.thread.consequence'),
+            invested: '—',
+            delta: `${consequenceDelta >= 0 ? '+' : ''}${consequenceDelta}`,
+            note: outcomeFor(node, CONCLUDED_BY_CONSEQUENCE).note
+                || L('RSR.editor.concludeConsequenceHint'),
+            checked: complicated
+        }] : []),
         {
             value: 'nobody', name: L('RSR.editor.concludeNobody'),
             invested: '—', delta: '0', note: L('RSR.editor.concludeNobodyHint'),
-            checked: ahead === null
+            checked: !complicated && ahead === null
         }
     ];
 
@@ -730,8 +870,43 @@ function timerBill(rows, board, showPlot = false) {
     return `<ul class="rsr-bill rsr-bill-timers">${list}</ul>`;
 }
 
-/** A heading for one section of a bill, so the two lists are told apart. */
+/** A heading for one section of a bill, so the lists are told apart. */
 const billHead = (key) => `<p class="rsr-bill-head">${esc(L(key))}</p>`;
+
+/**
+ * The Expiration Clocks this cycle is about to move, as a list, or '' when none
+ * are running.
+ *
+ * The same shape as `timerBill` and for the same reason: `turnDeadlines` runs
+ * the pure function the cycle itself runs, so the GM is shown the operation
+ * rather than a description of it. A Thread merely counting down is `is-idle`;
+ * one RUNNING OUT gets the sentence, because only one of those is a development.
+ *
+ * The Plot is named on the world's bill and not on a Plot's own, exactly as the
+ * timers do it — a Plot's bill has already named its Plot in the sentence above.
+ */
+function deadlineBill(rows, board, showPlot = false) {
+    if (!rows.length) return '';
+
+    const list = rows.map(({ node, change, expires }) => {
+        const plot = showPlot && node.plotId ? plotById(board, node.plotId)?.name : null;
+        const left = Math.max(0, Expiry.expirySize(node) - change.progress.expiry);
+        return `
+            <li class="${expires ? '' : 'is-idle'}">
+                <span class="rsr-bill-name">${esc(node.name)}</span>
+                <span class="rsr-bill-where">
+                    ${plot ? `<span class="rsr-bill-place">${esc(plot)}</span>` : ''}
+                </span>
+                <span class="rsr-bill-why">${esc(expires
+                    ? game.i18n.format('RSR.turn.deadlineEnds', {
+                        label: expiryLabel(board, node)
+                    })
+                    : game.i18n.format('RSR.turn.deadlineCounts', { left }))}</span>
+            </li>`;
+    }).join('');
+
+    return `<ul class="rsr-bill rsr-bill-deadlines">${list}</ul>`;
+}
 
 /**
  * How many of a bill's timers actually ARRIVE somewhere, which is the same
@@ -739,6 +914,55 @@ const billHead = (key) => `<p class="rsr-bill-head">${esc(L(key))}</p>`;
  * chronicle. A counter going down is not a development and is not counted.
  */
 const arrivals = (rows) => rows.filter(({ change }) => change.condition !== undefined).length;
+
+/**
+ * What could be resolved before this cycle turns, as markup, or '' when nothing
+ * could.
+ *
+ * THE FIRST THING ON THE BILL, above the income. Everything else a cycle
+ * confirmation shows is what the press is ABOUT to do; this is the one section
+ * about what the GM might want to do instead, and a warning printed under three
+ * lists of arithmetic is a warning nobody reads.
+ *
+ * It is a warning and not a refusal. The confirm button underneath is already
+ * the "do you still want to proceed" — adding a second dialog would be asking
+ * the same question twice, and refusing outright would be the board deciding
+ * that a full bar means a finished situation, which is exactly the judgement it
+ * has never made anywhere else.
+ *
+ * When nothing qualifies the section is absent entirely, so the ordinary press
+ * looks exactly as it always did.
+ */
+function resolvableBill(rows, board, showPlot = false) {
+    if (!rows.threads.length && !rows.plots.length) return '';
+
+    const reasons = (list, prefix) => list.map((r) => L(`${prefix}.${r}`)).join(' · ');
+
+    const threads = rows.threads.map(({ node, plot, reasons: why }) => `
+        <li>
+            <span class="rsr-bill-name">${esc(node.name)}</span>
+            <span class="rsr-bill-where">
+                ${showPlot && plot ? `<span class="rsr-bill-place">${esc(plot.name)}</span>` : ''}
+            </span>
+            <span class="rsr-bill-why">${esc(reasons(why, 'RSR.turn.resolvableReason'))}</span>
+        </li>`).join('');
+
+    // Plots second and marked as Plots, because "the Long Road could be
+    // resolved" and "the envoy could be resolved" are different sizes of
+    // decision and the list would otherwise read as one flat set of rows.
+    const plots = rows.plots.map(({ plot, reasons: why }) => `
+        <li class="is-plot">
+            <span class="rsr-bill-name">
+                <i class="fa-solid fa-scroll" inert></i> ${esc(plot.name)}
+            </span>
+            <span class="rsr-bill-where"></span>
+            <span class="rsr-bill-why">${esc(reasons(why, 'RSR.turn.resolvablePlotReason'))}</span>
+        </li>`).join('');
+
+    return `${billHead('RSR.turn.resolvableTitle')}
+        <p class="hint rsr-bill-lead">${esc(L('RSR.turn.resolvableLead'))}</p>
+        <ul class="rsr-bill rsr-bill-resolvable">${threads}${plots}</ul>`;
+}
 
 /**
  * Advance Turn, with the bill shown first.
@@ -788,6 +1012,17 @@ export async function confirmAdvanceTurn() {
     const timerRows = turnTimers(board);
     const timers = timerBill(timerRows, board, true);
 
+    // The other countdown this press moves. Beside the timers rather than
+    // folded into them: an Asset arriving in a condition and a Thread running
+    // out of time are different developments, and a GM scanning for one of them
+    // should not have to read past the other.
+    const deadlineRows = turnDeadlines(board);
+    const deadlines = deadlineBill(deadlineRows, board, true);
+
+    // What was already standing at its line when the button was reached for.
+    // Read across the whole board, because that is what this press moves.
+    const standing = resolvableBill(turnResolvable(board), board, true);
+
     const ok = await DialogV2.confirm({
         window: { title: game.i18n.format('RSR.turn.advanceNamed', {
             label: worldClock(board)
@@ -798,8 +1033,10 @@ export async function confirmAdvanceTurn() {
             from: esc(cycleReading(board, board.turn.count)),
             to: esc(cycleReading(board, board.turn.count + 1))
         })}</p>
+        ${standing}
         ${roster.length ? billHead('RSR.turn.incomeTitle') : ''}${bill}
         ${timers ? billHead('RSR.turn.timersTitle') + timers : ''}
+        ${deadlines ? billHead('RSR.turn.deadlinesTitle') + deadlines : ''}
         ${sittingOut}`,
         rejectClose: false
     });
@@ -813,7 +1050,10 @@ export async function confirmAdvanceTurn() {
     ui.notifications?.info(game.i18n.format('RSR.turn.advancedNotice', {
         reading: cycleReading(board, board.turn.count + 1),
         paid: roster.filter((row) => row.willBePaid).length,
-        arrived: arrivals(timerRows)
+        arrived: arrivals(timerRows),
+        // Threads that actually ran out, not Threads whose counter moved — the
+        // same rule the timers already follow, and the same reason.
+        ended: deadlineRows.filter((row) => row.expires).length
     }));
     return true;
 }
@@ -836,6 +1076,16 @@ export async function confirmAdvancePlotTurn(plotId) {
     const rows = turnTimers(board, plotId);
     const timers = timerBill(rows, board);   // no Plot column: this dialog names one Plot
 
+    // Only the deadlines this Plot's clock owns. A Thread on this Plot that the
+    // GM set to the world's cycle is counting in the campaign's time and is not
+    // this button's business — the same scoping the timers already have.
+    const deadlineRows = turnDeadlines(board, plotId);
+    const deadlines = deadlineBill(deadlineRows, board);
+
+    // This Plot alone. A GM pressing one Plot's cycle is not being asked about
+    // another Plot's business, and the Plot itself can be one of the rows.
+    const standing = resolvableBill(turnResolvable(board, plotId), board);
+
     const ok = await DialogV2.confirm({
         window: { title: L('RSR.turn.plotAdvance') },
         classes: ['daggerheart', 'dh-style', 'rsr', 'rsr-editor'],
@@ -844,8 +1094,10 @@ export async function confirmAdvancePlotTurn(plotId) {
             plot: esc(plot.name), label: esc(plotClock(plot)),
             turn: plot.turnCount, next: plot.turnCount + 1
         })}</p>
+        ${standing}
         ${billHead('RSR.turn.timersTitle')}
         ${timers || `<p class="hint">${esc(L('RSR.turn.noTimers'))}</p>`}
+        ${deadlines ? billHead('RSR.turn.deadlinesTitle') + deadlines : ''}
         <p class="hint">${esc(game.i18n.format('RSR.turn.plotNoIncome', {
             reading: cycleReading(board)
         }))}</p>`,
@@ -861,7 +1113,8 @@ export async function confirmAdvancePlotTurn(plotId) {
         plot: plot.name,
         label: plotClock(plot),
         turn: plot.turnCount + 1,
-        arrived: arrivals(rows)
+        arrived: arrivals(rows),
+        ended: deadlineRows.filter((row) => row.expires).length
     }));
     return true;
 }
@@ -902,6 +1155,9 @@ export async function confirmRevertTurn(plotId = null) {
     // `chapters` is on the clock rather than on the board's top level, so it is
     // handed in by name: a Segment opened on the cycle being taken back stops
     // existing with it, and the GM ought to read that before pressing.
+    // `board` already carries `nodes`, so the deadlines come along with the
+    // purses and the timers for free; `chapters` is the one thing that lives on
+    // the clock rather than at the board's top level.
     const said = revertSummary(undo, { ...board, chapters: runMarks(board) });
     const plot = undo.plotId ? plotById(board, undo.plotId) : null;
     const clock = said.clocks.find((c) => c.id === undo.plotId) ?? null;
@@ -941,6 +1197,17 @@ export async function confirmRevertTurn(plotId = null) {
                 name: `<strong>${esc(timer.name)}</strong>`,
                 condition: esc(L(labelOf(rowFor(conditions, timer.condition)))),
                 cycles: timer.cycles
+            });
+    }
+    // A window that closed and is about to be open again. Said as its own
+    // sentence, because a Thread coming back from having run out is a bigger
+    // fact than a counter moving by one — and it is the only line here that
+    // changes what the GM can still do with a row rather than only its numbers.
+    for (const deadline of said.deadlines) {
+        line('fa-solid fa-hourglass-half',
+            deadline.unexpires ? 'RSR.turn.revertDeadlineOpen' : 'RSR.turn.revertDeadline', {
+                name: `<strong>${esc(deadline.name)}</strong>`,
+                left: Math.max(0, deadline.size - deadline.to)
             });
     }
     // The only thing on this list the GM did by hand rather than by pressing the

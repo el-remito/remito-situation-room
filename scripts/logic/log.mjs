@@ -21,7 +21,7 @@
  * application's job, because that is where the viewer is known.
  */
 
-import { ASSET_CONDITION, LOG_KIND, VISIBILITY } from '../constants.mjs';
+import { ASSET_CONDITION, LOG_KIND, TRACK, VISIBILITY } from '../constants.mjs';
 
 /** Re-exported so a caller needs one import to write an entry. */
 export { LOG_KIND };
@@ -46,7 +46,7 @@ export function entry({
     kind, turn = 0, at = 0, plotId = null, nodeId = null, forceId = null,
     assetId = null, amount = 0, cost = 0, note = '', isExample = false,
     visibility = VISIBILITY.VISIBLE, sealed = false,
-    condition = ASSET_CONDITION.READY
+    condition = ASSET_CONDITION.READY, track = TRACK.PROGRESS
 } = {}) {
     return {
         kind,
@@ -65,6 +65,10 @@ export function entry({
         condition: Object.values(ASSET_CONDITION).includes(condition)
             ? condition
             : ASSET_CONDITION.READY,
+        // Which of a Thread's readings a push moved. Stored rather than derived,
+        // because the track can be switched off afterwards and a line about
+        // complications that no longer have a counter still happened.
+        track: Object.values(TRACK).includes(track) ? track : TRACK.PROGRESS,
         // What the table reads of this one line. VISIBLE lets it say what moved,
         // MASKED keeps only the note, HIDDEN keeps the whole line off a player's
         // screen. Set per development, because the same push can be a public rout

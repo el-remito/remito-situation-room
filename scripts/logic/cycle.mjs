@@ -169,7 +169,7 @@ export const hasMark = (chapters, at) => marks(chapters).some((m) => m.at === in
  * used.
  */
 export function record({
-    plotId = null, count = 0, forces = [], plots = [], assets = [], logIds = []
+    plotId = null, count = 0, forces = [], plots = [], assets = [], nodes = [], logIds = []
 } = {}) {
     // This doubles as the read-time repair for the STORED record — normalizeTurn
     // hands whatever is in the setting straight to it — so every list is checked
@@ -196,6 +196,12 @@ export function record({
             plotId: a.plotId ?? null,
             nodeId: a.nodeId ?? null
         })),
+        // The Threads whose Expiration Clocks this cycle moved, as they stood.
+        // The second countdown on this board, and it needs the same treatment
+        // the first one got: a cycle taken back has to take the deadline with
+        // it, or a Thread stays a cycle nearer running out than the count says
+        // it is — and unlike a purse there is nothing on screen to notice by.
+        nodes: rows(nodes).map((n) => ({ id: n.id, expiry: Math.max(0, int(n.expiry)) })),
         // The chronicle lines this advance wrote, newest first. They are what
         // proves the record is still current, and they are removed on the way
         // back: a cycle that was taken back did not happen, and a chronicle that
@@ -262,11 +268,12 @@ export const canRevert = (undo, log) => refusal(undo, log) === '';
  * unchanged would be indistinguishable from one that had worked.
  */
 export function reverse(undo, {
-    forces = [], plots = [], assets = [], log = [], chapters = []
+    forces = [], plots = [], assets = [], nodes = [], log = [], chapters = []
 } = {}) {
     const purses = new Map((undo?.forces ?? []).map((f) => [f.id, f]));
     const counts = new Map((undo?.plots ?? []).map((p) => [p.id, p]));
     const states = new Map((undo?.assets ?? []).map((a) => [a.id, a]));
+    const deadlines = new Map((undo?.nodes ?? []).map((n) => [n.id, n]));
     const drop = new Set(undo?.logIds ?? []);
     const back = Math.max(0, int(undo?.count));
 
@@ -289,6 +296,15 @@ export function reverse(undo, {
                 nodeId: was.nodeId
             };
         }),
+        // Only the deadline goes back. A Thread's own progress is not this
+        // cycle's doing — a push that landed between the cycle and the undo is
+        // somebody's deliberate act, and taking the cycle back must not take
+        // that with it. `refusal` would have refused the revert anyway in that
+        // case, which is exactly why this can afford to be narrow rather than
+        // rewriting the whole progress object.
+        nodes: nodes.map((n) => (deadlines.has(n.id)
+            ? { ...n, progress: { ...n.progress, expiry: deadlines.get(n.id).expiry } }
+            : n)),
         log: log.filter((e) => !drop.has(e.id)),
         chapters: marks(chapters).filter((m) => m.at <= back)
     };
@@ -304,12 +320,12 @@ export function reverse(undo, {
  * a Force deleted since the cycle does not appear as an empty line.
  */
 export function summary(undo, {
-    forces = [], plots = [], assets = [], chapters = []
+    forces = [], plots = [], assets = [], nodes = [], chapters = []
 } = {}) {
     if (!undo) {
         return {
             found: false, count: 0, purses: [], clocks: [], timers: [],
-            marks: [], lines: 0
+            deadlines: [], marks: [], lines: 0
         };
     }
 
@@ -317,6 +333,7 @@ export function summary(undo, {
     const force = byId(forces);
     const plot = byId(plots);
     const asset = byId(assets);
+    const node = byId(nodes);
     const back = Math.max(0, int(undo.count));
 
     return {
@@ -351,6 +368,21 @@ export function summary(undo, {
                 // it was committed to is a different sentence.
                 recommitted: (asset.get(a.id).plotId ?? null) !== (a.plotId ?? null)
                     || (asset.get(a.id).nodeId ?? null) !== (a.nodeId ?? null)
+            })),
+        // The Threads whose deadlines go back, with both numbers. `unexpires`
+        // is the one worth saying out loud: a cycle that ran a window shut and
+        // is now being taken back opens it again, and that is a bigger fact
+        // than a counter moving by one.
+        deadlines: (undo.nodes ?? [])
+            .filter((n) => node.has(n.id))
+            .map((n) => ({
+                id: n.id,
+                name: node.get(n.id).name,
+                from: Math.max(0, int(node.get(n.id).progress?.expiry)),
+                to: Math.max(0, int(n.expiry)),
+                size: Math.max(1, int(node.get(n.id).expirySize) || 1),
+                unexpires: Math.max(0, int(node.get(n.id).progress?.expiry))
+                    >= Math.max(1, int(node.get(n.id).expirySize) || 1)
             })),
         // A Segment opened on a cycle being taken back stops existing with it,
         // and that is worth its own line: it is the only thing on this list the

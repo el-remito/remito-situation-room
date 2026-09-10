@@ -14,7 +14,7 @@
 import {
     CONSTANT_DEFAULTS, ENTITY_DEFAULTS, LIFECYCLE, LOG_KIND, MODE, NODE_STATUS,
     VISIBILITY, VISIBILITY_KINDS, POLARITY, ASSET_MODIFIER, ASSET_CONDITION,
-    CONDITION_EFFECT, DEFAULT_CONDITIONS, TURN_BEHAVIOUR
+    CONDITION_EFFECT, DEFAULT_CONDITIONS, TURN_BEHAVIOUR, TRACK, EXPIRY_CLOCK
 } from '../constants.mjs';
 import { normalizeColor } from '../logic/palette.mjs';
 import { record as cycleRecord, marks as cycleMarks } from '../logic/cycle.mjs';
@@ -169,12 +169,17 @@ export function normalizePlot(raw = {}) {
 
 export function normalizeNode(raw = {}) {
     const progress = isObj(raw.progress) ? raw.progress : {};
-    const byForce = {};
-    if (isObj(progress.byForce)) {
-        for (const [forceId, value] of Object.entries(progress.byForce)) {
-            if (typeof forceId === 'string' && forceId.length) byForce[forceId] = int(value, 0);
+    // Two piles of the same shape, repaired the same way: what each side has
+    // spent, and what each side has gone wrong by.
+    const perForce = (raw2) => {
+        const out = {};
+        if (!isObj(raw2)) return out;
+        for (const [forceId, value] of Object.entries(raw2)) {
+            if (typeof forceId === 'string' && forceId.length) out[forceId] = int(value, 0);
         }
-    }
+        return out;
+    };
+    const byForce = perForce(progress.byForce);
     return {
         id: id(raw.id),
         plotId: str(raw.plotId),
@@ -188,7 +193,69 @@ export function normalizeNode(raw = {}) {
         // climbs underneath. Stored on every Thread and read only where it means
         // something — see logic/progress.mjs `depletes`.
         countdown: bool(raw.countdown),
-        progress: { pool: int(progress.pool, 0), byForce },
+        /**
+         * The Consequence: how badly this Thread is going, beside how well.
+         *
+         * Configuration only. The COUNT lives under `progress` with every other
+         * count, which is what keeps it out of the editor's draft — see
+         * logic/editing.mjs on why a push landing mid-edit has to survive the
+         * Save that follows.
+         *
+         * Flat fields rather than a nested object, following `modifier` on the
+         * Asset the other way round: the Thread editor harvests by control NAME
+         * off a flat list, and a nested field would need a translation layer at
+         * both ends of it for nothing.
+         *
+         * `consequenceOn` is stored on every Thread and read only where it means
+         * something. A Thread switched to Narrative keeps the config and stops
+         * showing the track — logic/progress.mjs `hasConsequence` is the one
+         * place that rule lives, so switching back finds it as it was left.
+         */
+        consequenceOn: bool(raw.consequenceOn),
+        consequenceSize: atLeast(raw.consequenceSize, 1, 6),
+        // Contested only: one track per side rather than one for the situation.
+        consequencePerForce: bool(raw.consequencePerForce),
+        // What concluding by Consequence does to the Plot, and what it says. The
+        // per-Force outcomes are a list keyed by Force; this is the one outcome
+        // with no Force behind it, so it sits here rather than in that list with
+        // a reserved key in the middle of it.
+        consequenceDelta: int(raw.consequenceDelta, 0),
+        consequenceNote: str(raw.consequenceNote),
+        /**
+         * The Expiration Clock: how long this Thread has left.
+         *
+         * On EVERY mode, Narrative included, and so deliberately not part of
+         * `MODE_SHAPE` — a deadline is not a way of advancing, it is a way of
+         * running out, and the Thread the fiction ends can have one as readily
+         * as the one a clock ends.
+         *
+         * Config here, count under `progress`, the same split the Consequence
+         * keeps and for the same reason.
+         *
+         * `expiryLabel` is what this ONE Thread calls having run out. Empty
+         * means the world's word, which is itself empty by default and means
+         * the built-in one — the same two-step fallback `turnLabel` keeps
+         * between a Plot and the campaign.
+         */
+        expiryOn: bool(raw.expiryOn),
+        expirySize: atLeast(raw.expirySize, 1, 6),
+        expiryClock: oneOf(raw.expiryClock, EXPIRY_CLOCK, EXPIRY_CLOCK.WORLD),
+        expiryLabel: str(raw.expiryLabel).trim(),
+        progress: {
+            pool: int(progress.pool, 0),
+            byForce,
+            // The Consequence's own counts. `consequence` is the shared track;
+            // `consequenceByForce` is the per-side one, and a Thread may carry
+            // figures in both — switching the toggle must not throw away what
+            // the other reading had, or a GM who switched to look would lose it.
+            consequence: int(progress.consequence, 0),
+            consequenceByForce: perForce(progress.consequenceByForce),
+            // How much of the deadline has been spent. Clamped at nothing here
+            // rather than at the size: the size is a sibling field and this
+            // function repairs one value at a time, so a count above it is left
+            // for `isExpired` to read as run out, which it correctly is.
+            expiry: Math.max(0, int(progress.expiry, 0))
+        },
         outcomes: arr(raw.outcomes).filter(isObj).map((o) => ({
             forceId: str(o.forceId),
             delta: int(o.delta, 0),
@@ -372,6 +439,10 @@ export function normalizeConstants(raw = {}) {
         turnLabel: str(raw?.turnLabel, D.turnLabel).trim(),
         // The word only. Where the runs begin is on the clock, not here.
         chapterLabel: str(raw?.chapterLabel, D.chapterLabel).trim(),
+        // The world's word for a Thread that has run out. Trimmed, so a label of
+        // spaces is no label at all and falls back to the built-in one rather
+        // than printing a chip with a gap in it.
+        expiryLabel: str(raw?.expiryLabel, D.expiryLabel).trim(),
         defaultVisibility: defaultVisibility(raw?.defaultVisibility)
     };
 }
@@ -422,6 +493,10 @@ export function normalizeLogEntry(raw = {}) {
         // like every other, and in the reader's language. Not enum-checked, for
         // the same reason the Asset's own is not.
         condition: str(raw.condition) || ASSET_CONDITION.READY,
+        // Which of a Thread's readings a push moved. An entry written before this
+        // existed reads as the Thread's own progress, which is what every push
+        // was until there was a second pile to land in.
+        track: oneOf(raw.track, TRACK, TRACK.PROGRESS),
         // What the table reads of this one line, set when it was written.
         visibility: oneOf(raw.visibility, VISIBILITY, VISIBILITY.VISIBLE),
         // Whether anything it names was withheld at that moment. Absent on an

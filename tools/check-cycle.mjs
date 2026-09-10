@@ -21,6 +21,9 @@ import {
     reading, marks, isChaptered, nextMark, hasMark,
     record, refusal, canRevert, reverse, summary
 } from '../scripts/logic/cycle.mjs';
+// The same module again, for the deadline block at the foot of this file: it
+// exercises three functions together and reads better naming which is which.
+import * as C from '../scripts/logic/cycle.mjs';
 
 let fail = 0;
 const eq = (label, got, want) => {
@@ -147,8 +150,13 @@ eq('a purse that stopped at its floor comes back to the floor',
 eq('an Asset keeps all four of the fields a timer can move',
     Object.keys(REC.assets[0]), ['id', 'condition', 'conditionCycles', 'plotId', 'nodeId']);
 
+// Pinned WHOLE rather than key by key, which is what caught the deadlines being
+// added: every list a revert replays has to exist on a record built from
+// nothing, or `reverse` reads undefined for the one that does not.
 eq('an empty record is a shape, not a crash',
-    record(), { plotId: null, count: 0, forces: [], plots: [], assets: [], logIds: [] });
+    record(), {
+        plotId: null, count: 0, forces: [], plots: [], assets: [], nodes: [], logIds: []
+    });
 
 // ── whether it may be used ───────────────────────────────────────────────────
 
@@ -274,5 +282,55 @@ eq('a row the board no longer holds is dropped rather than printed empty',
 eq('nothing to take back says so rather than printing an empty list',
     summary(null, BOARD).found, false);
 
-console.log(fail === 0 ? '\n  all passed\n' : `\n  ${fail} FAILED\n`);
+// ── the deadlines a cycle moved ──────────────────────────────────────────────
+// The SECOND countdown on this board, and it needs everything the first one got:
+// a cycle taken back has to take the deadline with it, or a Thread stays a cycle
+// nearer running out than the count says it is — and unlike a purse there is
+// nothing on screen to notice by.
+{
+    const thread = (id, expiry, size = 3) => ({
+        id, name: id, expirySize: size, progress: { pool: 2, expiry }
+    });
+
+    const undo = C.record({
+        count: 4,
+        // Values as they stood, like every other row in a record.
+        nodes: [{ id: 'n-a', expiry: 1 }, { id: 'n-b', expiry: 2 }],
+        logIds: ['l1']
+    });
+
+    eq('the record keeps the deadlines it moved',
+        undo.nodes, [{ id: 'n-a', expiry: 1 }, { id: 'n-b', expiry: 2 }]);
+    eq('a row without an id is not a row', C.record({ nodes: [{ expiry: 1 }] }).nodes, []);
+    eq('and a negative count is repaired',
+        C.record({ nodes: [{ id: 'n', expiry: -3 }] }).nodes[0].expiry, 0);
+    eq('a record made without any is empty rather than absent', C.record({}).nodes, []);
+
+    const nodes = [thread('n-a', 2), thread('n-b', 3), thread('n-c', 1)];
+    const back = C.reverse(undo, { nodes });
+
+    eq('a named deadline goes back', back.nodes[0].progress.expiry, 1);
+    eq('and one that ran out is opened again', back.nodes[1].progress.expiry, 2);
+    // The narrowness is the point: a push that landed between the cycle and the
+    // undo is somebody's deliberate act, and taking the cycle back must not take
+    // it with it.
+    eq('the Thread s own progress is untouched', back.nodes[0].progress.pool, 2);
+    eq('a Thread the record does not name comes back by reference',
+        back.nodes[2] === nodes[2], true);
+    eq('reverting with no nodes at all is not an error',
+        C.reverse(undo, {}).nodes, []);
+
+    const said = C.summary(undo, { nodes });
+    eq('the summary names both', said.deadlines.map((d) => d.name), ['n-a', 'n-b']);
+    eq('with both numbers', [said.deadlines[0].from, said.deadlines[0].to], [2, 1]);
+    // The line worth its own sentence: a window that closed is about to be open.
+    eq('a deadline merely counting back does not reopen a window',
+        said.deadlines[0].unexpires, false);
+    eq('one that had run out does', said.deadlines[1].unexpires, true);
+    eq('a Thread the board no longer holds is dropped rather than blank',
+        C.summary(undo, { nodes: [thread('n-a', 2)] }).deadlines.length, 1);
+    eq('and an empty record reports an empty list', C.summary(null).deadlines, []);
+}
+
+console.log(`\n${fail === 0 ? '  all passed' : `  ${fail} FAILED`}\n`);
 process.exit(fail === 0 ? 0 : 1);

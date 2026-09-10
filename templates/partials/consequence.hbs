@@ -1,0 +1,74 @@
+{{!--
+    One Consequence track.
+
+    A partial rather than two copies of the same markup, because a Thread draws
+    this in two places that have nothing else in common: once under the whole row
+    when the complication belongs to the situation, and once inside each contender
+    when the GM asked for one per side. Those live in different loops and would
+    otherwise drift the first time either was touched.
+
+    IT MIRRORS THE READING IT STANDS UNDER. `isPips` is true only on a Clock
+    Thread, where the reading above this one is counted in dots the table can see
+    — a smooth bar beside them would be two kinds of number sharing a row. Every
+    other mode gets the bar. The decision is made in logic/progress.mjs
+    `consequenceIsPips` and arrives here already answered.
+
+    `showValues` and the absence of `pips` are the hideValues rule, owned by
+    projectClock: a withheld clock falls back to a plain bar, because four filled
+    dots out of six IS the number and counting them is not a workaround.
+
+    THE LABEL IS THE CONTROL. There is no button at the end of this row. The
+    reading it stands under has nothing there — a Clock's pips and a pool's bar
+    are read, not pressed — so a + parked in that column put this track's number
+    one button-width away from the number above it, and the two stopped reading
+    as a column. The word that names the pile is what gets pressed instead. It
+    stays a real <button>, so it answers to the keyboard like every other control
+    here, and it is drawn only when this reader may push at all.
+
+    Parameters: `track` (the reading), `threadId`, `forceId` ("" for the shared
+    one — it lands in data-force-id, which the push handler reads as null).
+--}}
+<div class="rsr-consequence{{#if track.isFull}} is-full{{/if}}">
+    {{#if track.canPush}}
+    <button type="button" class="rsr-consequence-label" data-action="pushThread"
+            name="push-consequence-{{threadId}}-{{forceId}}"
+            data-thread-id="{{threadId}}" data-force-id="{{forceId}}"
+            data-track="consequence"
+            data-tooltip="{{localize 'RSR.editor.pushConsequenceHint'}}">
+        <i class="fa-solid fa-triangle-exclamation" inert></i>
+        {{localize "RSR.thread.consequence"}}
+    </button>
+    {{else}}
+    <span class="rsr-consequence-label">
+        <i class="fa-solid fa-triangle-exclamation" inert></i>
+        {{localize "RSR.thread.consequence"}}
+    </span>
+    {{/if}}
+
+    {{#if track.isPips}}
+        {{#if track.pips}}
+        <span class="rsr-pips rsr-pips-consequence">
+            {{#each track.pips}}<i class="rsr-pip{{#if this.filled}} is-filled{{/if}}"></i>{{/each}}
+        </span>
+        {{else}}
+        <span class="rsr-bar">
+            <span class="rsr-bar-fill" style="width: {{track.percent}}%"></span>
+        </span>
+        {{/if}}
+    {{else}}
+    <span class="rsr-bar">
+        <span class="rsr-bar-fill" style="width: {{track.percent}}%"></span>
+    </span>
+    {{/if}}
+
+    {{#if track.showValues}}
+    <span class="rsr-bar-value">{{track.current}}<span class="rsr-of">/{{track.total}}</span></span>
+    {{/if}}
+
+    {{!-- At its line. Said here rather than only in the row's foot because a
+          Contested Thread can have several of these and only one of them full,
+          and a badge at the bottom could not say which. --}}
+    {{#if track.isFull}}
+    <span class="rsr-ready rsr-ready-consequence">{{localize "RSR.thread.consequenceFull"}}</span>
+    {{/if}}
+</div>

@@ -16,9 +16,20 @@
      gold      attention / the current thing
      green     a strength, or something satisfied
      red       a weakness, or something failed
-     violet    WITHHELD FROM PLAYERS (masked or hidden)
+     violet    WITHHELD FROM PLAYERS (masked or hidden), and the two SECONDARY
+               READINGS a Thread carries beside its own — the Consequence and
+               the Expiration Clock.
    Violet is deliberately not red: "the players cannot see this" and "this is
    bad" are different facts and must not read as the same one.
+
+   It carries the second job because the two barely meet. A masked Thread draws
+   neither track — #buildThread drops both before the context is built — so
+   violet on a Thread row is either the mask or the tracks and never both, and
+   the one overlap left is a veil chip on a Thread that hides only its NUMBERS,
+   which is a chip beside a bar rather than two things wearing one colour. What
+   it buys is worth that: violet is the accent that sits well against the gold,
+   so a Thread's own reading climbing in gold and its complication climbing in
+   violet are told apart at a glance without either shouting.
    ========================================================================== */
 
 .rsr,
@@ -40,6 +51,16 @@
     --rsr-strength: var(--green, #40a640);
     --rsr-weakness: var(--medium-red, #d04747);
     --rsr-withheld: light-dark(#7c3aed, #b794f6);
+    /* The same violet under the name of its second job: the two readings a
+       Thread carries beside its own. One value, two names, so the day the two
+       meanings part is one line rather than eleven. */
+    --rsr-track: var(--rsr-withheld);
+    /* The columns a Thread's readings share. Named here because four rules in
+       three sections have to agree on them, and a bar that starts a few pixels
+       off the one above it is the whole of what a board looks wrong for. */
+    --rsr-name-col: 11rem;
+    --rsr-track-label: 8.5rem;
+    --rsr-track-btn: 1.6rem;
     --rsr-heading: 'Cinzel', serif;
     --rsr-body: var(--dh-font-body, 'Montserrat'), sans-serif;
 }
@@ -448,11 +469,44 @@
     gap: 0.5rem;
 }
 
+/* A contender carries a second line of its own — its Consequence — and that
+   line has to BE a line. Without the wrap it is one more item on the row, which
+   squeezes the bar beside it to a sliver and prints as a stray rule. */
+.rsr-contender { flex-wrap: wrap; }
+
 .rsr-pool, .rsr-clock { margin-top: 0.4rem; }
-.rsr-contender-name { flex: 0 0 11rem; font-size: var(--font-size-12, 12px); }
+
+/* A reading with no control of its own still ENDS where the ones that have one
+   end, so a column of x/y down a Thread reads as a column.
+
+   ONE control is left standing at the end of a reading: a contender's own push,
+   which is the only row on this board that has to be moved separately from the
+   row above it. The two secondary tracks moved theirs into their labels, so on
+   every other Thread nothing sits in that column and the values simply end at
+   the edge together — a gutter reserved there would be a hole.
+
+   Hence the :has: reserve it under a contest, on every row except the one
+   actually holding a button. The child combinator matters — a contender's own
+   Consequence sits INSIDE it and its label is a push control, and neither of
+   those is the trailing button this gutter is standing in for. */
+.rsr-thread:has(.rsr-contender > [data-action="pushThread"]) :is(
+    .rsr-pool,
+    .rsr-clock,
+    .rsr-consequence,
+    .rsr-expiry,
+    .rsr-contender:not(:has(> [data-action="pushThread"]))
+) {
+    padding-right: calc(var(--rsr-track-btn) + 0.5rem);
+}
+
+.rsr-contender-name { flex: 0 0 var(--rsr-name-col); font-size: var(--font-size-12, 12px); }
 
 .rsr-bar {
     flex: 1;
+    /* A floor, because flex:1 loses arguments silently. On a crowded row — a
+       label, a reading, a badge and a button — a bar with no minimum renders as
+       a one-pixel rule beside the label and reads as a stray character. */
+    min-width: 3.5rem;
     height: 7px;
     background: var(--rsr-panel-soft);
     border: 1px solid var(--rsr-border);
@@ -487,6 +541,100 @@
 }
 
 .rsr-pip.is-filled { background: var(--rsr-gold); border-color: var(--rsr-gold); }
+
+/* The one control still standing at the end of a reading, pinned to exactly the
+   width the gutter above reserves for it — so a contender's value column and the
+   value column of every other row on that Thread are the same column. */
+.rsr-contender > [data-action="pushThread"] {
+    flex: 0 0 var(--rsr-track-btn);
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* THE LABEL IS THE CONTROL, on both secondary tracks. A + at the end of the row
+   stood in a column its counterpart above leaves empty — pips and a pool bar are
+   read, not pressed — so the two numbers stopped lining up, and a column of
+   small icons down the right of a Thread read as chrome rather than as the two
+   decisions they are. The word naming the pile is what gets pressed instead, and
+   it stays a real <button>: ApplicationV2 dispatches actions on click alone, so
+   anything else would be a control the keyboard cannot reach.
+
+   Chrome off. It has to read as the label it replaced and not as a button parked
+   inside a reading; the width, the font and the colour all still come from the
+   label rules in the M8 and M9 sections. */
+button.rsr-consequence-label,
+button.rsr-expiry-label {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+    text-align: left;
+    /* Core's button face is the sans one and its transition is half a second.
+       Both are wrong for a word inside a reading: it has to be the same type as
+       the label beside it and answer at the speed the bars do. */
+    font-family: inherit;
+    line-height: inherit;
+    transition: color 120ms ease-out;
+    cursor: pointer;
+}
+
+/* Core puts a glow on any focused button, including one focused by the click
+   that just pressed it. Kept for the keyboard alone, which is who it is for. */
+button.rsr-consequence-label:focus,
+button.rsr-expiry-label:focus { outline: none; box-shadow: none; }
+
+button.rsr-consequence-label:focus-visible,
+button.rsr-expiry-label:focus-visible {
+    outline: 1px solid var(--rsr-track);
+    outline-offset: 2px;
+}
+
+/* WHERE THE LABEL GOES depends on what this row is standing under, because the
+   whole job of these two is to line up with it. Four cases, and only the last
+   is a plain column of its own:
+
+     inside a contender  the side's own complication, indented under the name —
+                         set in the M8 section, narrowed by exactly the indent.
+     under a contest     the bars above start after the NAME column, so the label
+                         takes that width and this bar starts under them.
+     under a bare pool
+     or a bare clock     there is no name column at all: the bar and the pips
+                         both start at the left edge. So the label stops setting
+                         a left edge, the track leads, and the label follows it.
+                         This is the misalignment a Clock Thread showed most
+                         plainly — six violet dots pushed half a label to the
+                         right of the eight gold ones.
+     anything else       a Narrative Thread carrying a deadline and nothing to
+                         line up with, which keeps the default column. */
+.rsr-thread:has(> .rsr-contenders) > .rsr-consequence > .rsr-consequence-label,
+.rsr-thread:has(> .rsr-contenders) > .rsr-expiry > .rsr-expiry-label {
+    min-width: var(--rsr-name-col);
+}
+
+.rsr-thread:has(> .rsr-clock, > .rsr-pool) > .rsr-consequence > *,
+.rsr-thread:has(> .rsr-clock, > .rsr-pool) > .rsr-expiry > * { order: 3; }
+
+.rsr-thread:has(> .rsr-clock, > .rsr-pool) > .rsr-consequence > :is(.rsr-bar, .rsr-pips),
+.rsr-thread:has(> .rsr-clock, > .rsr-pool) > .rsr-expiry > .rsr-bar { order: 1; }
+
+.rsr-thread:has(> .rsr-clock, > .rsr-pool) > .rsr-consequence > .rsr-consequence-label,
+.rsr-thread:has(> .rsr-clock, > .rsr-pool) > .rsr-expiry > .rsr-expiry-label {
+    order: 2;
+    /* It is no longer setting a left edge for anything, so it takes the width of
+       its own word rather than reserving a column in the middle of the row. */
+    min-width: 0;
+}
+
+/* The reading stays hard right whether or not the track before it fills the row.
+   A bar does, and this changes nothing; a row of pips does not, and without it
+   the number would drift left by however many dots the GM happened to draw. */
+.rsr-consequence > .rsr-bar-value,
+.rsr-expiry > .rsr-bar-value { margin-left: auto; }
 
 /* ── Help ── */
 
@@ -1665,13 +1813,18 @@
 
 /* ── the push dialog, compact ── */
 
+/* The name, then whatever chips this push carries: the mode, the track being
+   moved, and Depleting. space-between was right for two children and scatters
+   four across the dialog, so the name takes the slack and the chips group. */
 .rsr-push-head {
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 0.15rem;
 }
+
+.rsr-push-head > .rsr-push-name { margin-right: auto; }
 
 .rsr-push-name {
     font-family: var(--rsr-heading);
@@ -3015,3 +3168,236 @@
 .rsr-editor-form .rsr-outcome-head > :first-child { flex: 0 0 10rem; }
 .rsr-editor-form .rsr-outcome-head > :nth-child(2) { flex: 0 0 5rem; }
 .rsr-editor-form .rsr-outcome-head > :last-child { flex: 1; min-width: 0; }
+
+/* ── M8 — the Consequence ───────────────────────────────────────────────────
+   VIOLET, NOT GOLD AND NOT RED. Gold is the board's attention colour, and a
+   complication drawn in it would sit in the same channel as "Ready" — the one
+   moment on this board meant to be good news. Red was the first answer and was
+   worse in practice: a red bar under every second Thread reads as an alarm
+   going off about the ordinary state of a campaign, which is precisely what a
+   Consequence is not. Violet is the module's other accent, it holds against the
+   gold, and the palette note at the top of this file says what it now means.
+
+   The track is a row like .rsr-pool and .rsr-clock, because it is the same kind
+   of reading and stands directly under one of them. What it does NOT share is
+   the fill: a gold bar climbing under a gold bar climbing would be two halves of
+   one number rather than two numbers pointing opposite ways.
+   ========================================================================== */
+
+.rsr-consequence {
+    display: flex;
+    align-items: center;
+    /* The badge drops to a line of its own in a narrow window rather than
+       crushing the bar it is a verdict about. */
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+}
+
+/* Inside a contender, this is the side's OWN complication and sits under the
+   name it belongs to rather than beside it — indented so the eye reads it as a
+   second line about that side and not as a third side.
+
+   `flex: 1 0 100%` is what actually breaks the line, against the wrap set on
+   .rsr-contender in the bars section. Without it this is one more item on the
+   contender's own row, and the first thing to lose the argument for width is
+   its bar. The label is narrowed by exactly the indent, so the bar under a side
+   starts where that side's own bar starts. */
+.rsr-contender > .rsr-consequence {
+    flex: 1 0 100%;
+    margin: 0.2rem 0 0.1rem 0.75rem;
+}
+
+.rsr-contender > .rsr-consequence .rsr-consequence-label {
+    min-width: calc(var(--rsr-name-col) - 0.75rem);
+}
+
+/* A column, not a word. Both secondary readings take the same minimum, so
+   "Consequence" and the deadline's label start their bars at the same place on
+   one Thread — two labels of different lengths setting two different left edges
+   is what made a row of these look ragged. This is the width for a Thread with
+   nothing above to line up with; where there IS something, the bars section
+   overrides it — under a contest with the name column, under a bare pool or
+   clock with nothing, because there the label follows the track instead.
+
+   A MINIMUM rather than a fixed basis, because these are localized: a longer
+   word in another language grows its own label and pushes its own bar, which is
+   ugly in one place. Pinned, it would have overrun the bar instead. */
+.rsr-consequence-label {
+    flex: 0 0 auto;
+    min-width: var(--rsr-track-label);
+    white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+    letter-spacing: 0.03em;
+}
+
+/* Dots are a count, not a bar: the group is as wide as the number the GM chose.
+   Left at the bar's flex: 1 it would stretch to the end of the row and carry the
+   label along with it, half a Thread away from the dots it names. */
+.rsr-pips-consequence { flex: 0 0 auto; }
+
+.rsr-consequence .rsr-bar-fill,
+.rsr-pips-consequence .rsr-pip.is-filled {
+    background: var(--rsr-track);
+    border-color: var(--rsr-track);
+}
+
+/* At its line, the label stops being an annotation and becomes the point. */
+.rsr-consequence.is-full .rsr-consequence-label { color: var(--rsr-track); }
+
+/* The counterpart to .rsr-ready, which is filled gold for the one good moment on
+   the board. This is the one bad one, and it is filled for the same reason. */
+.rsr-ready-consequence {
+    background: var(--rsr-track);
+    color: var(--rsr-panel-deep);
+}
+
+.rsr-chip-consequence {
+    border-color: var(--rsr-track);
+    color: var(--rsr-track);
+}
+
+/* The label is the push control on this track — the reset and the reason are up
+   in the bars section, and all that is left here is which colour it answers to.
+   Underlined as well as coloured on hover, because a word that does something
+   should say so before it is pressed. */
+button.rsr-consequence-label:hover {
+    background: none;
+    color: var(--rsr-track);
+    text-decoration: underline;
+}
+
+/* ── the editor's subsection ── */
+
+/* A group of questions INSIDE a section: the Consequence is one decision with
+   three parts, and three more rows in the run would have read as three more
+   properties of the mode above them. Indented against a rule rather than boxed,
+   which is the same gesture the section headings already use one level up. */
+.rsr-editor-form .rsr-form-sub {
+    margin-top: 0.75rem;
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--rsr-border);
+}
+
+.rsr-editor-form .rsr-form-sub h4 {
+    margin: 0 0 0.15rem;
+    font-family: var(--rsr-heading);
+    font-size: var(--font-size-13, 13px);
+    color: var(--rsr-ink);
+    border: none;
+}
+
+/* The one outcome row with no Force behind it, marked so it does not read as a
+   side that wandered into the roster. */
+.rsr-editor-form .rsr-outcome-row.is-consequence { margin-top: 0.5rem; }
+.rsr-editor-form .rsr-outcome-row.is-consequence .rsr-outcome-force {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    color: var(--rsr-track);
+}
+
+/* ── M9 — the Expiration Clock ──────────────────────────────────────────────
+   A row like .rsr-consequence above it, and the third reading a Thread can
+   draw. It wears the same violet as the Consequence, and deliberately so: those
+   two are the things happening BESIDE a Thread's own progress, and one accent
+   for both says that once rather than teaching the reader two colours. Muted ink
+   was the first answer and read as switched off — a bar the eye files as chrome
+   is a poor way to say a window is closing.
+
+   They are told apart by shape instead: always a bar and never pips, which is
+   where this differs from the Consequence. That decision is in the partial's
+   header, and this stylesheet has no rule for pips inside .rsr-expiry precisely
+   because none should ever be drawn there.
+   ========================================================================== */
+
+.rsr-expiry {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+}
+
+/* The same basis the Consequence label takes, which is the whole point of the
+   token: two labels of different lengths would otherwise set two different left
+   edges for two bars stacked on one Thread. Overridden by the same four-case
+   rule in the bars section, for the same reason. */
+.rsr-expiry-label {
+    flex: 0 0 auto;
+    min-width: var(--rsr-track-label);
+    white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: var(--font-size-11, 11px);
+    color: var(--rsr-ink-muted);
+    letter-spacing: 0.03em;
+}
+
+/* Violet, a shade under full strength. This bar EMPTIES, and a gold one emptying
+   would read as progress being lost rather than as time being spent — while time
+   at full weight would out-shout the reading it is standing under. */
+.rsr-expiry .rsr-bar-fill {
+    background: var(--rsr-track);
+    opacity: 0.75;
+}
+
+/* Run out. The label stops being an annotation, and the bar stops pretending
+   there is anything left in it. */
+.rsr-expiry.is-expired .rsr-expiry-label { color: var(--rsr-track); }
+.rsr-expiry.is-expired .rsr-bar { border-color: var(--rsr-track); }
+
+/* Violet, like the rest of this track and unlike .rsr-ready. Gold stays the
+   Thread's own good news — and the two badges can stand on one Thread at once,
+   which is exactly when they must not read as the same announcement. What the
+   window closing MEANT is still the GM's to decide; the badge only says it did. */
+.rsr-ready-expired {
+    background: var(--rsr-track);
+    color: var(--rsr-panel-deep);
+}
+
+.rsr-chip-expiry { border-color: var(--rsr-track); color: var(--rsr-track); }
+
+button.rsr-expiry-label:hover {
+    background: none;
+    color: var(--rsr-track);
+    text-decoration: underline;
+}
+
+/* A deadline riding a clock its Plot no longer keeps. Same shape as the gate
+   line above it — a quiet aside on its own row, GM-only by way of the context. */
+.rsr-gate-why-stranded { color: var(--rsr-ink-muted); }
+
+/* The deadlines section of a cycle bill needs no rule of its own. It is built
+   from the same three spans the timers use — name, where, why — and .rsr-bill li
+   is a GRID, so the shared four-column template already stands each deadline row
+   under the timer rows above it. The flex-basis that used to live here was doing
+   nothing whatsoever on a grid child, which is the quietest kind of wrong. */
+
+/* ── M10 — what a Cycle would run past ──────────────────────────────────────
+   The first section of a cycle confirmation, and the only one that is about
+   what the GM might do INSTEAD of pressing. Everything under it is arithmetic
+   the press is about to perform; this is a question, so it is marked as one —
+   gold on the left edge, which is the board's attention colour and the same
+   signal .rsr-ready uses for a Thread standing at its line.
+
+   Not red. Nothing here has gone wrong: something is finished and nobody has
+   said so yet, which is a prompt rather than a fault.
+   ========================================================================== */
+
+.rsr-bill-resolvable {
+    border-left: 2px solid var(--rsr-gold-soft);
+    padding-left: 0.6rem;
+    margin-top: 0.15rem;
+}
+
+/* Sits between the head and the list, so the reassurance — you can still press
+   it — is read before the names rather than after them. */
+.rsr-bill-lead { margin: 0.1rem 0 0.35rem; }
+
+.rsr-bill-resolvable .rsr-bill-why { color: var(--rsr-gold); }
+
+/* A Plot is a bigger decision than a Thread and the list would otherwise read
+   as one flat set of rows. The icon carries it; the rule is only the spacing. */
+.rsr-bill-resolvable .is-plot { margin-top: 0.2rem; }
+.rsr-bill-resolvable .is-plot .rsr-bill-name { font-weight: 600; }
+.rsr-bill-resolvable .is-plot i { color: var(--rsr-ink-muted); margin-right: 0.3rem; }

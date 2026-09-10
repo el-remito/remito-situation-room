@@ -35,6 +35,13 @@ export const TEMPLATES = {
     BOARD: `modules/${MODULE_ID}/templates/situation-room.hbs`,
     PLOT_CARD: `modules/${MODULE_ID}/templates/partials/plot-card.hbs`,
     NODE_ROW: `modules/${MODULE_ID}/templates/partials/node-row.hbs`,
+    // One Thread's Consequence track. Its own partial because a Thread draws it
+    // in two places with nothing else in common — under the whole row, and
+    // inside each contender — and two copies would drift on the first edit.
+    CONSEQUENCE: `modules/${MODULE_ID}/templates/partials/consequence.hbs`,
+    // And one Thread's Expiration Clock, for the same reason: a reading the row
+    // draws once and the bills describe, kept in one place.
+    EXPIRY: `modules/${MODULE_ID}/templates/partials/expiry.hbs`,
     FORCE_PANEL: `modules/${MODULE_ID}/templates/partials/force-panel.hbs`,
     ASSET_CHIP: `modules/${MODULE_ID}/templates/partials/asset-chip.hbs`,
     GRAPH: `modules/${MODULE_ID}/templates/partials/graph.hbs`,
@@ -117,6 +124,68 @@ export const NODE_STATUS = {
 };
 
 /**
+ * Which of a Thread's readings a control is pointed at.
+ *
+ * A Thread used to keep exactly one number, and every control on it meant that
+ * number. It now keeps up to three — how far it has come, how badly it is going,
+ * and how long it has left — each pushed the same way, through the same dialog,
+ * by a button that says which.
+ *
+ * PROGRESS is the default at every call site, so a caller that says nothing gets
+ * the behaviour it always had. That is deliberate: this reached a dozen callers at
+ * once, and an omission at any of them must not silently move the wrong pile.
+ */
+export const TRACK = {
+    PROGRESS: 'progress',
+    CONSEQUENCE: 'consequence',
+    EXPIRY: 'expiry'
+};
+
+/**
+ * The reserved `concludedBy` for a Thread ended by its own Consequence.
+ *
+ * Not a Force id and never minted as one — Foundry's randomID yields 16
+ * alphanumerics, so nothing can collide with this. That matters in exactly one
+ * place: `force.delete` in data/state.mjs clears `concludedBy` when it matches the
+ * Force being removed, and a Thread that the complications ended has to survive
+ * the deletion of every side that was standing on it.
+ *
+ * A sentinel rather than a second boolean beside `concludedBy`, because two fields
+ * that have to agree eventually will not. Everything that resolves an outcome
+ * already goes through `outcomeFor`, so that is the one function that has to know
+ * this id exists.
+ */
+export const CONCLUDED_BY_CONSEQUENCE = 'rsr-consequence';
+
+/**
+ * Which clock a Thread's Expiration Clock rides.
+ *
+ * NOTHING ON THIS BOARD USED TO RUN OUT OF TIME. Cycles paid Forces and counted
+ * down Asset condition timers, and a Thread — an opportunity, an ultimatum, a
+ * window — could not be given a deadline. "They have three cycles to reach the
+ * pass" lived in the GM's notes rather than on the board that exists to hold it.
+ *
+ *   WORLD  moves with the world's cycle, whatever clock its Plot keeps. The
+ *          common case: a deadline in the campaign's own time.
+ *   PLOT   moves with its Plot's own cycle, and ONLY while that Plot is actually
+ *          keeping one. A siege counted in weeks has deadlines counted in weeks.
+ *   FIAT   moves when the GM says so and at no other time.
+ *
+ * GM FIAT IS POSSIBLE ON ALL THREE, which is why FIAT is "only by fiat" rather
+ * than "by fiat". The push control is drawn on every Expiration Clock; what this
+ * setting decides is what ELSE moves it.
+ *
+ * A deadline is deliberately not a mode and not part of MODE_SHAPE: it is not a
+ * way of advancing, it is a way of running out, and a Narrative Thread can have
+ * one exactly as readily as a Clock.
+ */
+export const EXPIRY_CLOCK = {
+    WORLD: 'world',
+    PLOT: 'plot',
+    FIAT: 'fiat'
+};
+
+/**
  * What kind of development a log entry records. The log stores references and a
  * kind, never a finished sentence — see logic/log.mjs for why.
  */
@@ -127,7 +196,11 @@ export const LOG_KIND = {
     COMMIT: 'commit',
     RELEASE: 'release',
     CONDITION: 'condition',
-    CYCLE: 'cycle'
+    CYCLE: 'cycle',
+    // A Thread's Expiration Clock reached its end. Its own kind and not a push,
+    // because nobody did it: a window closing is the passage of time arriving
+    // somewhere, which is the same thing `condition` records for an Asset.
+    EXPIRE: 'expire'
 };
 
 export const POLARITY = {
@@ -311,6 +384,20 @@ export const CONSTANT_DEFAULTS = {
      * uses that instead of this word and an ordinal.
      */
     chapterLabel: '',
+    /**
+     * What this world calls a Thread whose Expiration Clock has run out.
+     *
+     * Empty means the built-in word, for the same reason `turnLabel` is empty:
+     * a GM who never touches this gets whatever the language file says, in
+     * their own language, rather than an English participle copied into their
+     * world settings the first time the board was opened.
+     *
+     * A campaign's deadlines are rarely all the same kind of thing — a window
+     * *Closed*, an ultimatum *Run Out*, a season *Passed* — so this is the word
+     * for most of them and any one Thread may say otherwise. `expiryLabel` on
+     * the Thread beats this, and this beats the built-in.
+     */
+    expiryLabel: '',
     /**
      * What the table may see of a row the moment it is created, per kind of row.
      *

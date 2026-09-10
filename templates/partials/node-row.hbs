@@ -99,7 +99,12 @@
     {{!-- Concluded: the fiction of what happened. The delta is GM bookkeeping. --}}
     {{#if this.isConcluded}}
     <p class="rsr-outcome">
-        {{#if this.concludedBy}}
+        {{#if this.byConsequence}}
+        <span class="rsr-chip rsr-chip-consequence">
+            <i class="fa-solid fa-triangle-exclamation" inert></i>
+            {{localize "RSR.thread.consequence"}}
+        </span>
+        {{else if this.concludedBy}}
         <strong>{{this.concludedBy.name}}</strong>
         {{/if}}
         {{this.outcomeNote}}
@@ -138,6 +143,15 @@
                     data-tooltip="{{localize 'RSR.editor.pushForHint'}}">
                 <i class="{{../pushIcon}}" inert></i>
             </button>
+            {{/if}}
+
+            {{!-- This side's own complications, when the GM asked for one track
+                  per side rather than one for the contest. It is on its own line
+                  under the side it belongs to: a second bar beside the first
+                  would read as two halves of one reading. --}}
+            {{#if this.consequence}}
+            {{> "modules/remito-situation-room/templates/partials/consequence.hbs"
+                track=this.consequence threadId=../id forceId=this.consequence.forceId}}
             {{/if}}
         </li>
         {{/each}}
@@ -184,6 +198,36 @@
         <span class="rsr-bar-value">{{this.pool.current}}<span class="rsr-of">/{{this.pool.total}}</span></span>
         {{/if}}
     </div>
+    {{/if}}
+
+    {{!-- The Consequence, when this Thread keeps one for the whole situation
+          rather than one per side. Under the reading it stands beside, because
+          it is the other half of the same question: how it is going, and how
+          badly. Absent on a masked Thread — that projection is made in
+          _prepareContext, so there is nothing here to hide. --}}
+    {{#if this.consequence}}
+    {{> "modules/remito-situation-room/templates/partials/consequence.hbs"
+        track=this.consequence threadId=this.id forceId=""}}
+    {{/if}}
+
+    {{!-- How long it has left. Last of the three readings, under the two that
+          are about the Thread itself, because it is the one that is about the
+          world going on around it. Absent on a masked Thread — that projection
+          is made in _prepareContext, so there is nothing here to hide. --}}
+    {{#if this.expiry}}
+    {{> "modules/remito-situation-room/templates/partials/expiry.hbs"
+        track=this.expiry threadId=this.id}}
+    {{/if}}
+
+    {{!-- The deadline is riding a clock its Plot no longer keeps, so it is
+          running on nothing. GM-only by way of the context, and said rather
+          than silently repaired: the fix is a decision, not something the board
+          may take on the GM's behalf. --}}
+    {{#if this.expiryStranded}}
+    <p class="rsr-prereq rsr-gate-why-stranded">
+        <i class="fa-solid fa-link-slash" inert></i>
+        {{localize "RSR.thread.expiryStranded"}}
+    </p>
     {{/if}}
 
     {{!-- Committed Assets. data-asset-id makes each one draggable: back onto its

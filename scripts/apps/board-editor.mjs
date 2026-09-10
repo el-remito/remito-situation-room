@@ -24,13 +24,14 @@
  */
 
 import {
-    ASSET_MODIFIER, CONDITION_EFFECT, CONSTANT_DEFAULTS, EDIT_KIND, LIFECYCLE, MODE,
-    NODE_STATUS, TAG_COLORS, TURN_BEHAVIOUR, VISIBILITY
+    ASSET_MODIFIER, CONDITION_EFFECT, CONSTANT_DEFAULTS, EDIT_KIND, EXPIRY_CLOCK, LIFECYCLE,
+    MODE, NODE_STATUS, TAG_COLORS, TURN_BEHAVIOUR, VISIBILITY
 } from '../constants.mjs';
 import * as Edit from '../logic/editing.mjs';
 import { CUSTOM } from '../logic/palette.mjs';
 import { wouldCycle } from '../logic/gating.mjs';
 import * as Cond from '../logic/condition.mjs';
+import { MODE_SHAPE } from '../logic/progress.mjs';
 
 // ── harvesting ───────────────────────────────────────────────────────────────
 
@@ -364,11 +365,71 @@ function threadContext(edit, board) {
         ...optionsOf(MODE, 'RSR.thread.mode', draft.mode ?? '')
     ];
 
+    /**
+     * WHICH QUESTIONS THIS SECTION ASKS.
+     *
+     * The mode a Thread is actually running on, inheritance resolved, decides
+     * which controls exist at all — a Narrative Thread tracks nothing and was
+     * previously asked for a threshold, a segment count and a direction to read
+     * them in. One object rather than four flags, so the template branches on
+     * `editor.shape.segments` and the answer comes from the same table
+     * logic/progress.mjs uses.
+     *
+     * `data-reshapes` on the mode select is what makes this move: the app
+     * harvests and re-renders on change, so the section rebuilds around the
+     * answer without anything typed being lost.
+     */
+    const mode = draft.mode ?? plot?.defaultMode ?? MODE.FIAT;
+    const shape = MODE_SHAPE[mode] ?? MODE_SHAPE[MODE.FIAT];
+
     return shell(EDIT_KIND.NODE, edit, {
         draft,
         plotName: plot?.name ?? '',
         inheritedMode: `RSR.thread.mode.${plot?.defaultMode ?? MODE.FIAT}`,
         modes,
+        shape,
+        // What this mode actually counts, said in one line under the picker, so a
+        // section that has just lost four fields reads as an answer rather than
+        // as a form that broke.
+        modeLead: `RSR.editor.advanceLead.${mode}`,
+        // The one outcome with no Force behind it. Drawn in the Outcomes section
+        // beside the per-Force rows, and only while the track is on.
+        consequenceOutcome: shape.consequence && draft.consequenceOn
+            ? { delta: draft.consequenceDelta, note: draft.consequenceNote }
+            : null,
+        /**
+         * Which clocks this Thread's deadline may ride.
+         *
+         * The Plot's own is offered ONLY while the Plot is actually keeping one.
+         * A Plot on the world's clock has no button to press and a Plot keeping
+         * none has no clock at all, so the option would be a setting that
+         * quietly does nothing — and a control that does nothing is worse than
+         * an absent one, because the GM has no way to find out.
+         *
+         * A Thread already set to it keeps the option even so, or opening the
+         * editor on a stranded Thread would silently rewrite the GM's answer to
+         * the world's clock the moment they pressed Save. The row says it is
+         * stranded instead, and the fix stays theirs.
+         */
+        expiryClocks: Object.values(EXPIRY_CLOCK)
+            .filter((value) => value !== EXPIRY_CLOCK.PLOT
+                || plot?.turnBehaviour === TURN_BEHAVIOUR.ISOLATED
+                || draft.expiryClock === EXPIRY_CLOCK.PLOT)
+            .map((value) => ({
+                value,
+                label: `RSR.thread.expiryClock.${value}`,
+                selected: value === draft.expiryClock
+            })),
+        // What the box shows when this Thread has no word of its own: the
+        // world's, or the built-in one. An i18n KEY when it is the built-in,
+        // because the template localizes — and the GM's own text otherwise,
+        // which localize returns unchanged.
+        expiryPlaceholder: board.constants?.expiryLabel || 'RSR.thread.expired',
+        // A deadline riding a clock its Plot no longer keeps. GM-only by
+        // construction: this whole context is.
+        expiryStranded: draft.expiryOn
+            && draft.expiryClock === EXPIRY_CLOCK.PLOT
+            && plot?.turnBehaviour !== TURN_BEHAVIOUR.ISOLATED,
         statuses: optionsOf(NODE_STATUS, 'RSR.thread.status', draft.status),
         outcomes: forces.map((force) => {
             const row = draft.outcomes.find((o) => o.forceId === force.id);

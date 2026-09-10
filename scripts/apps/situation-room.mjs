@@ -15,8 +15,8 @@
  */
 
 import {
-    CONSTANT_DEFAULTS, EDIT_KIND, LIFECYCLE, LOG_KIND, MODE, NODE_STATUS, POLARITY,
-    PREFIX, TEMPLATES, VIEW, VISIBILITY, VISIBILITY_KINDS
+    CONCLUDED_BY_CONSEQUENCE, CONSTANT_DEFAULTS, EDIT_KIND, LIFECYCLE, LOG_KIND, MODE,
+    NODE_STATUS, POLARITY, PREFIX, TEMPLATES, TRACK, VIEW, VISIBILITY, VISIBILITY_KINDS
 } from '../constants.mjs';
 import {
     readBoard, visiblePlots, plotById, nodesForPlot, forcesForPlot,
@@ -24,13 +24,18 @@ import {
     plotsForForce, turnPreview, readLog, gateFor
 } from '../data/state.mjs';
 import { resolvePhase, resolvePhaseForGM, statePercent } from '../logic/state-track.mjs';
-import { resolveMode, effectiveThreshold, isFull, depletes } from '../logic/progress.mjs';
+import {
+    resolveMode, effectiveThreshold, isFull, depletes, outcomeFor,
+    hasConsequence, consequenceShared, consequenceIsPips, consequenceSize,
+    consequenceOf, consequenceFull
+} from '../logic/progress.mjs';
 import { layout } from '../logic/graph-layout.mjs';
 import { parseCustomColor, tagStyle } from '../logic/palette.mjs';
 import { refusal, nextMark, hasMark } from '../logic/cycle.mjs';
 import {
-    worldClock, plotClock, cycleReading, runLabelAt, runName
+    worldClock, plotClock, cycleReading, runLabelAt, runName, expiryLabel
 } from '../ui/clock.mjs';
+import * as Expiry from '../logic/expiry.mjs';
 import {
     engagedForceIds, uncommittedAssets, followsTurn, hasOwnTurn
 } from '../logic/economy.mjs';
@@ -112,7 +117,8 @@ const LOG_ICONS = {
     [LOG_KIND.COMMIT]: 'fa-solid fa-shield-halved',
     [LOG_KIND.RELEASE]: 'fa-solid fa-hand',
     [LOG_KIND.CONDITION]: 'fa-solid fa-heart-crack',
-    [LOG_KIND.CYCLE]: 'fa-solid fa-hourglass-end'
+    [LOG_KIND.CYCLE]: 'fa-solid fa-hourglass-end',
+    [LOG_KIND.EXPIRE]: 'fa-solid fa-hourglass-half'
 };
 
 /**
@@ -929,7 +935,13 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                 const row = {
                     id: e.id,
                     kind: e.kind,
-                    icon: LOG_ICONS[e.kind] ?? LOG_ICONS[LOG_KIND.PUSH],
+                    // The track wins over the kind. A line about complications
+                    // is read down the left edge like every other, and an arrow
+                    // pointing forward beside "complications mounted" is the
+                    // one icon that would say the opposite of its own sentence.
+                    icon: e.track === TRACK.CONSEQUENCE
+                        ? 'fa-solid fa-triangle-exclamation'
+                        : (LOG_ICONS[e.kind] ?? LOG_ICONS[LOG_KIND.PUSH]),
                     // Dropped on the one line that IS the world's clock moving,
                     // where a stamp would repeat the sentence word for word. A
                     // Plot's own cycle keeps it: "Global Cycle 2" beside "Days on
@@ -1053,6 +1065,33 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                     ? e.amount !== 0 && showValues(node, isGM) && !isMasked(node, isGM)
                     : false;
                 const amount = esc(e.amount > 0 ? `+${e.amount}` : String(e.amount));
+
+                // A push on the Consequence is a different sentence, not the
+                // same sentence with a chip on it: "the Ashen Hand advanced the
+                // Second Assault" and "complications mounted on the Second
+                // Assault" describe opposite developments, and a reader
+                // skimming a column of them has to be able to tell at a glance.
+                if (e.track === TRACK.CONSEQUENCE) {
+                    if (who) {
+                        return values
+                            ? F('RSR.log.consequence', { force: who, thread, amount })
+                            : F('RSR.log.consequenceQuiet', { force: who, thread });
+                    }
+                    return values
+                        ? F('RSR.log.consequenceWorld', { thread, amount })
+                        : F('RSR.log.consequenceWorldQuiet', { thread });
+                }
+
+                // A deadline moved by hand. It names no Force — time passing is
+                // not something a side does — and the number is said in the
+                // direction the row reads it, which is what is LEFT rather than
+                // what has been spent.
+                if (e.track === TRACK.EXPIRY) {
+                    return values
+                        ? F('RSR.log.deadline', { thread, amount })
+                        : F('RSR.log.deadlineQuiet', { thread });
+                }
+
                 if (who) {
                     return values
                         ? F('RSR.log.push', { force: who, thread, amount })
@@ -1063,9 +1102,25 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                     : F('RSR.log.pushWorldQuiet', { thread });
             }
             case LOG_KIND.CONCLUDE:
+                // Three endings, three sentences. The Consequence one names no
+                // Force because there was none — `forceId` is null on that line,
+                // so `who` is empty and it would otherwise read as "nobody
+                // concluded it", which is not what happened.
+                if (e.track === TRACK.CONSEQUENCE) {
+                    return F('RSR.log.concludeConsequence', { thread });
+                }
                 return who
                     ? F('RSR.log.conclude', { force: who, thread })
                     : F('RSR.log.concludeWorld', { thread });
+            case LOG_KIND.EXPIRE:
+                // The GM's own word for it, three fallbacks deep. The line reads
+                // in the reader's language for an untouched world and in the
+                // GM's own words for a renamed one — the same treatment every
+                // condition label already gets, and it is escaped for the same
+                // reason: somebody typed it.
+                return F('RSR.log.expired', {
+                    thread, label: esc(expiryLabel(board, node))
+                });
             case LOG_KIND.REOPEN:
                 return F('RSR.log.reopen', { thread });
             case LOG_KIND.COMMIT:
@@ -1189,6 +1244,14 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             isContested: false,
             isClock: false,
             isPool: false,
+            // The second track, or null when this Thread keeps none — and null
+            // for a masked one whatever it really keeps. Declared here with the
+            // three shapes so every row has the same key set whichever branch
+            // below it takes.
+            consequence: null,
+            // How long this Thread has left, or null when it keeps no deadline
+            // — and null for a masked one whatever it really keeps.
+            expiry: null,
             isDepleting: draining,
             // Which way the one control on this row points. A depleting Thread
             // is pushed by typing a NEGATIVE number, and an arrow aimed right
@@ -1263,10 +1326,18 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         row.revealedByPhase = isGM && gate.revealed && gate.manual && !concluded;
 
         if (concluded) {
-            const winner = node.concludedBy ? forceById(board, node.concludedBy) : null;
+            // Three ways a Thread ends now: a Force carried it, nobody did, or its
+            // own complications did. The third is a reserved id rather than a
+            // Force, so it is asked about FIRST — `forceById` would answer null
+            // for it and the row would print as "nobody", which is the one
+            // reading it must not have.
+            const byConsequence = node.concludedBy === CONCLUDED_BY_CONSEQUENCE;
+            const winner = !byConsequence && node.concludedBy
+                ? forceById(board, node.concludedBy) : null;
             const chip = winner ? projectForceChip(winner, isGM, maskLabel(EDIT_KIND.FORCE)) : null;
             row.concludedBy = chip;
-            const outcome = node.outcomes.find((o) => o.forceId === node.concludedBy);
+            row.byConsequence = byConsequence;
+            const outcome = outcomeFor(node, node.concludedBy);
             // The delta is bookkeeping; the note is fiction. Players get the fiction.
             row.outcomeNote = outcome?.note ?? '';
             row.outcomeDelta = isGM ? (outcome?.delta ?? null) : null;
@@ -1279,6 +1350,77 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         // survive the one setting meant to withhold precision.
         row.maskNote = maskNoteOf(node, isGM);
         if (row.maskNote) return row;
+
+        // ── the Consequence ──────────────────────────────────────────────────
+        // Withheld from a masked Thread entirely, with the mode chip and the
+        // drain and for the same reason: a second track under a row the table
+        // has been told nothing about says this one is going wrong, which is the
+        // loudest thing there is to say about it. A masked Thread keeps the one
+        // plain fallback bar every other withheld row keeps.
+        //
+        // `hideValues` is the other axis and behaves as it does everywhere: the
+        // track is drawn, its numbers are not, and a clock's pips go with them —
+        // projectClock already owns that rule.
+        const showsConsequence = hasConsequence(node, plot) && !isMasked(node, isGM);
+        const shared = consequenceShared(node, plot);
+        const pips = consequenceIsPips(node, plot);
+        const size = consequenceSize(node);
+        // Pips when the Thread it stands under counts in pips, a bar otherwise:
+        // the Consequence mirrors the reading it is beside rather than inventing
+        // a third kind of number for one row to hold.
+        const consequenceReading = (forceId) => {
+            const args = { current: consequenceOf(node, forceId), total: size, isGM, entity: node };
+            return pips ? projectClock(args) : projectProgress(args);
+        };
+
+        if (showsConsequence && shared) {
+            row.consequence = {
+                isPips: pips,
+                isFull: consequenceFull(node, plot),
+                canPush: row.canPush,
+                ...consequenceReading(null)
+            };
+        }
+
+        // ── the deadline ─────────────────────────────────────────────────────
+        // Withheld from a masked Thread with everything else, and for the
+        // sharpest version of the same reason: "this one is running out of
+        // time" is the single loudest thing that could be said about a row the
+        // table has been told nothing about.
+        //
+        // Always a bar, never pips — unlike the Consequence, which mirrors the
+        // reading it stands under. Time is not the Thread's own arithmetic and
+        // does not take its shape: a deadline drawn as segments beside a clock's
+        // segments would read as more of the same number.
+        //
+        // The control is drawn whatever clock it rides, because GM fiat is
+        // possible on all three. That is the whole meaning of the FIAT option
+        // being "only by fiat" rather than "by fiat".
+        if (Expiry.hasExpiry(node) && !isMasked(node, isGM)) {
+            row.expiry = {
+                isExpired: Expiry.isExpired(node),
+                // The GM's own word for it, three fallbacks deep — this
+                // Thread's, the world's, the built-in one.
+                label: expiryLabel(board, node),
+                // Not gated on the Thread's own gate, unlike every other
+                // control on this row. A shut Thread still runs out of time —
+                // that is exactly what a window closing on something you could
+                // not reach IS — so the deadline stays movable while the push
+                // and the conclusion do not.
+                canPush: isGM,
+                // A deadline is read as what is LEFT. Nobody counts up to a
+                // door closing.
+                ...projectProgress({
+                    current: Expiry.expirySpent(node),
+                    total: Expiry.expirySize(node),
+                    isGM, entity: node, countdown: true
+                })
+            };
+            // The clock is running on nothing: this Thread rides its Plot's own
+            // cycle and the Plot no longer keeps one. The GM's own authoring,
+            // so it is told to the GM alone, like `shutBy`.
+            row.expiryStranded = isGM && Expiry.isStranded(node, plot);
+        }
 
         if (shown === MODE.CONTESTED) {
             row.isContested = true;
@@ -1304,7 +1446,23 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                             current: node.progress.byForce[force.id] ?? 0,
                             total: threshold, isGM, entity: node,
                             countdown: draining
-                        })
+                        }),
+                        // One complication per side, when the GM asked for that
+                        // rather than one for the whole contest. Built here and
+                        // not above because a contested row IS its contenders:
+                        // there is no shared line for a per-side track to hang
+                        // under.
+                        ...(showsConsequence && !shared
+                            ? {
+                                consequence: {
+                                    isPips: pips,
+                                    isFull: consequenceFull(node, plot, force.id),
+                                    canPush: row.canPush,
+                                    forceId: force.id,
+                                    ...consequenceReading(force.id)
+                                }
+                            }
+                            : {})
                     };
                 })
                 .filter(Boolean);
@@ -1545,6 +1703,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
         // Only present while an editor is open, and it exits quietly when it is
         // not — cheaper than asking twice.
         this.#wireColorPicker();
+        this.#wireReshapers();
 
         // v1 keeps the player write path closed, so only a GM moves Assets around
         // — and a GM previewing the table's board is not one of them, or the
@@ -1572,6 +1731,31 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
                     drop: this.#onDrop.bind(this)
                 }
             }).bind(this.element);
+        }
+    }
+
+    /**
+     * The controls that change WHICH CONTROLS EXIST.
+     *
+     * A Thread editor asks only the questions its mode can answer, so changing
+     * the mode has to rebuild the section around the answer. That is a re-render
+     * of a form the GM is standing in, which is the one thing this editor spent
+     * its whole design avoiding — so it goes through `#mutate`, which harvests
+     * the form into the draft BEFORE re-rendering. Nothing typed is lost, and the
+     * mutation itself is the identity: the harvest is the entire point.
+     *
+     * `change` and not `input`, and wired ONLY to selects and checkboxes, which
+     * is why the attribute is opt-in rather than applied to the form. A text or
+     * number field carrying this would re-render between two keystrokes and the
+     * GM would be typing into an element that no longer exists.
+     *
+     * Focus survives because ApplicationV2's `_syncPartState` restores it for an
+     * element with an id or a [name], and every reshaping control has both.
+     */
+    #wireReshapers() {
+        if (!this.#edit) return;
+        for (const control of this.#form()?.querySelectorAll('[data-reshapes]') ?? []) {
+            control.addEventListener('change', () => this.#mutate((draft) => draft));
         }
     }
 
@@ -2022,9 +2206,21 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
      * may ride on the button when the control sits inside a contender's row, which
      * only preselects it — the dialog still asks.
      */
+    /**
+     * Move one of a Thread's readings.
+     *
+     * ONE action for every track. Which pile is being moved comes off the button
+     * that was pressed, because the button is standing beside the pile — a picker
+     * in the dialog would be asking a question the press already answered. An
+     * absent `data-track` is the Thread's own progress, so every control that
+     * predates the second track keeps meaning what it meant.
+     */
     static async _onPushThread(event, target) {
         const { promptPush } = await import('./editors.mjs');
-        await promptPush(target.dataset.threadId, { forceId: target.dataset.forceId || null });
+        await promptPush(target.dataset.threadId, {
+            forceId: target.dataset.forceId || null,
+            track: target.dataset.track || TRACK.PROGRESS
+        });
     }
 
     static async _onClearLog() {
@@ -2365,6 +2561,7 @@ export class SituationRoom extends HandlebarsApplicationMixin(ApplicationV2) {
             // same as an empty one.
             turnLabel: form.elements.turnLabel?.value ?? CONSTANT_DEFAULTS.turnLabel,
             chapterLabel: form.elements.chapterLabel?.value ?? CONSTANT_DEFAULTS.chapterLabel,
+            expiryLabel: form.elements.expiryLabel?.value ?? CONSTANT_DEFAULTS.expiryLabel,
             defaultVisibility
         });
 

@@ -1,0 +1,57 @@
+{{!--
+    One Thread's Expiration Clock.
+
+    ALWAYS A BAR, never pips — which is where it deliberately differs from the
+    Consequence beside it. The Consequence mirrors the reading it stands under,
+    because it is another count of the same situation; time is not the Thread's
+    own arithmetic and does not take its shape. A deadline drawn as segments
+    beside a Clock Thread's segments would read as more of the same number.
+
+    IT COUNTS DOWN. Nobody counts up to a door closing, so the reading is what is
+    LEFT — inverted once, by projectProgress, the same funnel every depleting
+    Thread already passes through.
+
+    THE LABEL IS THE CONTROL, as it is on the Consequence and for the same
+    reason: the reading above this one ends in nothing, so a button parked after
+    the number moved this row's number out of that column. "Time left" is the
+    press.
+
+    It is drawn whatever clock this rides, because GM fiat is possible on all
+    three: what the setting decides is what ELSE moves it. It is also the one
+    control on a Thread row that survives a shut gate, because a window closing
+    on something you could not reach is exactly what a deadline on a locked
+    Thread means.
+
+    Parameters: `track` (the reading) and `threadId`.
+--}}
+<div class="rsr-expiry{{#if track.isExpired}} is-expired{{/if}}">
+    {{#if track.canPush}}
+    <button type="button" class="rsr-expiry-label" data-action="pushThread"
+            name="push-expiry-{{threadId}}"
+            data-thread-id="{{threadId}}" data-track="expiry"
+            data-tooltip="{{localize 'RSR.editor.pushExpiryHint'}}">
+        <i class="fa-solid fa-hourglass-half" inert></i>
+        {{localize "RSR.thread.expiry"}}
+    </button>
+    {{else}}
+    <span class="rsr-expiry-label">
+        <i class="fa-solid fa-hourglass-half" inert></i>
+        {{localize "RSR.thread.expiry"}}
+    </span>
+    {{/if}}
+
+    <span class="rsr-bar">
+        <span class="rsr-bar-fill" style="width: {{track.percent}}%"></span>
+    </span>
+
+    {{#if track.showValues}}
+    <span class="rsr-bar-value">{{track.current}}<span class="rsr-of">/{{track.total}}</span></span>
+    {{/if}}
+
+    {{!-- The GM's own word for it — this Thread's, else the world's, else the
+          built-in one. Already resolved in _prepareContext, so there is nothing
+          to localize here and nothing to concatenate. --}}
+    {{#if track.isExpired}}
+    <span class="rsr-ready rsr-ready-expired">{{track.label}}</span>
+    {{/if}}
+</div>

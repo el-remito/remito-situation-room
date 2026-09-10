@@ -1,4 +1,5 @@
 import * as P from '../scripts/logic/progress.mjs';
+import { CONCLUDED_BY_CONSEQUENCE as CONSEQUENCE } from '../scripts/constants.mjs';
 import { normalizeNode, normalizePlot, normalizeAsset } from '../scripts/data/normalize.mjs';
 
 let fail = 0;
@@ -157,6 +158,115 @@ eq('the flag alone is not enough — fiat still types forward',
 // chronicle prints the number the GM typed.
 const roundTrip = (n, node_) => n * P.pushSign(node_, plot()) * P.pushSign(node_, plot());
 eq('display in, display out', roundTrip(3, down({ mode: 'clock' })), 3);
+
+// ── which questions each mode can answer ─────────────────────────────────────
+// The table the editor branches on. Asserted per mode rather than as one object
+// compare, so a failure names the field that moved.
+eq('narrative asks for nothing', P.shapeOf(node({ mode: 'fiat' }), plot()),
+    { threshold: false, segments: false, countdown: false, consequence: false, perForce: false });
+eq('invest reads a threshold', P.shapeOf(node({ mode: 'invest' }), plot()).threshold, true);
+eq('invest reads no segments', P.shapeOf(node({ mode: 'invest' }), plot()).segments, false);
+eq('a clock reads segments', P.shapeOf(node({ mode: 'clock' }), plot()).segments, true);
+eq('a clock reads no threshold', P.shapeOf(node({ mode: 'clock' }), plot()).threshold, false);
+eq('only contested asks how many piles',
+    Object.values(P.MODE_SHAPE).filter((s) => s.perForce).length, 1);
+eq('every mode but narrative can go wrong',
+    Object.values(P.MODE_SHAPE).filter((s) => s.consequence).length, 3);
+eq('the shape follows an inherited mode',
+    P.shapeOf(node({ mode: null }), plot({ defaultMode: 'clock' })).segments, true);
+eq('and an unknown mode reads as narrative',
+    P.shapeOf({ mode: 'nonsense' }, undefined).consequence, false);
+
+// ── the consequence ──────────────────────────────────────────────────────────
+const spoiled = (extra = {}) => node({
+    consequenceOn: true, consequenceSize: 4,
+    consequenceDelta: -20, consequenceNote: 'the works burn', ...extra
+});
+
+eq('a Thread with the toggle off keeps none',
+    P.hasConsequence(node({ mode: 'invest' }), plot()), false);
+eq('one with it on keeps one',
+    P.hasConsequence(spoiled({ mode: 'invest' }), plot()), true);
+// The one mode rule. Narrative tracks nothing by definition, so a counted
+// complication on one is an Investment Thread that has not admitted what it is.
+eq('narrative refuses it however the config reads',
+    P.hasConsequence(spoiled({ mode: 'fiat' }), plot()), false);
+eq('an inherited narrative refuses it too',
+    P.hasConsequence(spoiled({ mode: null }), plot({ defaultMode: 'fiat' })), false);
+eq('and the config survives the refusal',
+    spoiled({ mode: 'fiat' }).consequenceOn, true);
+
+eq('a clock draws its complications as pips',
+    P.consequenceIsPips(spoiled({ mode: 'clock' }), plot()), true);
+eq('an investment draws them as a bar',
+    P.consequenceIsPips(spoiled({ mode: 'invest' }), plot()), false);
+eq('a contest draws them as a bar',
+    P.consequenceIsPips(spoiled({ mode: 'contested' }), plot()), false);
+
+eq('one track by default', P.consequenceShared(spoiled({ mode: 'contested' }), plot()), true);
+eq('one per side when asked',
+    P.consequenceShared(spoiled({ mode: 'contested', consequencePerForce: true }), plot()), false);
+// The switch is Contested's alone: nothing else has sides to give a pile to.
+eq('the switch means nothing off contested',
+    P.consequenceShared(spoiled({ mode: 'invest', consequencePerForce: true }), plot()), true);
+
+eq('a fresh track reads nothing', P.consequenceOf(spoiled({ mode: 'invest' })), 0);
+eq('a size below one is impossible',
+    P.consequenceSize(node({ consequenceSize: 0 })), 1);
+
+const mounting = spoiled({ mode: 'invest', progress: { consequence: 3 } });
+eq('complications mount', P.addToConsequence(mounting, 1).consequence, 4);
+eq('and clamp at the line', P.addToConsequence(mounting, 9).consequence, 4);
+eq('and at nothing on the way back', P.addToConsequence(mounting, -9).consequence, 0);
+// The decision, asserted: a battalion committed to a Thread speeds what its
+// Force is doing, and has no business hastening what is going wrong to it.
+eq('an asset bonus does not hasten a complication',
+    P.addToConsequence(mounting, 1, [asset('bonusTick', 5)]).consequence, 4);
+eq('mounting them leaves the Thread s own progress alone',
+    P.addToConsequence(mounting, 1).pool, mounting.progress.pool);
+
+eq('three of four is not at the line',
+    P.consequenceFull(mounting, plot()), false);
+eq('four of four is',
+    P.consequenceFull(spoiled({ mode: 'invest', progress: { consequence: 4 } }), plot()), true);
+eq('and a Thread that keeps none never is',
+    P.consequenceFull(node({ mode: 'invest', progress: { consequence: 99 } }), plot()), false);
+
+// Per side. "Any side is at its line" is the question the row and the cycle
+// check both have — one side breaking is a Thread that can be ended.
+const twoSided = spoiled({
+    mode: 'contested', consequencePerForce: true,
+    progress: { consequenceByForce: { [LEGION]: 4, [GUARD]: 1 } }
+});
+eq('a side at its line is full', P.consequenceFull(twoSided, plot(), LEGION), true);
+eq('the other side is not', P.consequenceFull(twoSided, plot(), GUARD), false);
+eq('and asked of nobody, any side counts', P.consequenceFull(twoSided, plot()), true);
+eq('the sides at their line are named', P.consequenceLeaders(twoSided, plot(), [LEGION, GUARD]), [LEGION]);
+eq('one side s complications do not move the other s',
+    P.addConsequenceForForce(twoSided, GUARD, 1).consequenceByForce, { [LEGION]: 4, [GUARD]: 2 });
+eq('and clamp at the same line',
+    P.addConsequenceForForce(twoSided, GUARD, 99).consequenceByForce[GUARD], 4);
+// Switching the toggle must not cost the GM the reading they switched away from.
+eq('the shared count survives a per-side Thread',
+    P.addConsequenceForForce(twoSided, GUARD, 1).consequence, twoSided.progress.consequence);
+
+// ── the fourth ending ────────────────────────────────────────────────────────
+// The sentinel is resolved in exactly one function, which is what lets every
+// conclusion path below work without learning that a fourth ending exists.
+eq('the sentinel resolves to its own outcome',
+    P.outcomeFor(spoiled(), CONSEQUENCE), { forceId: CONSEQUENCE, delta: -20, note: 'the works burn' });
+eq('a Force still resolves to its own row',
+    P.outcomeFor(spoiled(), LEGION).delta, 15);
+eq('and a Force with nothing declared still resolves to nothing',
+    P.outcomeFor(spoiled(), 'f-nobody'), null);
+eq('State moves by the consequence figure',
+    P.stateAfterConclusion(plot(), spoiled(), CONSEQUENCE), 30);
+eq('and clamps at the floor like any other ending',
+    P.stateAfterConclusion(plot({ state: 5 }), spoiled(), CONSEQUENCE), 0);
+eq('concluding by consequence credits the sentinel, not a Force',
+    P.concludeThread(plot(), spoiled(), CONSEQUENCE).node.concludedBy, CONSEQUENCE);
+eq('and reopening reverses exactly what was applied',
+    P.reopenThread(plot({ state: 30 }), spoiled(), -20).plotState, 50);
 
 console.log(`\n${fail === 0 ? '  all passed' : `  ${fail} FAILED`}\n`);
 process.exit(fail === 0 ? 0 : 1);

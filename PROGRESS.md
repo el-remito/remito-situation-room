@@ -2,9 +2,14 @@
 
 Run `node progress.mjs` for a rendered view. Checkboxes below are the source of truth.
 
-**Gate:** each milestone stops for the user to verify in Foundry. On an explicit pass it is
-committed as one commit, and only then does the next milestone start. Nothing is committed
-before its milestone has passed.
+**Gate:** work stops for the user to verify in Foundry, and nothing is committed before it has
+passed. Through M7 the gate stood after every milestone. **v1.1.0 is gated as one release
+instead** — M8, M9 and M10 are three halves of one screen and one press: the Consequence and
+the Expiration Clock share the *How it advances* section, and the pre-cycle check reads both of
+them. Verifying them apart would mean verifying that section three times, twice against a shape
+that was about to change again. They land as **one commit** for the same reason: the three run
+through the same ten files, and a commit that carried only one of them would be a state this
+module does not start in.
 
 | Milestone | Verified | Committed |
 |---|---|---|
@@ -17,6 +22,7 @@ before its milestone has passed.
 | M6 | passed | `228b0df` |
 | M6.5 | passed | `824ab99` |
 | M7 | passed | `ca52a66` |
+| M8 · M9 · M10 (v1.1.0) | — | — |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)
@@ -428,3 +434,224 @@ finished say what they cost.
       and predated the Node → Thread rename
 - [x] i18n sweep, static passes and the suites
 - [x] Verified in a live world
+
+## M8 — The Consequence, and a section that asks only what it can answer
+
+v1.0 counted a Thread going *well* and had nothing to say about it going badly.
+A GM who wanted "the siege works are burning" beside "the wall is coming down"
+had to author a second Thread and remember it was the other half of the first.
+The same screen also asked every question of every mode: a Narrative Thread,
+which tracks nothing at all, was asked for a threshold, a segment count and a
+direction to read them in.
+
+- [x] `MODE_SHAPE` in `logic/progress.mjs` — one table saying which questions each
+      mode can answer, read by the editor's context and by the suite, so the form
+      and the arithmetic cannot drift
+- [x] *How it advances* renders only those questions and **rebuilds when the mode
+      changes** — `data-reshapes` plus `#wireReshapers`, which routes through
+      `#mutate` so the form is harvested into the draft before the re-render and
+      nothing typed is lost
+- [x] A per-mode lead under the picker, so a Narrative Thread reads as an answer
+      rather than as a section that broke
+- [x] The **Consequence**: a second track counting complications, on every mode
+      but Narrative. Not a mode — a Thread with the toggle off is byte-for-byte
+      the Thread it was
+- [x] It MIRRORS the reading it stands under — pips on a Clock, a bar on the
+      others — derived from the mode rather than stored, like `depletes`
+- [x] It never runs down, whatever the Thread beside it is doing, and Asset
+      bonuses do not hasten it: a committed battalion has no business speeding up
+      what is going wrong to its own Force
+- [x] Contested chooses: one complication over the contest, or one per side.
+      Switching keeps both readings' figures, so a look at one does not cost the
+      other
+- [x] Config on the node as flat fields, counts under `progress` — which is what
+      keeps a push landing mid-edit safe from the Save that follows
+- [x] A fourth ending. `CONCLUDED_BY_CONSEQUENCE` is a reserved `concludedBy`
+      resolved in exactly one function (`outcomeFor`), so `concludeThread`,
+      `stateAfterConclusion` and `reopenThread` needed no changes at all
+- [x] The Conclude dialog offers it with its own State change and note,
+      preselected when the track is at its line. Nothing fires on its own
+- [x] `force.delete` and `example.remove` sweep the second per-side pile, and the
+      sentinel survives both — it is not a Force id and never matches
+- [x] One push control per reading, one dialog, `data-track` on the button.
+      A Consequence push suggests a cost of nothing: nobody buys a complication
+- [x] The chronicle gets its own sentences and its own icon, because "advanced
+      the Second Assault" and "complications mounted on it" are opposite
+      developments a reader has to tell apart at a glance
+- [x] A masked Thread shows no Consequence, with its mode chip and its drain and
+      for the same reason. `hideValues` takes the numbers and leaves the track
+- [x] The fixture gains both shapes: per-side on *Preparing Siege Engines*, where
+      the side that is ahead is also the side coming apart, and pips on *The
+      Granary Stores*, which is depleting — so one reading falls while the other
+      climbs
+- [x] Help rewritten for GM and player
+- [x] `check.mjs` polices a fifth UI word, and gains **pass 8**: every Handlebars
+      block closes, and closes with itself. An unbalanced `{{#if}}` takes the
+      whole board down — the window is one part — and nothing here caught it
+- [x] `check-progress` +47, `check-normalize` +21, `check-editing` +13
+- [x] Recorded; verification is one gate for the whole release
+
+## M9 — The Expiration Clock
+
+Nothing on this board ran out of time. Cycles paid Forces and counted down Asset
+condition timers, and a Thread — an opportunity, an ultimatum, a window — could
+not be given a deadline, so "they have three Cycles to reach the pass" lived in
+the GM's notes rather than on the board that exists to hold exactly that.
+
+- [x] `logic/expiry.mjs` — the second countdown, modelled on `assetsOnTheClock`
+      because an Asset's condition timer is the same problem already solved once
+- [x] On EVERY mode, Narrative included, and deliberately absent from
+      `MODE_SHAPE`: how a Thread comes on and how it runs out are different
+      questions
+- [x] Three clocks — the world's, an isolated Plot's own, or GM fiat — with the
+      whole rule in `ridesClock` and all nine combinations asserted, because
+      "did that press just cost this Thread a Cycle?" is unanswerable after the
+      fact
+- [x] **GM fiat on all three.** The push control is drawn whatever the setting
+      says; what the setting decides is what ELSE moves it
+- [x] It is the one control a shut gate does NOT take away — a window closing on
+      something nobody could reach is exactly what a deadline on a locked Thread
+      means
+- [x] Always a bar and never pips, which is where it differs from the
+      Consequence: time is not the Thread's own arithmetic and does not take its
+      shape. It counts DOWN, because nobody counts up to a door closing
+- [x] A deadline riding a Plot's clock the Plot no longer keeps is **stranded**,
+      and the row says so to the GM rather than being silently repaired — the
+      fix is a decision
+- [x] The word is the GM's, three fallbacks deep: this Thread's, the world's
+      (Settings, beside the other two clock words), the built-in one
+- [x] `cycle.mjs` `record`/`reverse`/`summary` carry the deadlines, so a Cycle
+      taken back takes them with it — narrowly, touching only `progress.expiry`,
+      because a push that landed since is somebody's deliberate act
+- [x] Both cycle operations tick them, both bills preview them with the same pure
+      call, and only a Thread that actually RUNS OUT writes a chronicle line —
+      the rule the Asset timers already follow
+- [x] New `LOG_KIND.EXPIRE`, its own icon and its own sentence
+- [x] The fixture gains all three clocks: the envoy's supplies on the Long Road's
+      own cycle, the Duke's petitions on the WORLD's from inside that isolated
+      Plot — which is the case worth teaching — and winter on GM fiat alone
+- [x] Help rewritten again, GM and player
+- [x] The inversion — the GM types in the direction the ROW moves and what is
+      stored is what has been SPENT — is `spendBy` in the pure layer rather than
+      an expression at the write, because it is the easiest thing here to get
+      backwards and it fails silently. Caught in review with the sign reversed
+- [x] `check.mjs` polices a sixth UI word; `check-expiry` (48), `check-cycle`
+      (+17), `check-normalize` (+17), `check-editing` (+9)
+- [x] Recorded; verification is one gate for the whole release
+
+## M10 — What a Cycle would run past
+
+The cycle button is the loudest press on this board and it looked at nothing. It
+pays every Force, winds every Plot and counts down every timer without once
+asking whether something was already standing at its line — and every one of
+those effects is somewhere the GM is not looking.
+
+- [x] `logic/resolvable.mjs` — every reason a Thread or a Plot could be resolved,
+      as bare ids the caller localizes
+- [x] Four Thread reasons: at its threshold · a contested side at the threshold ·
+      complications at their limit · out of time. The contested one exists
+      because `isFull` deliberately never reports a contest, which makes it the
+      case a GM is most likely to walk past
+- [x] Two Plot reasons: every Thread concluded, or State at the end of its ladder
+- [x] **The two ends of a ladder are not symmetrical**, and assuming they were
+      was a real bug the fixture caught: a new Plot is seeded at its own floor,
+      so every Plot in the world begins in its lowest Phase. The floor now counts
+      only once at least one Thread on the Plot has concluded — "it subsided back
+      to nothing" and "it has not started" are the same reading of State and
+      different facts about the campaign
+- [x] A shut Thread is never named: `node.conclude` refuses one outright, so
+      offering it would point at a button the GM cannot press
+- [x] Scoped — the world's cycle reads the whole board, a Plot's own reads that
+      Plot
+- [x] First in the confirmation, above the income, with each row's own reason.
+      A warning and not a gate: the confirm button underneath is already the "do
+      you still want to proceed", and refusing would be the board deciding that a
+      full bar means a finished situation
+- [x] Absent entirely when nothing qualifies, so the ordinary press is unchanged
+- [x] The fixture ships exactly one row standing at a line — *A Name in the
+      Ledger*, masked and at its threshold — because the check cannot be
+      demonstrated on a board where nothing is finished
+- [x] `check-resolvable.mjs` (41), weighted toward the NEGATIVE cases: a check
+      that cried wolf would be turned off inside a session
+
+### Round 2 — from verification: the CSS sweep
+
+The first live read passed on function and failed on presentation, which is its
+own kind of result: none of the three features was wrong, and all three looked
+like they had been bolted on. A stylesheet-only round — no markup, no logic, no
+new keys.
+
+- [x] **The stray vertical rule beside every Consequence label was a bar.**
+      `.rsr-bar` was `flex: 1` with no floor, so on a crowded row it lost the
+      argument for width and rendered as one pixel. It has a minimum now, which
+      is the general fix: nothing on this board can silently collapse to a line
+- [x] A per-side Consequence was rendering INLINE on its contender's row, three
+      items along, against the partial's own stated intent — and stealing the
+      width from the bar beside it, which is why one side's bar was visibly
+      shorter than the other's. `flex: 1 0 100%` against a wrap on the contender
+      gives it the line it always claimed to have
+- [x] One label column: both tracks take the same MINIMUM label width, so the
+      Consequence and the deadline start their bars at the same place — a
+      minimum and not a pin, because the labels are localized and a longer word
+      should push its own bar rather than overrun it. Inside a contender the
+      column is narrowed by exactly the indent, so a side's complication starts
+      where that side's own bar starts
+- [x] One trailing gutter: a reading with no push control reserves the space one
+      would take, so the `x/y` column is a column. Only in a Thread that HAS
+      controls, which is three different cases — a GM on an open Thread, a GM on
+      a shut one where only the deadline still moves, and a player with none —
+      and in the last of those a reserved gutter is a hole nothing sits in
+- [x] **Violet, not red and not muted ink**, at the GM's own call. The two new
+      tracks are what is happening BESIDE a Thread's own reading, so they share
+      one accent and are told apart by shape instead: the Consequence mirrors the
+      reading above it, the deadline is always a bar. Red read as an alarm going
+      off about the ordinary state of a campaign; muted ink read as switched off.
+      The palette note at the top of the stylesheet gains violet's second meaning
+      rather than quietly losing its first — the two barely meet, because a
+      masked Thread draws neither track
+- [x] Two the sweep found on its own: `.rsr-bill-deadlines .rsr-bill-name` was a
+      flex-basis on a GRID child and had never done anything, and
+      `.rsr-push-head` was `space-between` with a name and three chips, which
+      scattered them across the dialog the moment the track chip joined
+- [x] The stylesheet had been half CRLF and half LF since M8 appended to it.
+      Normalized, which git was going to do anyway and an editor was not
+
+### Round 3 — from verification: the two columns that were still wrong
+
+Two rows still did not line up, and both had the same cause: the tracks were
+carrying a control the readings above them do not have.
+
+- [x] **The + at the end of a Consequence is gone, and the label is the
+      control.** It stood in a column its counterpart above leaves empty — a
+      Clock's pips and a pool's bar are read, not pressed — so the two numbers
+      on one Thread were a button-width apart, and a contest showed the same
+      fault twice over with a bordered arrow on one row and a bare + on the
+      next. The word that names the pile is what gets pressed now. Still a real
+      `<button>`: ApplicationV2 dispatches actions on click alone, so a clickable
+      div would have been a control the keyboard cannot reach
+- [x] The deadline's control moved into its label for the same reason, and keeps
+      the one property that matters — it survives a shut gate, because a window
+      still closes on a Thread nobody can reach
+- [x] **Where the label goes now depends on what the row stands under**, which is
+      the whole job of a secondary reading. Four cases, stated once in the bars
+      section: inside a contender it takes the name column less the indent; under
+      a contest it takes the name column, so the deadline's bar starts under the
+      contender bars; under a bare pool or a bare clock there is no name column
+      at all, so the track LEADS and the label follows it — which is what put six
+      violet dots half a label to the right of the eight gold ones above them;
+      and a Narrative Thread with nothing to line up with keeps the plain column
+- [x] The Consequence's pips are a count, not a bar: the group is as wide as the
+      number the GM chose, so the label sits beside the dots it names rather than
+      half a Thread away, and the reading is held right by its own margin
+- [x] The gutter narrowed to the one case that is left. Only a contest still
+      carries a trailing control, so only a contest reserves the space for it —
+      everywhere else the values simply end at the edge together
+- [x] Foundry's own `button` rule is a whole appearance — a height, a background,
+      the sans face, a half-second transition and a focus glow on click. Each is
+      turned off by name, and the focus ring kept for the keyboard alone
+
+- [x] **Verified in a live world — the one gate for v1.1.0.** Rounds 1 and 2 were
+      driven in a live world; round 3 ships on the GM's word rather than a fourth
+      pass, at their instruction. What it changes is two rows of a stylesheet and
+      one control per track, and both partials were compiled and rendered against
+      Foundry's own Handlebars before release

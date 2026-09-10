@@ -17,7 +17,7 @@
  */
 
 import {
-    LIFECYCLE, LOG_KIND, MODE, NODE_STATUS, VISIBILITY, POLARITY, ASSET_MODIFIER,
+    EXPIRY_CLOCK, LIFECYCLE, LOG_KIND, MODE, NODE_STATUS, VISIBILITY, POLARITY, ASSET_MODIFIER,
     ASSET_CONDITION, TURN_BEHAVIOUR
 } from '../constants.mjs';
 
@@ -196,7 +196,22 @@ export function buildExample() {
             description: 'Legion engineers work the treeline north of the wall, out of bowshot.',
             mode: MODE.CONTESTED,
             threshold: 10, segments: 6,
-            progress: { pool: 0, byForce: { [ID.legion]: 6, [ID.guard]: 3 } },
+            progress: {
+                pool: 0,
+                byForce: { [ID.legion]: 6, [ID.guard]: 3 },
+                // ONE COMPLICATION PER SIDE, which is the shape only a contest
+                // can have. The Legion's engineers are three of four rain-swollen
+                // days from losing the works entirely while the Guard, which has
+                // barely started interfering, is at one — so a GM reading this
+                // row can see that the side AHEAD is also the side about to come
+                // apart. That is the whole argument for the per-side switch.
+                consequenceByForce: { [ID.legion]: 3, [ID.guard]: 1 }
+            },
+            consequenceOn: true,
+            consequenceSize: 4,
+            consequencePerForce: true,
+            consequenceDelta: -5,
+            consequenceNote: 'Rain and rot take the half-built engines where no raid could.',
             outcomes: [
                 { forceId: ID.legion, delta: 15, note: 'The engines reach the wall intact.' },
                 { forceId: ID.guard, delta: -15, note: 'A night raid burns the engines in the yard.' }
@@ -249,7 +264,14 @@ export function buildExample() {
             description: 'Nothing happens here until the engines are ready.',
             mode: MODE.FIAT,
             threshold: 9, segments: 6,
-            progress: { pool: 0, byForce: {} },
+            progress: { pool: 0, byForce: {}, expiry: 0 },
+            // The third setting: nothing moves this but the GM. Winter is not on
+            // anybody's calendar until they say it is, and a clock that ran on
+            // its own would put the Legion out of time on a schedule the fiction
+            // never agreed to. The push control is drawn on this exactly as it
+            // is on the two above — what the setting decides is what ELSE moves
+            // it.
+            expiryOn: true, expirySize: 4, expiryClock: EXPIRY_CLOCK.FIAT,
             outcomes: [
                 { forceId: ID.legion, delta: 25, note: 'Northwall falls before winter.' },
                 { forceId: ID.guard, delta: -20, note: 'The breach is held. Barely.' }
@@ -265,7 +287,17 @@ export function buildExample() {
             description: 'A Legion paymaster is buying somebody inside the Guard.',
             mode: MODE.INVEST,
             threshold: 8, segments: 6,
-            progress: { pool: 5, byForce: { [ID.legion]: 5 } },
+            // AT ITS LINE, on purpose, and it is the only row in the fixture
+            // that is. Press Next Global Cycle on a freshly generated example
+            // and the confirmation names this Thread before it names anything
+            // else — which is the whole of what the pre-cycle check is for, and
+            // impossible to demonstrate on a board where nothing is finished.
+            //
+            // It is also MASKED, which makes it the sharper demonstration: the
+            // table has heard a rumour and the GM has a conclusion waiting, and
+            // the check is the only place on the board that says so at the
+            // moment it matters.
+            progress: { pool: 8, byForce: { [ID.legion]: 8 } },
             outcomes: [{ forceId: ID.legion, delta: 12, note: 'The name is confirmed.' }],
             status: NODE_STATUS.ACTIVE, concludedBy: null, prereqNodeIds: [],
             // Masked, and the mask says what it likes: this is the row that
@@ -303,7 +335,23 @@ export function buildExample() {
             description: 'What the city has left to eat, counted in weeks.',
             mode: MODE.CLOCK,
             threshold: 9, segments: 8,
-            progress: { pool: 3, byForce: {} },
+            progress: {
+                pool: 3, byForce: {},
+                // Five of six, so the fixture ships one track standing at the
+                // edge rather than only ones idling. Open Conclude on this row
+                // and the Consequence answer is already selected.
+                consequence: 5
+            },
+            // The Consequence that MIRRORS its Thread: this is the only Clock on
+            // the board, so this is where it draws as pips rather than as a bar,
+            // beside the pips it belongs to. It is also the row that proves the
+            // track does not invert with a depleting reading — the stores count
+            // DOWN from eight and the spoilage counts UP to six, because a
+            // complication is what is mounting whichever way the row is written.
+            consequenceOn: true,
+            consequenceSize: 6,
+            consequenceDelta: 15,
+            consequenceNote: 'What is left in the granary is not fit to eat.',
             outcomes: [
                 { forceId: ID.legion, delta: 20,
                   note: 'The gates open because there is nothing left inside them.' },
@@ -369,7 +417,13 @@ export function buildExample() {
             description: 'Six hundred miles, two rivers, and a Legion patrol on the ford.',
             mode: MODE.INVEST,
             threshold: 12, segments: 6,
-            progress: { pool: 4, byForce: { [ID.guard]: 4 } },
+            progress: { pool: 4, byForce: { [ID.guard]: 4 }, expiry: 1 },
+            // A deadline on THIS PLOT'S OWN CLOCK, which is the setting that only
+            // means anything on an isolated Plot. Her supplies are counted in the
+            // same weeks the road is, so pressing the siege's cycle does not
+            // shorten them and the Long Road's own button does.
+            expiryOn: true, expirySize: 5, expiryClock: EXPIRY_CLOCK.PLOT,
+            expiryLabel: 'Out of road',
             outcomes: [{ forceId: ID.guard, delta: 40, note: 'The plea is read aloud at court.' }],
             // Shut until the ford is behind her. The row says so by name, because
             // the ford is a Thread the table can see; a requirement they could
@@ -388,7 +442,24 @@ export function buildExample() {
                 + 'and has heard nothing from Northwall in a year.',
             mode: MODE.FIAT,
             threshold: 9, segments: 6,
-            progress: { pool: 0, byForce: {} },
+            progress: { pool: 0, byForce: {}, expiry: 2 },
+            // THE ROW THAT ANSWERS THREE QUESTIONS AT ONCE about deadlines.
+            //
+            // It is NARRATIVE — tracking nothing, with no threshold and no
+            // segments — and it still has three cycles, because how a Thread
+            // comes on and how it runs out are different questions.
+            //
+            // It is SHUT, and the clock runs anyway. A window closing on
+            // something nobody could reach is exactly what a deadline on a
+            // locked Thread means, and it is the best argument on this board for
+            // why the deadline is the one control a gate does not take away.
+            //
+            // And it rides the WORLD'S cycle from inside an isolated Plot. The
+            // Duke hears petitions on the first of the month whatever calendar
+            // the road is counted in, so the siege's button moves this and the
+            // Long Road's does not — the exact opposite of the envoy above it.
+            expiryOn: true, expirySize: 3, expiryClock: EXPIRY_CLOCK.WORLD,
+            expiryLabel: 'Petitions closed',
             outcomes: [{ forceId: ID.guard, delta: 35, note: 'Vaelport rides north.' }],
             status: NODE_STATUS.LOCKED, concludedBy: null, prereqNodeIds: [ID.envoy],
             visibility: VISIBILITY.VISIBLE, hideValues: false, playerAssignable: false

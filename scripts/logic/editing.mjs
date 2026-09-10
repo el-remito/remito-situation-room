@@ -24,7 +24,7 @@
 
 import {
     ASSET_CONDITION, ASSET_MODIFIER, CONDITION_EFFECT, DEFAULT_CONDITIONS, EDIT_KIND,
-    LIFECYCLE, MODE, NODE_STATUS, POLARITY, TURN_BEHAVIOUR, VISIBILITY
+    EXPIRY_CLOCK, LIFECYCLE, MODE, NODE_STATUS, POLARITY, TURN_BEHAVIOUR, VISIBILITY
 } from '../constants.mjs';
 import { CUSTOM, isPaletteColor, parseCustomColor } from './palette.mjs';
 
@@ -96,6 +96,22 @@ export const FIELDS = {
         { name: 'threshold', type: 'int' },
         { name: 'segments', type: 'int' },
         { name: 'countdown', type: 'bool' },
+        // The Consequence, as five flat controls. A control the current mode does
+        // not render simply is not in the form, and `harvest` skips what it cannot
+        // find — so the draft keeps what was configured for the mode the GM just
+        // switched away from, and switching back finds it as it was left.
+        { name: 'consequenceOn', type: 'bool' },
+        { name: 'consequenceSize', type: 'int' },
+        { name: 'consequencePerForce', type: 'bool' },
+        { name: 'consequenceDelta', type: 'int' },
+        { name: 'consequenceNote', type: 'text' },
+        // The deadline. Outside every mode branch in the template, because a
+        // Thread the fiction ends can run out of time exactly as readily as one
+        // a clock ends — see logic/expiry.mjs on why this is not in MODE_SHAPE.
+        { name: 'expiryOn', type: 'bool' },
+        { name: 'expirySize', type: 'int' },
+        { name: 'expiryClock', type: 'text' },
+        { name: 'expiryLabel', type: 'text' },
         { name: 'status', type: 'text' },
         { name: 'color', type: 'text' },
         { name: 'colorCustom', type: 'text' },
@@ -213,6 +229,25 @@ export function draftFrom(kind, entity, constants = {}, seed = {}) {
             threshold: int(e.threshold, K.threadThreshold ?? 9),
             segments: int(e.segments, K.clockSegments ?? 6),
             countdown: bool(e.countdown),
+            // Seeded from the world's clock size rather than from a constant of
+            // its own: a campaign that counts its clocks in six has no reason to
+            // count its complications in anything else, and one more number in
+            // Settings is one more number to explain.
+            consequenceOn: bool(e.consequenceOn),
+            consequenceSize: int(e.consequenceSize, K.clockSegments ?? 6),
+            consequencePerForce: bool(e.consequencePerForce),
+            consequenceDelta: int(e.consequenceDelta, 0),
+            consequenceNote: str(e.consequenceNote),
+            expiryOn: bool(e.expiryOn),
+            // Seeded from the world's clock size, like the Consequence: a
+            // campaign that counts in six has no reason to count deadlines in
+            // anything else, and one more number in Settings is one more to
+            // explain.
+            expirySize: int(e.expirySize, K.clockSegments ?? 6),
+            expiryClock: str(e.expiryClock) || EXPIRY_CLOCK.WORLD,
+            // Empty means the world's word, which is itself empty by default
+            // and means the built-in one.
+            expiryLabel: str(e.expiryLabel),
             status: str(e.status) || NODE_STATUS.ACTIVE,
             ...colorDraft(e.color),
             outcomes: (e.outcomes ?? []).map((o) => ({
@@ -412,6 +447,20 @@ export function patchFrom(kind, draft) {
             threshold: draft.threshold,
             segments: draft.segments,
             countdown: draft.countdown,
+            consequenceOn: draft.consequenceOn,
+            // Never below one. A track of nothing would read as full the moment
+            // it was switched on, which is a bug rather than a very fragile plan.
+            consequenceSize: Math.max(1, draft.consequenceSize),
+            consequencePerForce: draft.consequencePerForce,
+            consequenceDelta: draft.consequenceDelta,
+            consequenceNote: draft.consequenceNote.trim(),
+            expiryOn: draft.expiryOn,
+            expirySize: Math.max(1, draft.expirySize),
+            expiryClock: draft.expiryClock,
+            // Trimmed here rather than on the way in, so a GM who types a space
+            // and thinks better of it gets the world's word back rather than a
+            // chip with a gap in it.
+            expiryLabel: draft.expiryLabel.trim(),
             status: draft.status,
             color: colorPatch(draft),
             // An outcome of nothing said and nothing moved is not an outcome.

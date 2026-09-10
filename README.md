@@ -18,16 +18,17 @@ Five nouns carry the module. They are worth reading once before anything else.
 |---|---|
 | **Plot** | One running situation — an invasion, an investigation, a treaty that may not hold. Carries a single number, its **State**. |
 | **Phase** | A band along a Plot's State. Names what the situation is called while State sits inside it, and may open or shut Threads. |
-| **Thread** | A moving part of a Plot: the thing being attempted. Fills toward a threshold; concluding one moves the Plot's State. |
+| **Thread** | A moving part of a Plot: the thing being attempted. Fills toward a threshold; concluding one moves the Plot's State. May also carry a **Consequence** — the complications mounting against it — and an **Expiration Clock**. |
 | **Force** | A side with an agenda — an army, a guild, a hunger in the deep. Holds **Resources** and spends them to push Threads. |
 | **Asset** | Something a Force can commit to a Thread: a battalion, a bought magistrate, a dragon who owes nobody anything. |
 
 A **Cycle** is one turn of the campaign clock. **Segments** group Cycles into named runs, so the
 board can read *The Siege · Cycle 2* rather than *Cycle 10*.
 
-*(In the source, a Thread is a `node`, a Cycle is a `turn`, a Segment is a `chapter`, and Depleting
-is `countdown`. `tools/check.mjs` enforces the split in both directions: the code words never reach
-a reader, and the reader's words live only in `lang/en.json`.)*
+*(In the source, a Thread is a `node`, a Cycle is a `turn`, a Segment is a `chapter`, Depleting is
+`countdown`, and running out is `expiry`. `tools/check.mjs` enforces the split in both directions:
+the code words never reach a reader, and the reader's words — Thread, Cycle, Segment, Depleting,
+Consequence, Expired — live only in `lang/en.json`.)*
 
 ## What it does
 
@@ -38,6 +39,22 @@ a reader, and the reader's words live only in `lang/en.json`.)*
   falling to nothing rather than nothing climbing to eight. It is a reading, not a fifth mode:
   underneath, the pool still climbs. On a *Contested* Thread each side runs its own reserve down,
   which is how a war of attrition gets drawn.
+- **Consequence.** A second track on a Thread, counting how badly it is going rather than how
+  well, which can end it on its own terms. It is drawn to match the reading it stands under —
+  segments on a *Clock*, a bar on the others — never runs down, and is refused only to
+  *Narrative*, which tracks nothing by definition. A *Contested* Thread chooses one complication
+  over the whole contest or one per side, which is how the side that is winning can also be the
+  side about to come apart. Concluding by it is a fourth answer in the Conclude dialog, with its
+  own State change; nothing ever fires on its own.
+- **Expiration Clocks.** A deadline on any Thread, *including Narrative* — how a Thread comes on
+  and how it runs out are different questions. Counted down by the world's Cycle, by an isolated
+  Plot's own, or only when you say so; movable by hand whichever you pick. It is the one control a
+  shut gate does not take away, because a window closing on something nobody could reach is
+  exactly what that means. You name it: *Expired*, or your world's word, or this Thread's own.
+- **The Cycle looks before it moves.** Advancing a Cycle first names anything already standing at
+  a line — a Thread at its threshold, a contested side that reached it, complications at their
+  limit, a deadline run out, or a whole Plot whose Threads have all concluded. A reminder, not a
+  refusal: the button still turns the Cycle.
 - **Three independent gates.** A Thread can be shut by the GM's own switch, by a prerequisite that
   has not concluded, or by a Phase that names it under Locks. Any one is enough, none of it is
   stored, and a gate can reopen when State falls back.
@@ -69,8 +86,10 @@ a reader, and the reader's words live only in `lang/en.json`.)*
   Assets come loose and whose, which Threads it lets open, which Phases lose a line, and, for a
   Force, exactly which of its Assets are being destroyed outright with no refund.
 - **An example campaign.** *Generate Example* builds a two-Plot fixture exercising all four modes,
-  a prerequisite chain, a Phase crossing in both directions, and every visibility state.
-  *Remove Example* takes back exactly what it made and nothing else.
+  a prerequisite chain, a Phase crossing in both directions, every visibility state, both shapes of
+  Consequence, all three Expiration Clocks, and one Thread standing at its threshold so the
+  pre-Cycle check has something to say the first time you press it. *Remove Example* takes back
+  exactly what it made and nothing else.
 
 ## Installation
 
@@ -135,8 +154,8 @@ Three rules hold the shape:
 3. **Code word ≠ UI word.** See Nomenclature above.
 
 ```bash
-node tools/all.mjs      # every logic suite
-node tools/check.mjs    # nine static passes over the whole repo
+node tools/all.mjs      # every logic suite, and the static passes
+node tools/check.mjs    # ten static passes over the whole repo
 ```
 
 Everything else is verified by hand, in a world. There is no HMR: reload Foundry.

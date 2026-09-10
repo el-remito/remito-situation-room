@@ -15,6 +15,7 @@
  *   5. funnels      — game.settings only in settings.mjs, game.socket only in relay.mjs
  *   6. i18n shape   — no key is a prefix of another (Foundry expands the flat file)
  *   7. partials     — every TEMPLATES entry exists and is preloaded for {{> }}
+ *   8. handlebars   — every {{#block}} closes, and closes with itself
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -112,7 +113,15 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
         'RSR.plot.lifecycle.', 'RSR.asset.modifier.', 'RSR.visibility.',
         'RSR.settings.visibility.', 'RSR.editor.tone.', 'RSR.asset.condition.',
         'RSR.asset.effectScale.', 'RSR.plot.turnBehaviour.', 'RSR.turn.reason.',
-        'RSR.turn.revertReason.', 'RSR.color.'];
+        'RSR.turn.revertReason.', 'RSR.color.',
+        // One lead per mode, chosen by the editor's context from the mode it
+        // resolved — the same shape as every other line above.
+        'RSR.editor.advanceLead.',
+        // Which clock a deadline rides, built by `optionsOf` from EXPIRY_CLOCK.
+        'RSR.thread.expiryClock.',
+        // Why a row is standing at its line, built from the bare reason ids
+        // logic/resolvable.mjs hands back.
+        'RSR.turn.resolvableReason.', 'RSR.turn.resolvablePlotReason.'];
 
     for (const file of [...sources, ...templates]) {
         for (const m of read(file).matchAll(/['"](RSR\.[A-Za-z0-9_.]+)['"]/g)) used.add(m[1]);
@@ -180,11 +189,23 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
         // Both directions are checked. A UI word appearing in code means a string was
         // built where it should have been localized; a code word reaching a user means
         // the split was forgotten in the other direction.
+        //
+        // Consequence has no code word of its own — the field is spelled the same
+        // way in lower case, and the pattern is capital-sensitive, so a class name
+        // like `rsr-chip-consequence` is not a hit. It is policed in the UI
+        // direction only, which is the direction that matters: the WORD belongs in
+        // lang/en.json like every other word the reader sees.
         const UI_WORDS = [
             { word: 'Thread', pattern: /['"]([^'"\n]*\bThreads?\b[^'"\n]*)['"]/g },
             { word: 'Cycle', pattern: /['"]([^'"\n]*\bCycles?\b[^'"\n]*)['"]/g },
             { word: 'Depleting', pattern: /['"]([^'"\n]*\bDepleting\b[^'"\n]*)['"]/g },
-            { word: 'Segment', pattern: /['"]([^'"\n]*\bSegments?\b[^'"\n]*)['"]/g }
+            { word: 'Segment', pattern: /['"]([^'"\n]*\bSegments?\b[^'"\n]*)['"]/g },
+            { word: 'Consequence', pattern: /['"]([^'"\n]*\bConsequences?\b[^'"\n]*)['"]/g },
+            // The GM may rename this one outright, per world and per Thread, so
+            // a literal in code would be wrong twice over: not localizable, and
+            // not theirs. Every reader of it goes through ui/clock.mjs
+            // `expiryLabel`, which is the only place the built-in is named.
+            { word: 'Expired', pattern: /['"]([^'"\n]*\bExpired\b[^'"\n]*)['"]/g }
         ];
         const CODE_WORDS = [
             { word: 'Node', ui: 'Thread', pattern: /['"]([^'"\n]*\bNodes?\b[^'"\n]*)['"]/g },
@@ -313,6 +334,38 @@ console.log(`\n  ${C.bold}remito-situation-room${C.off} ${C.dim}static passes${C
         }
     }
     report(`partials preloaded (${declared.size} templates)`, problems);
+}
+
+// ── 8. every Handlebars block closes, and closes with itself ─────────────────
+{
+    /**
+     * An unbalanced `{{#if}}` is a Handlebars parse error, which in this module
+     * is a blank window: the whole board is ONE part, so a template that will
+     * not compile takes the entire application down rather than the section it
+     * is in. Nothing else here catches it — pass 0 parses JavaScript, and the
+     * templates are only compiled by Foundry at render.
+     *
+     * Comments are stripped first: `{{!-- ... --}}` is where the blocks are
+     * explained, and half an example inside one is not an unclosed block.
+     *
+     * This checks nesting, not semantics. `{{else}}` needs no counting — it does
+     * not open or close anything — and a helper name that does not exist is
+     * pass 3's business for actions and Foundry's for the rest.
+     */
+    const problems = [];
+    for (const file of templates) {
+        const body = read(file).replace(/\{\{!--[\s\S]*?--\}\}/g, '');
+        const open = [];
+        for (const m of body.matchAll(/\{\{([#/])\s*([A-Za-z0-9_]+)/g)) {
+            if (m[1] === '#') { open.push(m[2]); continue; }
+            const was = open.pop();
+            if (was !== m[2]) {
+                problems.push(`${rel(file)}: {{/${m[2]}}} closes {{#${was ?? 'nothing'}}}`);
+            }
+        }
+        if (open.length) problems.push(`${rel(file)}: never closed: ${open.join(', ')}`);
+    }
+    report(`Handlebars blocks balance (${templates.length} templates)`, problems);
 }
 
 // ── summary ──────────────────────────────────────────────────────────────────

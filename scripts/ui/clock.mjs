@@ -16,6 +16,7 @@
 
 import { reading } from '../logic/cycle.mjs';
 import { clockName } from '../logic/economy.mjs';
+import { expiryWord } from '../logic/expiry.mjs';
 
 const L = (key) => game.i18n.localize(key);
 const own = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -30,6 +31,21 @@ export const plotClock = (plot) => clockName(plot) || L('RSR.turn.plotLabel');
 /** What this world calls a run of Cycles, when the run has no name of its own. */
 export const runName = (board) =>
     own(board?.constants?.chapterLabel) || L('RSR.turn.segmentLabel');
+
+/**
+ * What a Thread that has run out is CALLED: its own word, the world's, or the
+ * built-in one.
+ *
+ * Three steps rather than two, and it is the only word on this board with that
+ * many, because a campaign's deadlines are rarely all the same kind of thing. A
+ * window *Closed*, an ultimatum *Run Out*, a season *Passed* — the world sets
+ * the one most of them are, and any one Thread may say otherwise.
+ *
+ * `expiryWord` does the two steps that need no i18n and stops; this supplies the
+ * built-in, exactly as `worldClock` does for the clock's own name.
+ */
+export const expiryLabel = (board, node) =>
+    expiryWord(node, board?.constants) || L('RSR.thread.expired');
 
 /** Where this world's runs begin. Marks, not a length — see logic/cycle.mjs. */
 export const runMarks = (board) => board?.turn?.chapters ?? [];

@@ -11,18 +11,23 @@
  * it is why deletes here have to sweep references by hand: nothing else will.
  */
 
-import { LIFECYCLE, LOG_KIND, VISIBILITY } from '../constants.mjs';
+import {
+    CONCLUDED_BY_CONSEQUENCE, LIFECYCLE, LOG_KIND, TRACK, VISIBILITY
+} from '../constants.mjs';
 import * as Cond from '../logic/condition.mjs';
 import * as S from '../settings.mjs';
 import { registerOperations, requestWrite } from './relay.mjs';
 import { buildExample } from './example-plot.mjs';
 import {
-    resolveMode, pushSign, addToPool, tickClock, addForForce, concludeThread, reopenThread
+    resolveMode, pushSign, addToPool, tickClock, addForForce, concludeThread, reopenThread,
+    outcomeFor, hasConsequence, consequenceShared, addToConsequence, addConsequenceForForce
 } from '../logic/progress.mjs';
 import * as Econ from '../logic/economy.mjs';
 import * as Gate from '../logic/gating.mjs';
 import * as Log from '../logic/log.mjs';
 import * as Cycle from '../logic/cycle.mjs';
+import * as Expiry from '../logic/expiry.mjs';
+import * as Resolvable from '../logic/resolvable.mjs';
 import { MODE } from '../constants.mjs';
 
 // ── reads ────────────────────────────────────────────────────────────────────
@@ -120,6 +125,29 @@ export const turnPreview = (board = readBoard()) => Econ.incomeRoster(board.forc
  */
 export const turnTimers = (board = readBoard(), plotId = null) =>
     Cond.ticking(board.conditions, Econ.assetsOnTheClock(board.assets, board.plots, plotId));
+
+/**
+ * The third of the bill: the Expiration Clocks this cycle is about to move, and
+ * which of them run out when it does.
+ *
+ * The same pure call the cycle itself makes, for the same reason `turnTimers` is:
+ * the GM is shown the operation rather than a description of it, so the bill
+ * cannot drift from what pressing the button actually does.
+ */
+export const turnDeadlines = (board = readBoard(), plotId = null) =>
+    Expiry.expiringOn(board.nodes, board.plots, plotId);
+
+/**
+ * What is standing at its line and could be resolved BEFORE this cycle turns.
+ *
+ * A read like the two above, and the last thing the confirmation shows first.
+ * Scoped by plotId the same way they are: the world's cycle asks about the whole
+ * board, a Plot's own asks about that Plot.
+ */
+export const turnResolvable = (board = readBoard(), plotId = null) => ({
+    threads: Resolvable.resolvableThreads(board, { plotId }),
+    plots: Resolvable.resolvablePlots(board, { plotId })
+});
 
 /** The Plots the world's cycle will not move, with the reason each one sits out. */
 export const turnSkips = (board = readBoard()) => Econ.sittingOut(board.plots);
@@ -284,11 +312,17 @@ const operations = {
             ...p, forceIds: p.forceIds.filter((id) => id !== forceId)
         })));
         await S.setNodes(S.getNodes().map((n) => {
-            const { [forceId]: _dropped, ...byForce } = n.progress.byForce;
+            const { [forceId]: _spent, ...byForce } = n.progress.byForce;
+            // Both per-side piles, or a Contested Thread keeps a phantom
+            // contender's complications forever after its side is gone.
+            const { [forceId]: _gone, ...consequenceByForce } = n.progress.consequenceByForce;
             return {
                 ...n,
-                progress: { ...n.progress, byForce },
+                progress: { ...n.progress, byForce, consequenceByForce },
                 outcomes: n.outcomes.filter((o) => o.forceId !== forceId),
+                // The Consequence sentinel is not a Force id and never matches
+                // here, which is the point of it: a Thread the complications
+                // ended survives the deletion of every side that stood on it.
                 concludedBy: n.concludedBy === forceId ? null : n.concludedBy
             };
         }));
@@ -422,7 +456,7 @@ const operations = {
      */
     async 'node.advance'({
         nodeId, forceId = null, amount = 1, resourceDelta = null, note = '',
-        visibility = VISIBILITY.VISIBLE
+        visibility = VISIBILITY.VISIBLE, track = TRACK.PROGRESS
     }) {
         const nodes = S.getNodes();
         const node = nodes.find((n) => n.id === nodeId);
@@ -430,9 +464,60 @@ const operations = {
         const plot = S.getPlots().find((p) => p.id === node.plotId) ?? null;
         const assets = S.getAssets().filter((a) => a.nodeId === nodeId);
         const mode = resolveMode(node, plot);
+
+        // Which pile. Refused when the Thread does not keep one — the control is
+        // not drawn in that case, but a render can be stale and the writer is the
+        // one thing here that cannot be looking at an old screen.
+        const onConsequence = track === TRACK.CONSEQUENCE;
+        if (onConsequence && !hasConsequence(node, plot)) return;
+
+        /**
+         * The deadline, which is the one track a GM can ALWAYS move by hand.
+         *
+         * Handled before everything below because none of it applies: a
+         * deadline names no Force, costs nobody anything and has no mode. What
+         * a push does here is what the cycle does, by hand, in either direction
+         * — which is the whole meaning of "GM fiat is possible on all three".
+         *
+         * IT ALSO SITS ABOVE THE GATE CHECK, and that is deliberate rather than
+         * an oversight. Every other control on a Thread row is refused while
+         * the Thread is shut; this one is not, because a window closing on
+         * something nobody could reach is exactly what a deadline on a locked
+         * Thread is FOR. The cycle moves these on shut Threads too, so a hand
+         * that could not would be the one thing on this board that disagreed
+         * with its own clock.
+         */
+        if (track === TRACK.EXPIRY) {
+            if (!Expiry.hasExpiry(node)) return;
+            const size = Expiry.expirySize(node);
+            const was = Expiry.expirySpent(node);
+
+            // Display direction in, storage direction out. The rule and the
+            // reason live in logic/expiry.mjs `spendBy`, where they can be
+            // asserted — this file cannot be imported by node.
+            const spent = Expiry.spendBy(node, amount);
+            if (spent === was && !note) return;
+            await S.setNodes(nodes.map((n) => (n.id === nodeId
+                ? { ...n, progress: { ...n.progress, expiry: spent } }
+                : n)));
+            // Running out by hand is the same development as running out on a
+            // cycle, so it writes the same line. Merely moving the counter is a
+            // push like any other. The figure is turned back around on the way
+            // into the chronicle, so what a reader sees is the number the GM
+            // typed rather than the one underneath it.
+            await record({
+                kind: spent >= size && was < size ? LOG_KIND.EXPIRE : LOG_KIND.PUSH,
+                plotId: node.plotId, nodeId,
+                amount: was - spent, note, visibility, track,
+                isExample: node.isExample
+            });
+            return;
+        }
+
         // Display direction in, storage direction out. 1 on an ordinary Thread,
-        // so this is a no-op everywhere it is not needed.
-        const sign = pushSign(node, plot);
+        // so this is a no-op everywhere it is not needed — and 1 on a Consequence
+        // always, which never runs backwards however the Thread beside it reads.
+        const sign = onConsequence ? 1 : pushSign(node, plot);
         const applied = Math.trunc(Number(amount) || 0) * sign;
 
         // A shut gate refuses the write outright, for the same reason an
@@ -449,20 +534,39 @@ const operations = {
         const asked = Number.isFinite(resourceDelta) ? Math.trunc(resourceDelta) : null;
         if (spender && asked !== null && asked < 0 && !Econ.canAfford(spender, -asked)) return;
 
+        // Which pile the amount lands in. The Consequence is asked FIRST and does
+        // not consult the mode beyond whether it exists at all: a shared track on
+        // a Contested Thread takes a push in nobody's name, which is exactly the
+        // case the mode branch below would have refused.
         let progress;
-        if (mode === MODE.CLOCK) progress = tickClock(node, applied, assets);
-        else if (mode === MODE.CONTESTED) {
-            if (!forceId) return;               // contested progress must name a side
-            progress = addForForce(node, forceId, applied, assets);
-        } else progress = addToPool(node, applied, assets);
+        let realized;
+        const perSide = onConsequence
+            ? !consequenceShared(node, plot)
+            : mode === MODE.CONTESTED;
+        if (perSide && !forceId) return;        // a per-side pile must name a side
+
+        if (onConsequence) {
+            progress = perSide
+                ? addConsequenceForForce(node, forceId, applied)
+                : addToConsequence(node, applied);
+            realized = perSide
+                ? (progress.consequenceByForce[forceId] ?? 0)
+                    - (node.progress.consequenceByForce[forceId] ?? 0)
+                : progress.consequence - node.progress.consequence;
+        } else {
+            if (mode === MODE.CLOCK) progress = tickClock(node, applied, assets);
+            else if (mode === MODE.CONTESTED) progress = addForForce(node, forceId, applied, assets);
+            else progress = addToPool(node, applied, assets);
+
+            // What actually moved, which is not always what was asked for: a tick
+            // into a full clock moves nothing, and an Asset's bonus progress is
+            // not billed.
+            realized = mode === MODE.CONTESTED
+                ? (progress.byForce[forceId] ?? 0) - (node.progress.byForce[forceId] ?? 0)
+                : progress.pool - node.progress.pool;
+        }
 
         await S.setNodes(nodes.map((n) => (n.id === nodeId ? { ...n, progress } : n)));
-
-        // What actually moved, which is not always what was asked for: a tick into
-        // a full clock moves nothing, and an Asset's bonus progress is not billed.
-        const realized = mode === MODE.CONTESTED
-            ? (progress.byForce[forceId] ?? 0) - (node.progress.byForce[forceId] ?? 0)
-            : progress.pool - node.progress.pool;
 
         // A negative delta is a spend, a positive one a windfall. With nothing
         // passed, the Force pays for what it moved, exactly as it always did.
@@ -490,6 +594,11 @@ const operations = {
             // beside the Thread's own name, so a line saying +1 under a row that
             // just fell from 5 to 4 would be the same lie the dialog told.
             amount: realized * sign, cost: delta, note, visibility,
+            // Which pile moved, so the sentence can say the complications
+            // mounted rather than that the Thread came on. Stored, not derived:
+            // the toggle can be switched off afterwards, and a line about a
+            // Consequence that no longer exists still happened.
+            track,
             isExample: node.isExample
         });
     },
@@ -521,10 +630,19 @@ const operations = {
 
         // The outcome note is the fiction the GM already wrote for this ending, so
         // the chronicle says what happened rather than that something happened.
-        const outcome = node.outcomes.find((o) => o.forceId === forceId) ?? null;
+        // Through `outcomeFor`, which is where the Consequence ending is resolved:
+        // a Thread its own complications ended has a note too.
+        const outcome = outcomeFor(node, forceId);
         await record({
             kind: LOG_KIND.CONCLUDE,
-            plotId: plot.id, nodeId, forceId,
+            plotId: plot.id, nodeId,
+            // The Consequence sentinel is not a Force and must not be written
+            // into a field every reader looks up in the roster: `forceById`
+            // would answer null and the line would name a Force that is not
+            // there. Which ending it was rides on `track`, which is the field
+            // for exactly that question.
+            forceId: forceId === CONCLUDED_BY_CONSEQUENCE ? null : forceId,
+            track: forceId === CONCLUDED_BY_CONSEQUENCE ? TRACK.CONSEQUENCE : TRACK.PROGRESS,
             amount: result.delta, note: outcome?.note ?? '',
             isExample: node.isExample
         });
@@ -636,6 +754,16 @@ const operations = {
             await S.setAssets(assets.map((a) => (byId.has(a.id) ? { ...a, ...byId.get(a.id) } : a)));
         }
 
+        // The second countdown, applied exactly like the first: every Thread
+        // whose Expiration Clock rides the WORLD's cycle. One set to its Plot's
+        // own clock is that button's business, not this one's.
+        const nodes = S.getNodes();
+        const ran = Expiry.expiringOn(nodes, plots, null);
+        if (ran.length) {
+            const byId = new Map(ran.map((r) => [r.node.id, r.change]));
+            await S.setNodes(nodes.map((n) => (byId.has(n.id) ? { ...n, ...byId.get(n.id) } : n)));
+        }
+
         await S.setTurn({ count: result.turn.count, chapters: was.chapters });
         // Recorded after the counter moves, so the entry names the cycle it opened.
         const lines = [await record({ kind: LOG_KIND.CYCLE, amount: result.payments.length })];
@@ -650,6 +778,18 @@ const operations = {
                 forceId: asset.forceId, assetId: asset.id,
                 condition: change.condition,
                 isExample: asset.isExample
+            }));
+        }
+
+        // And one per Thread that actually RAN OUT, by the same rule: a deadline
+        // moving from four to three is not a development, and a window closing
+        // is.
+        for (const { node, expires } of ran) {
+            if (!expires) continue;
+            lines.push(await record({
+                kind: LOG_KIND.EXPIRE,
+                plotId: node.plotId, nodeId: node.id,
+                isExample: node.isExample
             }));
         }
 
@@ -672,6 +812,10 @@ const operations = {
                 forces: result.payments.map((p) => ({ id: p.forceId, resources: p.from })),
                 plots: wound,
                 assets: moved.map(({ asset }) => asset),
+                // As they stood, like every other row here: the count BEFORE the
+                // tick, read off the node the loop was handed rather than off
+                // the one that was just written.
+                nodes: ran.map(({ node }) => ({ id: node.id, expiry: node.progress.expiry })),
                 logIds: lines
             })
         });
@@ -708,6 +852,16 @@ const operations = {
             await S.setAssets(assets.map((a) => (byId.has(a.id) ? { ...a, ...byId.get(a.id) } : a)));
         }
 
+        // Only the deadlines this Plot's clock owns: a Thread on this Plot that
+        // the GM set to the WORLD's cycle is counting in the campaign's time and
+        // is not this button's business, exactly as an uncommitted Asset is not.
+        const nodes = S.getNodes();
+        const ran = Expiry.expiringOn(nodes, plots, plotId);
+        if (ran.length) {
+            const byId = new Map(ran.map((r) => [r.node.id, r.change]));
+            await S.setNodes(nodes.map((n) => (byId.has(n.id) ? { ...n, ...byId.get(n.id) } : n)));
+        }
+
         // The Plot's own count, not the world's, which has not moved. `amount`
         // carries it because the entry's `turn` is stamped with the world's.
         const lines = [await record({
@@ -728,6 +882,15 @@ const operations = {
             }));
         }
 
+        for (const { node, expires } of ran) {
+            if (!expires) continue;
+            lines.push(await record({
+                kind: LOG_KIND.EXPIRE,
+                plotId: node.plotId, nodeId: node.id,
+                isExample: node.isExample
+            }));
+        }
+
         // One undo record for the whole board, whichever clock wrote it — see
         // logic/cycle.mjs. `count` is the world's count UNCHANGED, so reverting
         // this writes it back as it is and the world's clock never moves.
@@ -740,6 +903,7 @@ const operations = {
                 count: turn.count,
                 plots: [plot],
                 assets: moved.map(({ asset }) => asset),
+                nodes: ran.map(({ node }) => ({ id: node.id, expiry: node.progress.expiry })),
                 logIds: lines
             })
         });
@@ -766,8 +930,9 @@ const operations = {
         const forces = S.getForces();
         const plots = S.getPlots();
         const assets = S.getAssets();
+        const nodes = S.getNodes();
         const back = Cycle.reverse(turn.undo, {
-            forces, plots, assets, log, chapters: turn.chapters
+            forces, plots, assets, nodes, log, chapters: turn.chapters
         });
 
         // Rows the record does not name come back by reference, so each of these
@@ -777,6 +942,7 @@ const operations = {
         if (back.forces.some((f, i) => f !== forces[i])) await S.setForces(back.forces);
         if (back.plots.some((p, i) => p !== plots[i])) await S.setPlots(back.plots);
         if (back.assets.some((a, i) => a !== assets[i])) await S.setAssets(back.assets);
+        if (back.nodes.some((n, i) => n !== nodes[i])) await S.setNodes(back.nodes);
 
         // The cycle did not happen, so the chronicle stops saying it did. A line
         // saying it began followed by a line saying it was undone is the GM's
@@ -883,12 +1049,17 @@ const operations = {
         await S.setNodes(S.getNodes()
             .filter((n) => !n.isExample)
             .map((n) => {
-                const byForce = Object.fromEntries(Object.entries(n.progress.byForce)
+                // Both per-side piles, exactly as force.delete sweeps them.
+                const without = (rows) => Object.fromEntries(Object.entries(rows)
                     .filter(([forceId]) => !goneForces.has(forceId)));
                 return {
                     ...n,
                     prereqNodeIds: kept(n.prereqNodeIds),
-                    progress: { ...n.progress, byForce },
+                    progress: {
+                        ...n.progress,
+                        byForce: without(n.progress.byForce),
+                        consequenceByForce: without(n.progress.consequenceByForce)
+                    },
                     outcomes: n.outcomes.filter((o) => !goneForces.has(o.forceId)),
                     concludedBy: goneForces.has(n.concludedBy) ? null : n.concludedBy
                 };
@@ -934,9 +1105,11 @@ export const advanceNode = (
     nodeId,
     {
         amount = 1, forceId = null, resourceDelta = null, note = '',
-        visibility = VISIBILITY.VISIBLE
+        visibility = VISIBILITY.VISIBLE, track = TRACK.PROGRESS
     } = {}
-) => write('node.advance', { nodeId, amount, forceId, resourceDelta, note, visibility });
+) => write('node.advance', {
+    nodeId, amount, forceId, resourceDelta, note, visibility, track
+});
 export const concludeNode = (nodeId, forceId = null) => write('node.conclude', { nodeId, forceId });
 export const reopenNode = (nodeId) => write('node.reopen', { nodeId });
 export const adjustForceResources = (forceId, delta) => write('force.adjust', { forceId, delta });

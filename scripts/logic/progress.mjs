@@ -22,11 +22,54 @@
  * fiction question and the numbers are only one input to it.
  */
 
-import { ASSET_MODIFIER, MODE, NODE_STATUS } from '../constants.mjs';
+import {
+    ASSET_MODIFIER, CONCLUDED_BY_CONSEQUENCE, MODE, NODE_STATUS
+} from '../constants.mjs';
 import { effectiveValue } from './condition.mjs';
 
 /** A Thread's mode, resolving the inherit case. `null` on the node means inherit. */
 export const resolveMode = (node, plot) => node?.mode ?? plot?.defaultMode ?? MODE.FIAT;
+
+/**
+ * WHICH QUESTIONS EACH MODE CAN ANSWER.
+ *
+ * One table, read by the editor's context builder and by the suite, so the form
+ * and the arithmetic cannot drift into disagreeing about what a mode uses.
+ *
+ * It exists because the Thread editor used to ask every question of every mode: a
+ * Narrative Thread, which tracks nothing at all, was asked for a threshold, a
+ * segment count and a direction to read them in — three fields whose answers it
+ * would never look at. A GM filling them in learns the wrong thing about what the
+ * mode does, and a GM leaving them alone has no way to tell the difference between
+ * a field that is ignored and one they forgot.
+ *
+ * `perForce` is Contested's alone, and it is not a mode of its own for the same
+ * reason `countdown` is not: nothing about the arithmetic changes, only how many
+ * piles there are. The EXPIRATION CLOCK is deliberately absent — a deadline is not
+ * a way of advancing, it is a way of running out, and every mode can have one.
+ */
+export const MODE_SHAPE = {
+    [MODE.FIAT]: {
+        threshold: false, segments: false, countdown: false,
+        consequence: false, perForce: false
+    },
+    [MODE.INVEST]: {
+        threshold: true, segments: false, countdown: true,
+        consequence: true, perForce: false
+    },
+    [MODE.CLOCK]: {
+        threshold: false, segments: true, countdown: true,
+        consequence: true, perForce: false
+    },
+    [MODE.CONTESTED]: {
+        threshold: true, segments: false, countdown: true,
+        consequence: true, perForce: true
+    }
+};
+
+/** What this Thread's mode actually uses. Unknown modes read as Narrative. */
+export const shapeOf = (node, plot) =>
+    MODE_SHAPE[resolveMode(node, plot)] ?? MODE_SHAPE[MODE.FIAT];
 
 // ── asset modifiers ──────────────────────────────────────────────────────────
 
@@ -100,6 +143,116 @@ export function isFull(node, plot, assets) {
 
 /** Whether the GM may be offered a Conclude button at all. */
 export const canConclude = (node) => node?.status !== NODE_STATUS.CONCLUDED;
+
+// ── the consequence ──────────────────────────────────────────────────────────
+
+/**
+ * A SECOND TRACK, RUNNING THE OTHER WAY.
+ *
+ * Everything above this line counts a Thread going WELL: a pool filling, a clock
+ * ticking toward its segments, two sides spending against each other. Nothing
+ * counted it going badly, and a GM who wanted "the siege works are burning"
+ * beside "the wall is coming down" had to author a second Thread and remember it
+ * was the other half of the first.
+ *
+ * So a Thread may carry a Consequence: complications, counted, which can end it
+ * on their own terms. It is NOT a mode. Every one of the four keeps working
+ * exactly as it did, the Consequence sits beside whatever they count, and a
+ * Thread with the toggle off is byte-for-byte the Thread it was.
+ *
+ * It is refused to Narrative, and that is the one mode rule here. Narrative
+ * tracks nothing by definition — it is the mode for a Thread the fiction ends —
+ * and a Narrative Thread with a counted complication on it is an Investment
+ * Thread that has not admitted what it is.
+ *
+ * WHAT IT DOES NOT DO: it does not conclude anything by itself. A full
+ * Consequence is a reading, like `isFull` is a reading — the row says so and the
+ * Conclude dialog offers it as an answer. Who ended this and how is a fiction
+ * question, and the numbers are one input to it.
+ */
+
+/** Whether this Thread keeps a Consequence at all. Narrative never does. */
+export const hasConsequence = (node, plot) =>
+    !!node?.consequenceOn && shapeOf(node, plot).consequence;
+
+/**
+ * Whether the Consequence is ONE track or one per side.
+ *
+ * Per-side is Contested's alone, and only when the GM asked for it. Two sides
+ * racing each other rarely go wrong in the same way at the same rate — one army
+ * is losing its supply line while the other is losing its nerve — but a single
+ * complication mounting over the whole contest is just as ordinary a shape, so
+ * the GM says which.
+ */
+export const consequenceShared = (node, plot) =>
+    !(resolveMode(node, plot) === MODE.CONTESTED && !!node?.consequencePerForce);
+
+/**
+ * How the Consequence is DRAWN: as pips, or as a bar.
+ *
+ * It mirrors the Thread it is standing under. A Clock Thread counts in discrete
+ * segments the table can see, and a complication beside it that read as a smooth
+ * bar would be two different kinds of number sharing a row — so a Clock's
+ * Consequence is pips, and everything else's is a bar.
+ *
+ * A reading rather than a stored field, for exactly the reason `depletes` is one:
+ * a second size field, or a second shape switch, would be a second thing to keep
+ * in step with the mode every time the mode changed.
+ */
+export const consequenceIsPips = (node, plot) => resolveMode(node, plot) === MODE.CLOCK;
+
+/** The size of the track. Never below one — a complication of nothing is not one. */
+export const consequenceSize = (node) => Math.max(1, node?.consequenceSize ?? 1);
+
+/** One reading: the shared track, or one side's own. */
+export const consequenceOf = (node, forceId = null) => (forceId
+    ? Number(node?.progress?.consequenceByForce?.[forceId]) || 0
+    : Number(node?.progress?.consequence) || 0);
+
+/**
+ * Whether the complications have run this Thread out.
+ *
+ * With no `forceId` on a per-side track this asks whether ANY side is full, which
+ * is the question the row and the cycle check both have: one side's Consequence
+ * reaching its line is a Thread that can be ended, whichever side it was.
+ */
+export function consequenceFull(node, plot, forceId = null) {
+    if (!hasConsequence(node, plot)) return false;
+    const size = consequenceSize(node);
+    if (consequenceShared(node, plot)) return consequenceOf(node) >= size;
+    if (forceId) return consequenceOf(node, forceId) >= size;
+    return Object.values(node?.progress?.consequenceByForce ?? {})
+        .some((v) => (Number(v) || 0) >= size);
+}
+
+/** The sides whose own Consequence is full, for a row that has to name them. */
+export const consequenceLeaders = (node, plot, forceIds) => (forceIds ?? [])
+    .filter((id) => consequenceFull(node, plot, id));
+
+/**
+ * Add to the shared Consequence. Clamped to 0..size, like a clock.
+ *
+ * ASSET BONUSES DO NOT APPLY, here or on the per-side transform below, and that
+ * is a decision rather than an omission. A committed battalion is a Force putting
+ * its weight behind what it is trying to do; it has no business hastening the
+ * complication working against it, and a `bonusTick` Asset that made a Thread go
+ * wrong faster would be the opposite of what the GM committed it for.
+ */
+export function addToConsequence(node, amount) {
+    const raw = consequenceOf(node) + Math.trunc(Number(amount) || 0);
+    const consequence = Math.min(consequenceSize(node), Math.max(0, raw));
+    return { ...node.progress, consequence };
+}
+
+/** Add to one side's own Consequence. Clamped the same way. */
+export function addConsequenceForForce(node, forceId, amount) {
+    const raw = consequenceOf(node, forceId) + Math.trunc(Number(amount) || 0);
+    const value = Math.min(consequenceSize(node), Math.max(0, raw));
+    return {
+        ...node.progress,
+        consequenceByForce: { ...node.progress.consequenceByForce, [forceId]: value }
+    };
+}
 
 // ── depleting ──────────────────────────────────────
 
@@ -192,9 +345,30 @@ export function addForForce(node, forceId, amount, assets) {
 
 // ── conclusion ───────────────────────────────────────────────────────────────
 
-/** The outcome a given Force concluding this Thread would produce, if one is declared. */
-export const outcomeFor = (node, forceId) =>
-    (node?.outcomes ?? []).find((o) => o.forceId === forceId) ?? null;
+/**
+ * The outcome a given ending would produce, if one is declared.
+ *
+ * THE ONE PLACE the Consequence sentinel is resolved. `concludeThread`,
+ * `stateAfterConclusion`, `reopenThread` and the conclusion dialog all reach an
+ * outcome through here, so a Thread ended by its own complications moves State by
+ * the figure the GM wrote for that ending without any of them learning a fourth
+ * kind of ending exists.
+ *
+ * The Consequence outcome lives in two flat fields rather than as a row in
+ * `outcomes` with a reserved key, because `outcomes` is swept by Force id in three
+ * places — force.delete, example.remove and the editor's own harvest — and a row
+ * in that list with nothing behind it would have to survive all three.
+ */
+export function outcomeFor(node, forceId) {
+    if (forceId === CONCLUDED_BY_CONSEQUENCE) {
+        return {
+            forceId: CONCLUDED_BY_CONSEQUENCE,
+            delta: node?.consequenceDelta ?? 0,
+            note: node?.consequenceNote ?? ''
+        };
+    }
+    return (node?.outcomes ?? []).find((o) => o.forceId === forceId) ?? null;
+}
 
 /**
  * What the Plot's State becomes if `forceId` concludes this Thread.

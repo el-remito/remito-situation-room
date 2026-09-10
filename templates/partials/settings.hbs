@@ -138,6 +138,23 @@
                data-tooltip="{{localize 'RSR.settings.segmentLabelHint'}}"></i>
         </div>
 
+        {{!-- The third word this section owns, and the only one about a Thread
+              rather than about the clock — but it belongs here, because it is a
+              word for something the CYCLE does, and because this is where a GM
+              already comes looking for the words their campaign uses. Any one
+              Thread may still say otherwise; this is the word for most of
+              them. --}}
+        <div class="rsr-settings-row">
+            <label for="rsr-expiryLabel">{{localize "RSR.settings.expiryLabel"}}</label>
+            <span class="rsr-settings-controls">
+                <input type="text" id="rsr-expiryLabel" name="expiryLabel"
+                       value="{{settings.constants.expiryLabel}}"
+                       placeholder="{{localize 'RSR.thread.expired'}}">
+            </span>
+            <i class="fa-regular fa-circle-question rsr-info" data-tooltip-class="rsr-tip"
+               data-tooltip="{{localize 'RSR.settings.expiryLabelHint'}}"></i>
+        </div>
+
         {{!-- And this is WHERE each one began: one row per mark, each naming the
               Cycle it opened on. A list rather than a length, because a chapter
               ends when something ends and not when a number divides — and because

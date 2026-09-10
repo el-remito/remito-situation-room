@@ -22,7 +22,7 @@ module does not start in.
 | M6 | passed | `228b0df` |
 | M6.5 | passed | `824ab99` |
 | M7 | passed | `ca52a66` |
-| M8 · M9 · M10 (v1.1.0) | — | — |
+| M8 · M9 · M10 (v1.1.0) | passed | `70d74d2` |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)

@@ -29,7 +29,7 @@ answers all four.
 | M6.5 | passed | `824ab99` |
 | M7 | passed | `ca52a66` |
 | M8 · M9 · M10 (v1.1.0) | passed | `70d74d2` |
-| M11 · M12 · M13 · M14 (v1.2.0) | — | — |
+| M11 · M12 · M13 · M14 (v1.2.0) | passed | `2599ca4` |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)

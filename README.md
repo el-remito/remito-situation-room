@@ -118,6 +118,24 @@ The Help tab is the real documentation. It has nine sections, and every one is w
 once for the GM and once for the table — so what a player reads about masking is what a player
 would actually want to know about it.
 
+### Language
+
+The board reads in **English** or **Português (Brasil)**, set in Configure Settings → Module
+Settings → Remito Situation Room → *Board language*.
+
+It is a **world** setting, and it is the whole table's. Foundry picks a language per client, which
+is the right answer for a personal preference and the wrong one for a shared board — five players
+could otherwise read the same Plot five ways, with the GM unable to settle it. Whatever each
+player has set for Foundry itself, the Situation Room follows the world. Changing it reloads every
+connected client, which is how it reaches them.
+
+Domain nouns are deliberately **not** translated: Plot, Thread, Force, Asset, Resource, State,
+Cycle, Segment, Phase, Consequence. They are what the table says out loud, and a board that
+renamed them would leave the module and the players speaking different languages.
+
+*Generate Example* writes its Plot in the language in force when you press it, and then leaves it
+alone — it becomes your world data, and yours to edit.
+
 ## Requirements
 
 - Foundry VTT **v14** (verified 14.365)
@@ -133,6 +151,7 @@ situation-room.mjs        entry point — hooks, template preload, the module AP
 scripts/
   constants.mjs           MODULE_ID, SETTINGS, TEMPLATES, every enum
   settings.mjs            the ONLY place game.settings is touched
+  i18n.mjs                the ONLY place game.i18n.translations is written
   data/
     state.mjs             the ONLY writer; every operation lives here
     relay.mjs             the ONLY place game.socket is touched
@@ -142,6 +161,7 @@ scripts/
   ui/                     the Foundry-shaped edges of the logic layer
   apps/                   ApplicationV2 windows
 templates/                Handlebars — every partial preloaded in the entry point
+lang/                     en.json and pt-BR.json, key for key
 tools/                    the checks, run with node
 ```
 
@@ -154,11 +174,31 @@ Three rules hold the shape:
 3. **Code word ≠ UI word.** See Nomenclature above.
 
 ```bash
-node tools/all.mjs      # every logic suite, and the static passes
-node tools/check.mjs    # ten static passes over the whole repo
+node tools/all.mjs          # every logic suite, and the static passes
+node tools/check.mjs        # ten static passes over the whole repo
+node tools/check-lang.mjs   # every other language file against en.json
 ```
 
 Everything else is verified by hand, in a world. There is no HMR: reload Foundry.
+
+### Adding a language
+
+Every word the reader sees is in `lang/`, and `en.json` is canonical — the code is written
+against it and `tools/check.mjs` checks both directions of it. A second language is four steps:
+
+1. Copy `lang/en.json` to `lang/<tag>.json` and translate the values. Leave every **key**
+   alone, and leave the `{placeholder}` names and the HTML inside the values alone with them.
+2. Add the file to `languages` in `module.json`.
+3. Add the tag to `LANGUAGES` in `scripts/constants.mjs`, and a `choices` entry plus its two
+   label keys to the *Board language* registration in `scripts/settings.mjs`. Option labels are
+   endonyms and are identical in every file, so a GM always reads the choice in its own language.
+4. Run `node tools/check-lang.mjs` until it is green. It holds the new file to the same key set
+   as English, the same placeholders per key, the same markup, and no prose left untranslated.
+
+Domain nouns stay in English in every language — Plot, Thread, Force, Asset, Resource, State,
+Cycle, Segment, Phase, Consequence, Clock, Gate, and the status words *Depleting* and *Expired*.
+They are the vocabulary a table speaks at the table, and translating them would leave the module
+saying one thing and the players saying another.
 
 ## Licence
 

@@ -11,6 +11,12 @@ that was about to change again. They land as **one commit** for the same reason:
 through the same ten files, and a commit that carried only one of them would be a state this
 module does not start in.
 
+**v1.2.0 is gated as one release too**, for a plainer reason: none of the four can be verified
+apart. The setting has nothing to switch to until the translation exists, the translation has no
+way to appear on screen until the setting does, the checker is what says the translation is
+complete, and the fixture is the fastest way to see a board full of it. One pass over one world
+answers all four.
+
 | Milestone | Verified | Committed |
 |---|---|---|
 | M1 | passed | `1d9bd86` |
@@ -23,6 +29,7 @@ module does not start in.
 | M6.5 | passed | `824ab99` |
 | M7 | passed | `ca52a66` |
 | M8 · M9 · M10 (v1.1.0) | passed | `70d74d2` |
+| M11 · M12 · M13 · M14 (v1.2.0) | — | — |
 
 ## M1 — Scaffold and data spine
 - [x] `module.json` (socket: true from the first commit)
@@ -655,3 +662,91 @@ carrying a control the readings above them do not have.
       pass, at their instruction. What it changes is two rows of a stylesheet and
       one control per track, and both partials were compiled and rendered against
       Foundry's own Handlebars before release
+
+## M11 — One language for the whole table
+
+The module already kept every reader-facing word in `lang/en.json` — 595 of them — so there was
+no i18n refactor to do. What was missing was a second file and a way to choose it.
+
+Foundry chooses a language from `core.language`, which is **per client**. A table of five could
+read the same Plot five ways, and the GM would have nothing to settle it with. So the world holds
+the answer and every client obeys it.
+
+- [x] `SETTINGS.LANGUAGE` and a `LANGUAGES` map in `scripts/constants.mjs`
+- [x] The module's **first `config: true` setting**, in `scripts/settings.mjs` — world-scoped,
+      `requiresReload: true`, two choices and no per-player opt-out. The ten existing settings
+      stay `config: false`; the board is still the only editor of its own data
+- [x] **Enforcement is Foundry's own.** `SettingsConfig#_onSubmit` sees a world-scoped setting
+      with `requiresReload` and calls `reloadConfirm({world: true})`, which emits `reload` to
+      every connected client (`client/applications/settings/config.mjs:195`). No socket code of
+      ours is involved, and none could be — `data/relay.mjs` owns that channel
+- [x] `scripts/i18n.mjs` — a fourth single funnel: the ONLY place `game.i18n.translations` is
+      written. It starts the fetch at `init` and merges at `i18nInit`. The two halves are not
+      decoration: `client/game.mjs` calls `init` at :652 and only then, at :663, awaits
+      `i18n.initialize()`, which ends by assigning a **new** object to `translations`
+      (`localization.mjs:234`). A merge during `init` lands in the object that assignment
+      discards — and loses every time, since one small local file always resolves before
+      Foundry has fetched core, the system and every other module's language
+- [x] The merge is **unconditional**, and that is what makes it correct in all four combinations
+      of client language and world language. `Localization#setLanguage` loads only the client's
+      own language into `translations` and puts English in a separate `_fallback`
+      (`client/helpers/localization.mjs:226-237`), so `translations` is never a blend and ours
+      wins outright
+- [x] The `ready` hook awaits the load before anything reads a string, and redraws the Journal
+      directory — the one surface that renders *before* `ready`, and so the one that could
+      otherwise sit there in the client's own language
+- [x] `RSR.settings.language*` keys avoid `RSR.settings.language` itself: pass 6 forbids a key
+      that is a prefix of another, because Foundry `expandObject`s the flat file on load
+
+## M12 — `tools/check-lang.mjs`
+
+`tools/check.mjs` names `lang/en.json` outright, in passes 2 and 6. A second file would have
+shipped with **no validation at all**. `tools/all.mjs` discovers `check-*.mjs`, so the new suite
+needed no wiring.
+
+- [x] **Key parity**, both directions. Load-bearing rather than tidy: a key missing from the
+      world's file is not filled in from English, because a client running English in a pt-BR
+      world has an empty `_fallback` and would render the raw key
+- [x] **Nesting** — the pass-6 rule, applied per file
+- [x] **Placeholders** — the `{named}` set per key, against English. A translated placeholder
+      throws nothing; it renders as literal `{nome}` in the middle of a sentence
+- [x] **Markup** — the tag multiset per key, and every tag closed. The Help bodies render
+      unescaped, so a dropped `</p>` swallows the rest of the panel
+- [x] **Residue** — any value 40 characters or longer still byte-identical to English. Shorter
+      ones legitimately match: the domain nouns are kept in English on purpose
+
+## M13 — Português (Brasil)
+
+- [x] All 599 keys, in `en.json` order so the two files diff against each other
+- [x] **Domain nouns kept in English**, which forced a fixed article and gender per term before
+      the first key — *o Plot*, *a Thread*, *a Force*, *o Asset*, *o Resource*, *o State*,
+      *o Cycle*, *o Segment*, *a Phase*, *a Consequence*, *o Clock*, *o Gate*; *Depleting* and
+      *Expired* invariant. Without that table, 599 strings drift apart
+- [x] Chrome **does** translate: the four views (Situação, Posto de Comando, Configurações,
+      Ajuda), every button, label, notice and hint, and the nine Help sections in both their
+      GM and player halves
+- [x] The module title in `module.json` stays *Remito Situation Room*
+- [x] Option labels are **endonyms** — `English` and `Português (Brasil)`, identical in both
+      files — so a GM always reads the choice in its own language, whichever way the setting
+      currently stands
+
+## M14 — The example fixture
+
+`scripts/data/example-plot.mjs` was the one file in the module with hardcoded English and zero
+`game.i18n` references. A pt-BR GM pressing *Generate Example* got the Siege of Northwall in
+English.
+
+- [x] ~93 strings moved to `RSR.example.*` in both language files
+- [x] Localized **at generation time, not render time**. What `buildExample()` returns is world
+      data the GM then edits: a name that re-translated itself under them on the next reload
+      would overwrite their edit. The example is written once, in the language in force, and
+      stays in it
+- [x] Every key is spelled out in full at its call site rather than built from a stem, which is
+      what lets `check.mjs` pass 2 see all ninety-odd of them in both directions — no
+      `DYNAMIC_PREFIXES` entry, and so no way to write example copy nobody renders
+
+- [x] **Verified in a live world — the one gate for v1.2.0.** The first pass failed: the board
+      reloaded into English with the setting correctly on pt-BR. Cause was lifecycle ordering, not
+      translation — `game.i18n.translations` is replaced wholesale after the `init` hook, so the
+      merge was landing in an object Foundry then discarded. Moving it to `i18nInit` fixed it, and
+      the second pass was clean in both browsers.

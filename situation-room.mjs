@@ -11,6 +11,7 @@
 
 import { MODULE_ID, TEMPLATES, VIEW } from './scripts/constants.mjs';
 import { registerSettings, registerBoardMenu } from './scripts/settings.mjs';
+import { startLanguageLoad, applyWorldLanguage, languageReady } from './scripts/i18n.mjs';
 import { registerRelay, registerAnnouncements } from './scripts/data/relay.mjs';
 import { registerSidebarButton } from './scripts/ui/sidebar-button.mjs';
 import { seedPhaseWatch } from './scripts/ui/phase-note.mjs';
@@ -19,6 +20,13 @@ import { SituationRoom, openBoard, showBoardAsDirected } from './scripts/apps/si
 
 Hooks.once('init', () => {
     registerSettings();
+
+    // Starts the DOWNLOAD of the world's language file. After registerSettings,
+    // because it reads a setting. Nothing is written to game.i18n here: Foundry
+    // replaces its translations object after this hook returns, so a merge now
+    // would be thrown away. See the i18nInit hook below.
+    startLanguageLoad();
+
     registerSidebarButton();
 
     registerBoardMenu(SituationRoom);
@@ -49,7 +57,25 @@ Hooks.once('init', () => {
     ]);
 });
 
-Hooks.once('ready', () => {
+// The earliest moment our copy survives. client/game.mjs calls `init` at :652
+// and only then, at :663, awaits i18n.initialize() — which ends by assigning a
+// brand new object to game.i18n.translations (localization.mjs:234) and calling
+// this hook (:104). Merging here puts the WORLD's language over the client's
+// own, on the object every localize() actually reads.
+Hooks.once('i18nInit', applyWorldLanguage);
+
+Hooks.once('ready', async () => {
+    // Everything below this line, and everything the user can open afterwards,
+    // reads strings — so the world's language file has to have landed first.
+    await languageReady();
+
+    // The Journal button is the one surface that renders before `ready`: the
+    // directory is built during UI initialization, so it may already be sitting
+    // there with the client's own language on it. Redrawing it re-runs our
+    // injector against the merged table. Guarded on `rendered` so this never
+    // forces a tab open that Foundry had not drawn yet.
+    if (ui.journal?.rendered) ui.journal.render();
+
     registerRelay();
 
     // The relay's other direction: a GM addressing the table. Registered here

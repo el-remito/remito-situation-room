@@ -28,7 +28,25 @@ export const SETTINGS = {
     LOG: 'log',
     CONDITIONS: 'conditions',
     // Player-facing options.
-    DEFAULT_VISIBILITY: 'defaultVisibility'
+    DEFAULT_VISIBILITY: 'defaultVisibility',
+    // The one config:true setting. World-scoped, so the GM's choice is the
+    // table's choice — see scripts/i18n.mjs.
+    LANGUAGE: 'language'
+};
+
+/**
+ * The language files this module ships, keyed by the value of SETTINGS.LANGUAGE.
+ *
+ * Foundry loads whichever file matches the CLIENT's own core.language, which is
+ * per-player and therefore useless for settling a table. scripts/i18n.mjs fetches
+ * the file named here and merges it over game.i18n.translations, so the world
+ * setting wins regardless of what each client asked for. Both files carry the
+ * same key set, which is what makes that merge total; tools/check-lang.mjs is
+ * what keeps it true.
+ */
+export const LANGUAGES = {
+    'en': 'lang/en.json',
+    'pt-BR': 'lang/pt-BR.json'
 };
 
 export const TEMPLATES = {

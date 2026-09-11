@@ -92,6 +92,36 @@ export function registerSettings() {
         type: String,
         default: VISIBILITY.HIDDEN
     });
+
+    /**
+     * The module's one config:true setting, and the only one a GM meets in
+     * Foundry's own settings sheet.
+     *
+     * World-scoped on purpose. Foundry's own core.language is per-client, so a
+     * table left to itself renders the board in as many languages as it has
+     * players. This setting is the GM's single lever, and `requiresReload` is
+     * what makes it stick for everyone: SettingsConfig sees a world-scoped
+     * setting with requiresReload and calls reloadConfirm({world: true}), which
+     * emits a `reload` to every connected client. No socket code of ours is
+     * involved, and none could be — data/relay.mjs owns that channel.
+     *
+     * `choices` values are i18n keys like `name` and `hint`; the settings sheet
+     * renders them with localize=true. They are endonyms, identical in both
+     * language files, so the choice reads the same whichever way it is set.
+     */
+    game.settings.register(MODULE_ID, SETTINGS.LANGUAGE, {
+        name: 'RSR.settings.languageName',
+        hint: 'RSR.settings.languageHint',
+        scope: 'world',
+        config: true,
+        requiresReload: true,
+        type: String,
+        default: 'en',
+        choices: {
+            'en': 'RSR.settings.languageOption.en',
+            'pt-BR': 'RSR.settings.languageOption.ptBR'
+        }
+    });
 }
 
 /**
@@ -140,6 +170,12 @@ export const getAssets = () =>
 /** The GM's condition table. Seeded with the module's six when the world has none. */
 export const getConditions = () => readCollection(SETTINGS.CONDITIONS);
 export const getLog = () => readCollection(SETTINGS.LOG);
+
+/**
+ * The language the world is played in. Read once, at init, by scripts/i18n.mjs.
+ * Every other reader is Foundry itself, through game.i18n.
+ */
+export const getLanguage = () => game.settings.get(MODULE_ID, SETTINGS.LANGUAGE);
 export const getTurn = () => normalizeTurn(game.settings.get(MODULE_ID, SETTINGS.TURN));
 
 /**
